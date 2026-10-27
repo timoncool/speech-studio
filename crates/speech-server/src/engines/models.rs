@@ -74,7 +74,21 @@ pub fn write_selection(mroot: &Path, selection: &Value) -> std::io::Result<()> {
 /// Модели кастинга (лица и голос, крейт dub-faces) идут туда же, куда локальные стадии: читают
 /// DUB_FACES_BACKEND при загрузке. Ставится на старте и при каждой записи выбора — переключение без рестарта.
 pub fn apply_faces_backend(mroot: &Path) {
-    std::env::set_var("DUB_FACES_BACKEND", stage_backend(mroot, "local_backend"));
+    let backend = faces_backend_for(stage_backend(mroot, "local_backend"), crate::engines::hw::gpu_report().cuda_build.is_some());
+    std::env::set_var("DUB_FACES_BACKEND", backend);
+}
+
+/// The device the casting models (dub-faces: WeSpeaker voice similarity) run on, given the stage backend and whether a
+/// card here can run a CUDA build. They run on ONNX Runtime's CUDA execution provider, which fails hard (`ort
+/// commit_from_file … CUDA failure 801 ; GPU=-1`) when no CUDA device is present or usable, so «gpu» without one
+/// becomes «cpu» — the models run on the processor, as they do under «auto» with no card, instead of crashing the job.
+/// Vulkan has no ONNX Runtime provider here and already loads them on the processor.
+fn faces_backend_for(backend: &'static str, cuda_build: bool) -> &'static str {
+    if backend == "gpu" && !cuda_build {
+        "cpu"
+    } else {
+        backend
+    }
 }
 
 /// Выбор для ответов API. Секреты не уходят никогда: вместо ключа OpenRouter — `or_key_set`, пароль
@@ -750,6 +764,21 @@ pub fn resolve_mt(mroot: &Path, sel: &Value) -> (PathBuf, PathBuf) {
         mroot.join("mt").join("gemma-4-12b-it-qat-q4_0.gguf"),
         mroot.join("mt").join("mmproj-gemma-4-12b-it-qat-q4_0.gguf"),
     )
+}
+
+#[cfg(test)]
+mod faces_backend_tests {
+    use super::faces_backend_for;
+
+    /// On a computer with no card that runs a CUDA build, the casting models' «gpu» becomes «cpu» so ONNX Runtime does
+    /// not try the CUDA provider and crash; with such a card «gpu» stays, and «cpu»/«vulkan» are left as they are.
+    #[test]
+    fn gpu_without_a_cuda_card_runs_the_casting_models_on_the_processor() {
+        assert_eq!(faces_backend_for("gpu", false), "cpu");
+        assert_eq!(faces_backend_for("gpu", true), "gpu");
+        assert_eq!(faces_backend_for("cpu", false), "cpu");
+        assert_eq!(faces_backend_for("vulkan", false), "vulkan");
+    }
 }
 
 #[cfg(test)]

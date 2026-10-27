@@ -371,27 +371,6 @@ fn recognise(p: &ListenPaths, engine: &Engine, wav: &Path, work: &Path, s: &lp::
     Ok(lines)
 }
 
-/// Below this share of the probability in a model's own languages the recording is taken to be in another language.
-/// VoxLingua107 mixes close languages (Russian FLEURS clips came out Belarusian 0.60 / Russian 0.40), so a share this
-/// size still means the model's language; Chinese gives its share near zero.
-const OWN_LANGUAGES_MIN: f32 = 0.1;
-
-/// The language of a 16 kHz recording by VoxLingua107 on its first 30 s, for a model that knows `known`: its likeliest
-/// own language while those hold a noticeable share, else the likeliest of all 107 (the recording goes to a model that
-/// knows it). None for a recording under half a second, which the detector does not hear.
-fn spoken_language(models_root: &Path, wav: &Path, known: &[&str]) -> Result<Option<String>, String> {
-    let (pcm, _) = crate::audio::wavio::read_mono_f32_head(wav, 30 * 16_000)?;
-    if pcm.len() < dub_asr::tcpp::LANGID_MIN_SAMPLES {
-        return Ok(None);
-    }
-    let pcm = pcm.as_slice();
-    let engine = dub_asr::tcpp::engine_dir(models_root, crate::engines::models::tcpp_build(models_root));
-    let model = dub_asr::tcpp::helper_path(models_root, &dub_asr::tcpp::LANGID);
-    let own = dub_asr::tcpp::detect_language(&engine, &model, pcm, known)?;
-    let guess = if own.allowed_mass >= OWN_LANGUAGES_MIN { own } else { dub_asr::tcpp::detect_language(&engine, &model, pcm, &[])? };
-    Ok(guess.ranked.into_iter().next().map(|(code, _)| code))
-}
-
 /// Распознать запись проекта заново (прежний транскрипт заменяется; имена спикеров по ключам сохраняются).
 pub fn transcribe(p: &ListenPaths, pid: &str, progress: &dyn Fn(Value)) -> Result<Value, String> {
     crate::engines::tts_host::make_room();
@@ -436,7 +415,7 @@ pub fn transcribe(p: &ListenPaths, pid: &str, progress: &dyn Fn(Value)) -> Resul
     };
     if let Some(model) = studio_model {
         crate::app::ensure_components(&p.repo_root, &[crate::engines::models::tcpp_build(&p.models_root).dir(), "langid"], &|ev| progress(ev))?;
-        if let Some(lang) = spoken_language(&p.models_root, &mix, model.languages)? {
+        if let Some(lang) = crate::app::recognition::spoken_language(&p.models_root, &mix, model.languages)? {
             step(progress, t!("listen-step-langid", lang = lang.to_uppercase()), 7);
             engine = ready_engine(p, &project, &lang, progress)?;
             s.lang = lang;

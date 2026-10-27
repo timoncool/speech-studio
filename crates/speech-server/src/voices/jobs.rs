@@ -20,6 +20,52 @@ fn work_dir(voices: &Path, name: &str, what: &str) -> Result<tempfile::TempDir, 
     tempfile::Builder::new().prefix(&format!("{what}-")).tempdir_in(&base).map_err(|e| format!("{name}: {e}"))
 }
 
+/// Recognise a voice reference in the right language, with the recogniser that language needs. Under «Auto» the
+/// language is the one VoxLingua107 hears, so a reference the default recogniser (Parakeet) does not know — Chinese and
+/// the like — goes to CrisperWhisper instead of coming back empty and being refused as silent, and the components of
+/// whichever recogniser handles it are fetched before it runs.
+fn recognise_reference(p: &VoicePaths, audio: &Path, card_lang: &str, name: &str, progress: &dyn Fn(Value)) -> Result<crate::app::recognition::Heard, String> {
+    let lang = reference_language(p, audio, card_lang, progress);
+    let engine = match crate::app::recognition::choice_of(&p.repo_root, &p.models_root, &lang, name, "")? {
+        crate::engines::models::AsrChoice::CrisperWhisper { .. } => "whisper",
+        _ => "",
+    };
+    crate::app::recognition::ensure(&p.repo_root, &p.models_root, engine, progress)?;
+    crate::app::recognition::transcribe(&p.repo_root, &p.models_root, audio, &lang, name)
+}
+
+/// The language a reference is recognised in: the one set on its card, or — under «Auto» — the language VoxLingua107
+/// hears in it. «auto» when it cannot be heard, or when the selected recogniser (CrisperWhisper) reads every language
+/// itself and needs no language id.
+fn reference_language(p: &VoicePaths, audio: &Path, card_lang: &str, progress: &dyn Fn(Value)) -> String {
+    let lang = card_lang.trim();
+    if !lang.is_empty() && lang != "auto" {
+        return lang.to_string();
+    }
+    match heard_reference_language(p, audio, progress) {
+        Ok(Some(code)) => code,
+        Ok(None) => "auto".to_string(),
+        Err(e) => {
+            tracing::warn!("voice reference language id: {e}");
+            "auto".to_string()
+        }
+    }
+}
+
+fn heard_reference_language(p: &VoicePaths, audio: &Path, progress: &dyn Fn(Value)) -> Result<Option<String>, String> {
+    let sel = crate::engines::models::load_selection(&p.models_root);
+    // CrisperWhisper reads «auto» itself across its languages, so it needs no language id
+    let known: &[&str] = match crate::engines::models::resolve_asr_choice(&p.repo_root, &p.models_root, &sel) {
+        crate::engines::models::AsrChoice::Ggml { model, .. } | crate::engines::models::AsrChoice::Server { model, .. } => model.languages,
+        crate::engines::models::AsrChoice::CrisperWhisper { .. } => return Ok(None),
+    };
+    crate::app::ensure_components(&p.repo_root, &[crate::engines::models::tcpp_build(&p.models_root).dir(), "langid"], progress)?;
+    let work = work_dir(&p.voices_dir, "langid", "langid")?;
+    let wav = work.path().join("ref16k.wav");
+    crate::audio::media::to_16k_mono(audio, &wav)?;
+    crate::app::recognition::spoken_language(&p.models_root, &wav, known)
+}
+
 /// Транскрипт рефа тем ASR, что выбран в настройках; пишет `<имя>.txt` и помечает транскрипт как распознанный.
 pub fn transcribe(p: &VoicePaths, name: &str, progress: &dyn Fn(Value)) -> Result<Value, String> {
     let audio = lib::audio_path(&p.voices_dir, name).ok_or_else(|| t!("voice-missing", name = name.to_string()))?;
@@ -27,8 +73,7 @@ pub fn transcribe(p: &VoicePaths, name: &str, progress: &dyn Fn(Value)) -> Resul
     progress(json!({ "type": "progress", "stage": "voice_transcript", "msg": t!("voice-transcribing", name = name.to_string()) }));
     crate::engines::tts_host::make_room();
     crate::app::ensure_job_components(&p.repo_root, &p.models_root, false, false, &|ev| progress(ev))?;
-    crate::app::recognition::ensure(&p.repo_root, &p.models_root, "", &|ev| progress(ev))?;
-    let heard = crate::app::recognition::transcribe(&p.repo_root, &p.models_root, &audio, &card.lang, name)?;
+    let heard = recognise_reference(p, &audio, &card.lang, name, &|ev| progress(ev))?;
     let text = heard.text;
     if text.is_empty() {
         return Err(t!("voice-no-speech", name = name.to_string()));
@@ -55,8 +100,7 @@ pub fn ensure_words(p: &VoicePaths, name: &str, limit: f64) -> Result<(), String
     // распознавание рядом с целой моделью озвучки не входит и в 24 ГБ
     crate::engines::tts_host::unload();
     crate::app::ensure_job_components(&p.repo_root, &p.models_root, false, false, &|_| {})?;
-    crate::app::recognition::ensure(&p.repo_root, &p.models_root, "", &|_| {})?;
-    let heard = crate::app::recognition::transcribe(&p.repo_root, &p.models_root, &audio, &card.lang, name)?;
+    let heard = recognise_reference(p, &audio, &card.lang, name, &|_| {})?;
     if heard.words.is_empty() {
         return Err(t!("voice-no-speech", name = name.to_string()));
     }

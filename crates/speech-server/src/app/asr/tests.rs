@@ -97,3 +97,15 @@ fn missing_parts_name_the_chosen_recogniser() {
     assert!(nemotron.iter().any(|id| id == "asr-gguf-nemotron"), "{nemotron:?}");
     assert!(!nemotron.iter().any(|id| id.starts_with("crisperwhisper")), "{nemotron:?}");
 }
+
+/// Outside the model's own languages the recording goes to CrisperWhisper, so «auto» picks the likeliest language it
+/// can read: VoxLingua107 also names languages Whisper has no token for (Esperanto, Guarani, Interlingua).
+#[test]
+fn a_language_no_recogniser_knows_gives_way_to_the_likeliest_one_it_does() {
+    let ranked = |cs: &[(&str, f32)]| cs.iter().map(|(c, p)| ((*c).to_string(), *p)).collect::<Vec<_>>();
+    assert_eq!(recognisable_language(&ranked(&[("eo", 0.5), ("zh", 0.3), ("ru", 0.2)])).as_deref(), Some("zh"));
+    assert_eq!(recognisable_language(&ranked(&[("ru", 0.6), ("be", 0.4)])).as_deref(), Some("ru"));
+    // all candidates outside any recogniser: the top is named, to be refused by name
+    assert_eq!(recognisable_language(&ranked(&[("gn", 0.7), ("ia", 0.3)])).as_deref(), Some("gn"));
+    assert_eq!(recognisable_language(&[]), None);
+}

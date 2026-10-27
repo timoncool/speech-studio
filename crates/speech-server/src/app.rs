@@ -96,7 +96,7 @@ pub(crate) use voice_rename::rename_voice;
 pub(crate) mod recognition {
     #[cfg(test)]
     pub(crate) use super::asr::choice;
-    pub(crate) use super::asr::{choice_of, ensure, missing_parts, second_opinion, transcribe, transcribe_many};
+    pub(crate) use super::asr::{choice_of, ensure, missing_parts, second_opinion, spoken_language, transcribe, transcribe_many, Heard};
 }
 
 pub(crate) mod profiles {
