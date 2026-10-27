@@ -19,7 +19,7 @@ export const ALLOW: Allow = {
  * spelled the same in the language. "*" applies to every language.
  */
 export const SAME_AS_EN: Record<"*" | "ru" | "zh" | "es" | "pt" | "fr", string[]> = {
-  "*": ["speech.ab", "prep.layer_ssml", "voices.attr_accentHint", "voices.variantBadge", "share.places.telegram", "share.places.x", "share.places.whatsapp", "share.places.reddit", "prefs.sections.api", "api.base", "api.logMs", "journal.line", "journal.quoted", "speech.takeWer", "modes.speech", "modes.listening", "modes.talk", "talk.title", "mic.what_live", "app.name", "asrVariant.int8", "asrVariant.fp32", "asrVariant.ultra", "asrVariant.ultraInt8", "jobs.atStage", "downloads.speed", "providers.localGemma", "providers.serverUrlPlaceholder", "url.qHeight", "url.tool.version", "dict.kind_regex", "book.minutes", "book.hours"],
+  "*": ["speech.ab", "voices.seconds", "prep.layer_ssml", "voices.attr_accentHint", "voices.variantBadge", "share.places.telegram", "share.places.x", "share.places.whatsapp", "share.places.reddit", "prefs.sections.api", "api.base", "api.logMs", "journal.line", "journal.quoted", "speech.takeWer", "modes.speech", "modes.listening", "modes.talk", "talk.title", "mic.what_live", "app.name", "asrVariant.int8", "asrVariant.fp32", "asrVariant.ultra", "asrVariant.ultraInt8", "jobs.atStage", "downloads.speed", "providers.localGemma", "providers.serverUrlPlaceholder", "url.qHeight", "url.tool.version", "dict.kind_regex", "book.minutes", "book.hours"],
   ru: [],
   zh: ["share.places.vk", "units.gb", "units.mb", "units.kb", "units.b"],
   es: ["talk.style_aura", "talk.widget", "voices.attr_timbre", "share.places.vk", "speech.rateKhz", "batch.error", "prefs.idleMinutes", "journal.kind.proxy", 

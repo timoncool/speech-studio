@@ -8,6 +8,7 @@ use crate::app::tools;
 use crate::engines::models;
 use crate::speech::talk as say_api;
 use crate::voices::{http as voice_api, record};
+use axum::extract::Query;
 use axum::extract::State;
 use axum::http::HeaderMap;
 use axum::http::StatusCode;
@@ -203,11 +204,25 @@ pub(super) async fn record_stop(State(st): State<AppState>, body: Option<Json<Va
     Json(out).into_response()
 }
 
-/// GET /voices/catalog — каталог доп-голосов (HF датасет Slait/russia_voices): имя, пол, URL-превью. Hugging Face
-/// не ответил — 502 {error, detail}.
-pub(super) async fn voices_catalog() -> Response {
+/// GET /voices/catalog — каталог доп-голосов (HF датасет nerualdreming/russia_voices): на каждый голос name, file,
+/// displayName, пол, возраст (adult/child), язык, описание, длительность, год рождения, URL-превью, размер, SHA-256,
+/// размер txt. Необязательные query-фильтры (их же шлёт MCP): gender, age, language, q (имя/описание), min_duration,
+/// max_duration — сервер отдаёт отобранное и сколько всего. Hugging Face не ответил — 502 {error, detail}.
+pub(super) async fn voices_catalog(Query(q): Query<std::collections::HashMap<String, String>>) -> Response {
     match tokio::task::spawn_blocking(record::catalog).await {
-        Ok(Ok(v)) => Json(v).into_response(),
+        Ok(Ok(v)) => {
+            let voices = v["voices"].as_array().cloned().unwrap_or_default();
+            let filter = record::CatalogFilter {
+                gender: q.get("gender").cloned(),
+                age_group: q.get("age").or_else(|| q.get("age_group")).cloned(),
+                language: q.get("language").or_else(|| q.get("lang")).cloned(),
+                query: q.get("q").or_else(|| q.get("query")).cloned(),
+                min_duration: q.get("min_duration").and_then(|s| s.parse().ok()),
+                max_duration: q.get("max_duration").and_then(|s| s.parse().ok()),
+            };
+            let filtered = record::filter_catalog(&voices, &filter);
+            Json(json!({ "voices": filtered, "total": voices.len(), "shown": filtered.len() })).into_response()
+        }
         Ok(Err(e)) => (
             StatusCode::BAD_GATEWAY,
             Json(json!({ "error": "catalog_unavailable", "detail": e })),
@@ -226,10 +241,25 @@ pub(super) async fn voices_get(State(st): State<AppState>, Json(body): Json<Valu
     match ok {
         Ok(Ok(())) => {
             let base = name.clone();
-            let card = voice_library::VoiceCard {
+            let mut card = voice_library::VoiceCard {
                 source: "russia_voices".into(),
                 ..voice_library::guess_card(&base)
             };
+            // the dataset's metadata is surer than the guess from the file name (and gives the language, so «auto»
+            // recognition routes the reference right away)
+            if let Ok(cat) = record::catalog() {
+                if let Some(e) = cat["voices"].as_array().into_iter().flatten().find(|e| e["name"] == name.as_str()) {
+                    if let Some(g) = e["gender"].as_str().filter(|s| !s.is_empty()) {
+                        card.gender = g.to_string();
+                    }
+                    if let Some(l) = e["language"].as_str().filter(|s| !s.is_empty()) {
+                        card.lang = l.to_ascii_lowercase();
+                    }
+                    if let Some(a) = e["age_group"].as_str().filter(|a| *a == "child" || *a == "adult") {
+                        card.age = a.to_string();
+                    }
+                }
+            }
             if let Err(e) = voice_library::write_card(&st.voices_dir, &base, &card) {
                 return Json(json!({ "ok": false, "error": e }));
             }
