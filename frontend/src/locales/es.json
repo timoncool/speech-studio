@@ -107,6 +107,8 @@
     "themeHint": "Oscuro, claro o como el sistema",
     "volume": "Volumen del estudio",
     "volumeHint": "Todo lo que reproduce el estudio: locución, voces, grabaciones y sonidos",
+    "uiScale": "Escala de la interfaz",
+    "uiScaleHint": "Dibuja todo el estudio más grande o más pequeño y se mantiene para el próximo inicio. Ctrl + más y Ctrl + menos, o Ctrl con la rueda del ratón, también la cambian; Ctrl + 0 vuelve al 100 %.",
     "theme_system": "Como el sistema",
     "theme_dark": "Oscuro",
     "theme_light": "Claro",

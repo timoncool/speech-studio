@@ -107,6 +107,8 @@
     "themeHint": "深色、浅色或跟随系统",
     "volume": "工作室音量",
     "volumeHint": "工作室播放的所有声音：配音、声音、录音和提示音",
+    "uiScale": "界面缩放",
+    "uiScaleHint": "放大或缩小整个工作室界面，并保留到下次启动。Ctrl + 加号、Ctrl + 减号或按住 Ctrl 滚动鼠标滚轮也可以调整；Ctrl + 0 恢复为 100 %。",
     "theme_system": "跟随系统",
     "theme_dark": "深色",
     "theme_light": "浅色",

@@ -19,6 +19,7 @@ import SpeechPage from "./components/speech/SpeechPage";
 import TalkPage from "./components/talk/TalkPage";
 import { aloudPlayback, useAloudPlayback } from "./lib/livePlayback";
 import { serveTalkFeed } from "./lib/talkFeed";
+import { applyUiScale, scaleForKey, setUiScale, storedUiScale, UI_SCALE_EVENT } from "./lib/uiScale";
 
 const modelName = (p?: string) => (p ? (p.split(/[\\/]/).pop() || p).replace(/\.(gguf|onnx|bin|pt|safetensors)$/i, "") : "");
 
@@ -32,6 +33,36 @@ export default function App() {
   const hub = useHubState(i18n.language);
   useAloudPlayback();
   useEffect(serveTalkFeed, []);
+  // The interface scale kept from the last session, and Ctrl with plus, minus, nought or the wheel to change it.
+  useEffect(() => {
+    let scale = storedUiScale();
+    applyUiScale(scale);
+    const change = (next: number | null) => {
+      if (next === null || next === scale) return;
+      scale = setUiScale(next);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+      const next = scaleForKey(event.key, scale);
+      if (next === null) return;
+      event.preventDefault();
+      change(next);
+    };
+    const onWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey || event.deltaY === 0) return;
+      event.preventDefault();
+      change(scaleForKey(event.deltaY < 0 ? "+" : "-", scale));
+    };
+    const onScale = (event: Event) => { scale = (event as CustomEvent<number>).detail; };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("wheel", onWheel, { passive: false });
+    window.addEventListener(UI_SCALE_EVENT, onScale);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("wheel", onWheel);
+      window.removeEventListener(UI_SCALE_EVENT, onScale);
+    };
+  }, []);
   useEffect(() => {
     const tel = hub?.telemetry;
     if (stage === "setup" || !tel || tel.acknowledged || tel.disabledByEnv) return;

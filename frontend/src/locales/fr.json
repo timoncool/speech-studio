@@ -107,6 +107,8 @@
     "themeHint": "Sombre, clair ou comme le système",
     "volume": "Volume du studio",
     "volumeHint": "Tout ce que joue le studio : doublage, voix, enregistrements et sons",
+    "uiScale": "Échelle de l'interface",
+    "uiScaleHint": "Dessine tout le studio en plus grand ou plus petit et est conservée au prochain démarrage. Ctrl + plus et Ctrl + moins, ou Ctrl avec la molette de la souris, la changent aussi ; Ctrl + 0 revient à 100 %.",
     "theme_system": "Comme le système",
     "theme_dark": "Sombre",
     "theme_light": "Clair",

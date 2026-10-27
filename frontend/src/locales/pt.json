@@ -107,6 +107,8 @@
     "themeHint": "Escuro, claro ou como o sistema",
     "volume": "Volume do estúdio",
     "volumeHint": "Tudo o que o estúdio toca: locução, vozes, gravações e sons",
+    "uiScale": "Escala da interface",
+    "uiScaleHint": "Desenha todo o estúdio maior ou menor e é mantida para o próximo início. Ctrl + mais e Ctrl + menos, ou Ctrl com a roda do mouse, também a alteram; Ctrl + 0 volta a 100 %.",
     "theme_system": "Como o sistema",
     "theme_dark": "Escuro",
     "theme_light": "Claro",
