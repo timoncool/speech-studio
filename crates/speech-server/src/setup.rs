@@ -620,35 +620,35 @@ mod platform {
         markers: &[Marker { rel: "models/qwen3-tts/libggml-cuda.so", expect: 181_033_752 }],
     };
 
-    // BSRoformer.cpp v0.1.0 (timoncool/BSRoformer.cpp studio-0.1.0, scripts/release-linux-cuda-docker.sh): Ubuntu
-    // 22.04, libgomp beside the program, RUNPATH $ORIGIN, ../../models/higgs-engine and ../../models/cuda12-runtime;
-    // Vulkan is the author's build.
+    // BSRoformer.cpp v0.1.0 (timoncool/BSRoformer.cpp studio-0.1.1, scripts/release-linux-cuda-docker.sh): Ubuntu
+    // 22.04, the program with ggml, a ggml-cpu per instruction level, the device's backend module and libgomp beside
+    // it, RUNPATH $ORIGIN, ../../models/higgs-engine and ../../models/cuda12-runtime.
     pub const BSROFORMER: Parts = Parts {
-        size: 118_589_684,
+        size: 123_464_218,
         files: &[
-            FileSpec { url: "https://github.com/timoncool/BSRoformer.cpp/releases/download/studio-0.1.0/BSRoformer-linux-cuda13-x64.tar.gz", dest_rel: "tools/bsroformer/_engine.tar.gz", size: 118_589_684, sha256: "d363cd9c2249417f4d93851e4958c1c6808fa18e5f8b564312ed124c5881bf63", extract: Extract::Flat },
+            FileSpec { url: "https://github.com/timoncool/BSRoformer.cpp/releases/download/studio-0.1.1/BSRoformer-linux-cuda13-x64.tar.gz", dest_rel: "tools/bsroformer/_engine.tar.gz", size: 123_464_218, sha256: "807f59113f17eb706bc7289155bdf507d05ae01650a5c2ccd9685f5574e9cd04", extract: Extract::Flat },
         ],
         markers: &[Marker { rel: "tools/bsroformer/bs_roformer-cli", expect: 0 }],
     };
     pub const BSROFORMER_CUDA12: Parts = Parts {
-        size: 172_267_870,
+        size: 177_134_761,
         files: &[
-            FileSpec { url: "https://github.com/timoncool/BSRoformer.cpp/releases/download/studio-0.1.0/BSRoformer-linux-cuda12-x64.tar.gz", dest_rel: "tools/bsroformer-cuda12/_engine.tar.gz", size: 172_267_870, sha256: "d6bc6ee2e0af9f7a430ab6f0b3ded880e764ea77ee68e97a1c689cee92083520", extract: Extract::Flat },
+            FileSpec { url: "https://github.com/timoncool/BSRoformer.cpp/releases/download/studio-0.1.1/BSRoformer-linux-cuda12-x64.tar.gz", dest_rel: "tools/bsroformer-cuda12/_engine.tar.gz", size: 177_134_761, sha256: "82540c02b5a9730137b0059ffda8c0c79b589a649af554dff1f88867a6c7444d", extract: Extract::Flat },
         ],
         markers: &[Marker { rel: "tools/bsroformer-cuda12/bs_roformer-cli", expect: 0 }],
     };
     pub const BSROFORMER_VULKAN: Parts = Parts {
-        size: 5_900_692,
+        size: 28_805_838,
         files: &[
-            FileSpec { url: "https://github.com/chenmozhijin/BSRoformer.cpp/releases/download/v0.1.0/BSRoformer-linux-vulkan.tar.xz", dest_rel: "tools/bsroformer-vulkan/_engine.tar.xz", size: 5_900_692, sha256: "bee2e9b5dd322b8d4fe1081583ce41709c2c1341550bbb557073c1216fef3e85", extract: Extract::Flat },
+            FileSpec { url: "https://github.com/timoncool/BSRoformer.cpp/releases/download/studio-0.1.1/BSRoformer-linux-vulkan-x64.tar.gz", dest_rel: "tools/bsroformer-vulkan/_engine.tar.gz", size: 28_805_838, sha256: "d0b6acc7b4b05c453bbfe99ea8154251fde4d96b2edd957fdab6e596f7a64927", extract: Extract::Flat },
         ],
         markers: &[Marker { rel: "tools/bsroformer-vulkan/bs_roformer-cli", expect: 0 }],
     };
 
     pub const BSROFORMER_CPU: Parts = Parts {
-        size: 640_204,
+        size: 5_849_988,
         files: &[
-            FileSpec { url: "https://github.com/chenmozhijin/BSRoformer.cpp/releases/download/v0.1.0/BSRoformer-linux-x64-cpu.tar.xz", dest_rel: "tools/bsroformer-cpu/_engine.tar.xz", size: 640_204, sha256: "bc0f20237b9ed263582ebd0844dfc7dbb61309a67c31f4a8d7ba156e21292c77", extract: Extract::Flat },
+            FileSpec { url: "https://github.com/timoncool/BSRoformer.cpp/releases/download/studio-0.1.1/BSRoformer-linux-cpu-x64.tar.gz", dest_rel: "tools/bsroformer-cpu/_engine.tar.gz", size: 5_849_988, sha256: "65eb3cf26dfed0a23f01906a9f179ae7ab503f2bdac4f411e49ec902a5addafd", extract: Extract::Flat },
         ],
         markers: &[Marker { rel: "tools/bsroformer-cpu/bs_roformer-cli", expect: 0 }],
     };
