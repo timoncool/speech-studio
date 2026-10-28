@@ -51,11 +51,11 @@ fn each_request_resolves_current_selection_without_changing_previous_specificati
     let root = tempfile::tempdir().unwrap();
     let models = selection(root.path(), json!({"local_backend":"cpu", "asr":"int8"}));
     for id in ["transcribe-engine-cpu", "parakeet", "parakeet-ultra"] {
-        // installed means the pinned size: the content is not read here
-        for f in crate::setup::manifest().iter().find(|c| c.id == id).unwrap().files {
-            let path = root.path().join(f.dest_rel);
+        // installed means the markers at their pinned size: the content is not read here
+        for m in crate::setup::manifest().iter().find(|c| c.id == id).unwrap().markers {
+            let path = root.path().join(m.rel);
             std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-            std::fs::File::create(path).unwrap().set_len(f.size).unwrap();
+            std::fs::File::create(path).unwrap().set_len(m.expect).unwrap();
         }
     }
     let first = choice(root.path(), &models, "en", "voice").unwrap();

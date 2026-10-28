@@ -164,7 +164,6 @@ pub fn drama(models_root: &Path) -> Result<Tts, String> {
     if !crate::engines::models::drama_installed(models_root) {
         return Err(t!("render-drama-missing"));
     }
-    crate::engines::hw::processor_runs(crate::engines::hw::CpuEngine::Drama)?;
     let e = drama::DramaEngine::load_limited(&crate::engines::models::drama_dll(models_root), &[], &models_root.join(crate::engines::models::DRAMA_TTS), DRAMA_MAX_LEN, limit)
         .map_err(|e| drama_load_error(&e.to_string(), limit))?;
     let e = Arc::new(e);
@@ -249,7 +248,6 @@ pub fn qwen(models_root: &Path, clone: bool, stress: bool) -> Result<Tts, String
 /// and driver for that build.
 fn qwen_build(models_root: &Path) -> Result<acpp_server::asset::Build, String> {
     let build = crate::engines::qwen_tts::build(models_root)?;
-    crate::engines::hw::processor_runs(crate::engines::hw::CpuEngine::Qwen)?;
     if build == acpp_server::asset::Build::Cuda13 {
         cuda13_ready()?;
     }

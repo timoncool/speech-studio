@@ -20,9 +20,14 @@ fn search_dirs(root: &Path) -> Vec<PathBuf> {
 /// грузятся LoadLibrary'ем, поэтому проверяются отдельными точками входа. Сборки сервера и Qwen — в `entry_points`.
 const FIXED_ENTRY_POINTS: &[(&str, &str)] = &[
     ("drama3", "models/drama-engine/drama_engine.dll"),
-    ("transcribe-engine", "models/transcribe-engine/transcribe_engine.dll"),
-    ("transcribe-engine-cpu", "models/transcribe-engine-cpu/transcribe_engine.dll"),
-    ("transcribe-engine-vulkan", "models/transcribe-engine-vulkan/transcribe_engine.dll"),
+    ("transcribe-engine", "models/transcribe-engine/transcribe.dll"),
+    ("transcribe-engine", "models/transcribe-engine/ggml-cpu-x64.dll"),
+    ("transcribe-engine", "models/transcribe-engine/ggml-cuda.dll"),
+    ("transcribe-engine-cpu", "models/transcribe-engine-cpu/transcribe.dll"),
+    ("transcribe-engine-cpu", "models/transcribe-engine-cpu/ggml-cpu-x64.dll"),
+    ("transcribe-engine-vulkan", "models/transcribe-engine-vulkan/transcribe.dll"),
+    ("transcribe-engine-vulkan", "models/transcribe-engine-vulkan/ggml-cpu-x64.dll"),
+    ("transcribe-engine-vulkan", "models/transcribe-engine-vulkan/ggml-vulkan.dll"),
     ("onnxruntime", "models/runtime/onnxruntime-win-x64-1.28.2/lib/onnxruntime.dll"),
     (
         "onnxruntime-gpu",
@@ -63,7 +68,7 @@ pub fn entry_points() -> Vec<(&'static str, String)> {
             out.push((server, format!("tools/{}/audiocpp_server.exe", build.folder())));
         }
     }
-    for (component, file) in [("qwen3-tts-engine", "qwen.dll"), ("qwen3-tts-engine", "ggml-cpu.dll"), ("qwen3-tts-vulkan", "ggml-vulkan.dll"), ("qwen3-tts-cuda", "ggml-cuda.dll")] {
+    for (component, file) in [("qwen3-tts-engine", "qwen.dll"), ("qwen3-tts-engine", "ggml-cpu-x64.dll"), ("qwen3-tts-vulkan", "ggml-vulkan.dll"), ("qwen3-tts-cuda", "ggml-cuda.dll")] {
         if listed(component) {
             out.push((component, format!("models/qwen3-tts/{file}")));
         }

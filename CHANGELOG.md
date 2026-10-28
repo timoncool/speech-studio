@@ -4,7 +4,7 @@ What changed, newest first. Dates are release dates; the app is versioned by its
 build. Every change a user can see is written here in the commit that makes it, and the
 release notes on GitHub are taken from the release's section.
 
-## 0.3.1 — 2026-10-27
+## 0.3.5 — 2026-10-28
 
 ### Added
 
@@ -13,7 +13,7 @@ release notes on GitHub are taken from the release's section.
 
 ### Fixed
 
-- **Drama 3 starts again on a processor without AVX2, FMA or BMI2**, as it did before 0.3.0: its engine is built for any x86-64 processor, and 0.3.0 refused it with «Drama 3 needs a processor with AVX2…». Qwen3-TTS, the voice separator and the audio.cpp engine are built for AVX2, FMA, F16C and BMI2 and still say so on a processor without them.
+- **Every engine runs on any x86-64 processor, with or without AVX2, FMA or BMI2**: Drama 3 starts again as it did before 0.3.0, which refused it with «Drama 3 needs a processor with AVX2…», and the audio.cpp engine (Higgs, Supertonic, CrisperWhisper, Parakeet), Qwen3-TTS, the voice separator and recognition (transcribe.cpp) now come with a processor build for every instruction level and load the one this processor runs best, instead of the AVX2 build alone. The new builds are downloaded once after the update.
 - **A voice reference in a language the recogniser does not know is heard anyway**: under Auto, a Chinese (or other) reference recognised by the default Parakeet, which does not know it, came back empty and was refused as «no speech was recognised»; now the reference's language is heard by VoxLingua107 and a recogniser that knows it (CrisperWhisper) is used, so its transcript, its cleaning and its voicing with Drama 3 go through.
 - **Auto only guesses a language a recogniser can read**: the language id (VoxLingua107) names a few languages CrisperWhisper has no token for (Esperanto, Guarani, Interlingua) and a recording guessed as one of them was refused; Auto now takes the likeliest language a recogniser here can read instead.
 - **The voice-similarity check runs on the processor when there is no usable graphics card**, instead of stopping a voicing with an ONNX Runtime CUDA error: its model asks for the card only when one can run a CUDA build, as under Auto with no card.

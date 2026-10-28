@@ -125,7 +125,6 @@ pub fn clean(p: &VoicePaths, name: &str, progress: &dyn Fn(Value)) -> Result<Val
     // the separator takes 44.1 kHz only and refuses a voice recorded at 48 or 24 kHz
     crate::audio::media::extract_audio(&audio, &wav, 44_100, 2)?;
     let stems = work.path().join("stems");
-    crate::engines::hw::processor_runs(crate::engines::hw::CpuEngine::Separator)?;
     tracing::info!("separation: {} ({})", cli.display(), crate::engines::models::server_choice(&p.models_root, "sep_backend"));
     let res = dub_sep::separate(&wav, &stems, &cli, &model).map_err(|e| e.localize())?;
     lib::replace_with_cleaned(&p.voices_dir, name, &res.vocals)?;

@@ -215,7 +215,6 @@ fn separate(p: &ListenPaths, src: &Path, work: &Path) -> Result<PathBuf, String>
     let hq = work.join("mix-44k.wav");
     crate::audio::media::extract_audio(src, &hq, 44_100, 2)?;
     let stems = work.join("stems");
-    crate::engines::hw::processor_runs(crate::engines::hw::CpuEngine::Separator)?;
     tracing::info!("separation: {}", cli.display());
     let res = dub_sep::separate(&hq, &stems, &cli, &model).map_err(|e| e.localize())?;
     let clean = work.join("vocals16.wav");
@@ -239,7 +238,6 @@ pub fn separate_to(repo_root: &Path, models_root: &Path, src: &Path, out: &Path,
     let work = tempfile::Builder::new().prefix("separate-").tempdir().map_err(|e| e.to_string())?;
     let hq = work.path().join("mix-44k.wav");
     crate::audio::media::extract_audio(src, &hq, 44_100, 2)?;
-    crate::engines::hw::processor_runs(crate::engines::hw::CpuEngine::Separator)?;
     tracing::info!("separation: {} ({})", cli.display(), crate::engines::models::server_choice(models_root, "sep_backend"));
     let res = dub_sep::separate(&hq, &work.path().join("stems"), &cli, &model).map_err(|e| e.localize())?;
     std::fs::create_dir_all(out).map_err(|e| format!("{}: {e}", out.display()))?;

@@ -172,7 +172,6 @@ fn config(repo_root: &Path, models_root: &Path, build: Build) -> ServerConfig {
 /// on disk changed or the process ended. An error, before the program starts, when the processor lacks the build's
 /// floor, the program or its CUDA libraries are missing, or `model` is not on disk.
 pub fn server(repo_root: &Path, models_root: &Path, build: Build, model: &str) -> Result<Arc<Server>, String> {
-    crate::engines::hw::processor_runs(crate::engines::hw::CpuEngine::AudioCpp)?;
     let config = config(repo_root, models_root, build);
     if !config.exe.is_file() {
         return Err(t!("acpp-no-server", path = config.exe.display().to_string()));
