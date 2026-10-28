@@ -204,12 +204,81 @@ pub(super) async fn record_stop(State(st): State<AppState>, body: Option<Json<Va
     Json(out).into_response()
 }
 
+/// A voice's card from its catalogue entry: everything the dataset gives; `over` — over what the card says (a fresh
+/// download), else only what the card leaves empty (a voice taken before its card kept the catalogue's data).
+fn fill_card(card: &mut voice_library::VoiceCard, e: &Value, over: bool) {
+    let text = |k: &str| e[k].as_str().map(str::trim).filter(|s| !s.is_empty());
+    let set = |field: &mut String, value: Option<String>| {
+        if let Some(v) = value.filter(|_| over || field.is_empty()) {
+            *field = v;
+        }
+    };
+    set(&mut card.gender, text("gender").map(str::to_string));
+    set(&mut card.lang, text("language").map(str::to_ascii_lowercase));
+    set(&mut card.age, text("age_group").filter(|a| *a == "child" || *a == "adult").map(str::to_string));
+    set(&mut card.display, text("displayName").filter(|d| Some(*d) != e["name"].as_str()).map(str::to_string));
+    set(&mut card.description, text("description").map(str::to_string));
+    if over || card.birth_year.is_none() {
+        card.birth_year = e["birth_year"].as_u64().and_then(|y| u32::try_from(y).ok());
+    }
+    if over || card.duration_s.is_none() {
+        card.duration_s = e["duration_s"].as_f64().filter(|d| *d > 0.0);
+    }
+}
+
+#[cfg(test)]
+mod card_tests {
+    use super::*;
+
+    #[test]
+    fn a_download_takes_the_catalogue_and_a_backfill_keeps_what_the_card_says() {
+        let e = json!({ "name": "RU_Female_volkova_anna", "displayName": "Анна Волкова", "gender": "female", "age_group": "child",
+            "language": "RU", "description": " Юная актриса ", "duration_s": 69.0, "birth_year": 2014 });
+        let mut fresh = voice_library::VoiceCard::default();
+        fill_card(&mut fresh, &e, true);
+        assert_eq!((fresh.display.as_str(), fresh.gender.as_str(), fresh.age.as_str(), fresh.lang.as_str()), ("Анна Волкова", "female", "child", "ru"));
+        assert_eq!((fresh.description.as_str(), fresh.birth_year, fresh.duration_s), ("Юная актриса", Some(2014), Some(69.0)));
+        let mut own = voice_library::VoiceCard { gender: "male".into(), description: "своё".into(), ..Default::default() };
+        fill_card(&mut own, &e, false);
+        assert_eq!((own.gender.as_str(), own.description.as_str(), own.display.as_str(), own.age.as_str()), ("male", "своё", "Анна Волкова", "child"));
+    }
+}
+
+/// The voices of the library that came from the catalogue before their cards kept its data get it now.
+fn backfill_cards(voices_dir: &std::path::Path, catalog: &[Value]) {
+    let mut changed = false;
+    for v in voice_library::list(voices_dir).0 {
+        if !v.card.display.is_empty() {
+            continue;
+        }
+        let Some(e) = catalog.iter().find(|e| e["name"] == v.name.as_str()) else { continue };
+        let mut card = v.card.clone();
+        fill_card(&mut card, e, false);
+        if card != v.card {
+            match voice_library::write_card(voices_dir, &v.name, &card) {
+                Ok(()) => changed = true,
+                Err(err) => tracing::warn!("voices: the card of {} keeps its old data: {err}", v.name),
+            }
+        }
+    }
+    if changed {
+        app::events::publish(json!({ "changed": "voices" }));
+    }
+}
+
 /// GET /voices/catalog — каталог доп-голосов (HF датасет nerualdreming/russia_voices): на каждый голос name, file,
 /// displayName, пол, возраст (adult/child), язык, описание, длительность, год рождения, URL-превью, размер, SHA-256,
 /// размер txt. Необязательные query-фильтры (их же шлёт MCP): gender, age, language, q (имя/описание), min_duration,
 /// max_duration — сервер отдаёт отобранное и сколько всего. Hugging Face не ответил — 502 {error, detail}.
-pub(super) async fn voices_catalog(Query(q): Query<std::collections::HashMap<String, String>>) -> Response {
-    match tokio::task::spawn_blocking(record::catalog).await {
+pub(super) async fn voices_catalog(State(st): State<AppState>, Query(q): Query<std::collections::HashMap<String, String>>) -> Response {
+    let dir = st.voices_dir.clone();
+    let got = tokio::task::spawn_blocking(move || {
+        let v = record::catalog()?;
+        backfill_cards(&dir, v["voices"].as_array().map(Vec::as_slice).unwrap_or_default());
+        Ok::<_, String>(v)
+    })
+    .await;
+    match got {
         Ok(Ok(v)) => {
             let voices = v["voices"].as_array().cloned().unwrap_or_default();
             let filter = record::CatalogFilter {
@@ -249,23 +318,7 @@ pub(super) async fn voices_get(State(st): State<AppState>, Json(body): Json<Valu
             // recognition routes the reference right away)
             if let Ok(cat) = record::catalog() {
                 if let Some(e) = cat["voices"].as_array().into_iter().flatten().find(|e| e["name"] == name.as_str()) {
-                    if let Some(g) = e["gender"].as_str().filter(|s| !s.is_empty()) {
-                        card.gender = g.to_string();
-                    }
-                    if let Some(l) = e["language"].as_str().filter(|s| !s.is_empty()) {
-                        card.lang = l.to_ascii_lowercase();
-                    }
-                    if let Some(a) = e["age_group"].as_str().filter(|a| *a == "child" || *a == "adult") {
-                        card.age = a.to_string();
-                    }
-                    if let Some(d) = e["displayName"].as_str().filter(|s| !s.is_empty() && *s != name.as_str()) {
-                        card.display = d.to_string();
-                    }
-                    if let Some(d) = e["description"].as_str().map(str::trim).filter(|s| !s.is_empty()) {
-                        card.description = d.to_string();
-                    }
-                    card.birth_year = e["birth_year"].as_u64().and_then(|y| u32::try_from(y).ok());
-                    card.duration_s = e["duration_s"].as_f64().filter(|d| *d > 0.0);
+                    fill_card(&mut card, e, true);
                 }
             }
             if let Err(e) = voice_library::write_card(&st.voices_dir, &base, &card) {
