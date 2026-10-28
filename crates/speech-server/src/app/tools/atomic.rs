@@ -26,7 +26,7 @@ pub(super) fn tools() -> Vec<Tool> {
         Tool {
             name: "speak_text",
             description: "A text voiced into an audio file in one call: voice is a voice name of voices_list (none: the engine's base voice), engine an id of engines_list (default higgs), lang a code or auto, format wav, flac, mp3, ogg or m4a (default flac). Lines like \"Anna: ...\" give a dialogue with the cast of the voices named after the speakers. The first call makes a Speech project (project_id) and voices it; calling again with the same text and arguments answers with the file at once. The answer names the file on this computer.",
-            schema: || object(json!({ "text": { "type": "string" }, "voice": { "type": "string" }, "engine": { "type": "string", "enum": crate::engines::all().iter().map(|e| e.id).collect::<Vec<_>>() }, "lang": { "type": "string" }, "format": { "type": "string", "enum": ["wav", "flac", "mp3", "ogg", "m4a"] }, "direction": { "type": "string", "description": "how it should sound (tone, pace), for the engines that take it" }, "seed": { "type": "integer", "minimum": 0, "description": "a fixed seed: another seed gives another take of the same text" }, "seconds": seconds_arg() }), &["text"]),
+            schema: || object(json!({ "text": { "type": "string" }, "voice": { "type": "string" }, "engine": { "type": "string", "enum": crate::engines::all().iter().map(|e| e.id).collect::<Vec<_>>() }, "lang": { "type": "string" }, "format": { "type": "string", "enum": ["wav", "flac", "mp3", "ogg", "m4a"] }, "direction": { "type": "string", "description": "how it should sound (tone, pace), for the engines that take it" }, "seed": { "type": "integer", "minimum": 0, "description": "a fixed seed: another seed gives another take of the same text" }, "temperature": { "type": "number", "description": "sampling temperature of the engine (Higgs, Drama 3, Qwen3-TTS); the engine's default when left out" }, "top_k": { "type": "integer", "minimum": 0 }, "top_p": { "type": "number" }, "max_tokens": { "type": "integer", "minimum": 0, "description": "ceiling of the engine's answer in tokens; 0 sets it by the text's length" }, "steps": { "type": "integer", "minimum": 1, "description": "flow steps of Supertonic" }, "loudness": { "type": "string", "enum": ["off", "video", "podcast", "acx"], "description": "loudness preset of the export (default video)" }, "seconds": seconds_arg() }), &["text"]),
             call: |_| composite("speak_text"),
         },
         Tool {
@@ -158,6 +158,9 @@ fn local_path(args: &Value) -> Result<String, String> {
 
 // ---------------------------------------------------------------- tools
 
+/// The project settings a one-call voicing takes over the engine's defaults, as POST /projects names them.
+pub(crate) const ENGINE_SETTINGS: &[&str] = &["temperature", "top_k", "top_p", "max_tokens", "steps", "loudness"];
+
 async fn speak(args: &Value, until: Instant) -> Result<Value, String> {
     let said = text(args, "text")?;
     let format = args.get("format").and_then(Value::as_str).unwrap_or("flac").to_string();
@@ -170,9 +173,18 @@ async fn speak(args: &Value, until: Instant) -> Result<Value, String> {
     if let Some(seed) = seed {
         keyed["seed"] = json!(seed);
     }
+    for setting in ENGINE_SETTINGS {
+        if let Some(v) = args.get(*setting).filter(|v| !v.is_null()) {
+            keyed[*setting] = v.clone();
+        }
+    }
     let key = blake3::hash(keyed.to_string().as_bytes()).to_hex()[..16].to_string();
     let name: String = said.chars().take(40).collect();
-    let made = ok(Method::POST, "/projects".into(), Some(json!({ "name": name, "text": said, "voice": field("voice"), "engine": field("engine"), "lang": field("lang"), "direction": field("direction"), "seed": seed, "key": key }))).await?;
+    let mut asked = json!({ "name": name, "text": said, "voice": field("voice"), "engine": field("engine"), "lang": field("lang"), "direction": field("direction"), "seed": seed, "key": key });
+    for setting in ENGINE_SETTINGS {
+        asked[*setting] = keyed[*setting].clone();
+    }
+    let made = ok(Method::POST, "/projects".into(), Some(asked)).await?;
     let pid = made["project_id"].as_str().ok_or("POST /projects answered no project_id")?.to_string();
     let want = format!("{}.{format}", made["project"]["name"].as_str().unwrap_or("speech"));
     let exports = ok(Method::GET, format!("/projects/{}/exports", segment(&pid)), None).await?;

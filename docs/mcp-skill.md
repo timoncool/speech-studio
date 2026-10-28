@@ -206,7 +206,8 @@ The studio's own tools for it: `openai_api_status`, `openai_api_key_create` (a n
 
 Programs that speak OpenAI's audio API can use the studio directly: `POST http://127.0.0.1:8797/v1/audio/speech`
 (`model` tts-1 / higgs / drama3, `voice` a voice name of the library, `instructions`, `speed`, `response_format` mp3,
-wav, flac, aac, pcm), `POST /v1/audio/transcriptions` (multipart `file`, `model` whisper-1, `language`,
+wav, flac, aac, pcm; beyond OpenAI's fields the project settings of the engine, each over its default: `seed`,
+`temperature`, `top_k`, `top_p`, `max_tokens`, `steps` for Supertonic, `loudness` off, video, podcast, acx), `POST /v1/audio/transcriptions` (multipart `file`, `model` whisper-1, `language`,
 `response_format` json, text, srt, vtt, verbose_json) and `GET /v1/models`. With a key (`SPEECH_STUDIO_API_TOKEN`, or
 one the user made in Settings, API) send `Authorization: Bearer <key>`. Settings, API also shows examples and the latest
 requests with their answers (`ui_open_settings` with section api).

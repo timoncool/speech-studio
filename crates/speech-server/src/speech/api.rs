@@ -90,8 +90,25 @@ fn keyed_project(workspace: &Path, key: &str) -> Option<(String, SpeechProject)>
     })
 }
 
-/// POST /projects {name, text?, voice?, lang?, seed?} — новый проект Speech: текст режется на блоки (абзацы или диалог);
-/// `seed` фиксирует сид дублей.
+/// The engine settings a request may give a new project, each over the engine's default; an engine reads those it has.
+struct SamplingArgs {
+    temperature: Option<f64>,
+    top_k: Option<u32>,
+    top_p: Option<f64>,
+    max_tokens: Option<u32>,
+    steps: Option<u32>,
+}
+
+impl SamplingArgs {
+    fn of(body: &Value) -> Self {
+        let float = |n: &str| body.get(n).and_then(Value::as_f64);
+        let int = |n: &str| body.get(n).and_then(Value::as_u64).map(|v| v.min(u32::MAX as u64) as u32);
+        SamplingArgs { temperature: float("temperature"), top_k: int("top_k"), top_p: float("top_p"), max_tokens: int("max_tokens"), steps: int("steps") }
+    }
+}
+
+/// POST /projects {name, text?, voice?, lang?, seed?, temperature?, top_k?, top_p?, max_tokens?, loudness?} — новый проект
+/// Speech: текст режется на блоки (абзацы или диалог); `seed` фиксирует сид дублей, остальное — настройки проекта.
 pub async fn create(State(st): State<AppState>, Json(body): Json<Value>) -> Response {
     let name = body.get("name").and_then(Value::as_str).map(str::trim).filter(|n| !n.is_empty()).map(str::to_string).unwrap_or_else(|| t!("speech-untitled"));
     let text = body.get("text").and_then(Value::as_str).unwrap_or("").to_string();
@@ -103,6 +120,8 @@ pub async fn create(State(st): State<AppState>, Json(body): Json<Value>) -> Resp
     let engine = body.get("engine").and_then(Value::as_str).filter(|e| !e.is_empty()).map(str::to_string);
     let direction = body.get("direction").and_then(Value::as_str).map(str::trim).unwrap_or("").to_string();
     let seed = body.get("seed").and_then(Value::as_u64);
+    let sampling = SamplingArgs::of(&body);
+    let loudness = body.get("loudness").and_then(Value::as_str).filter(|l| !l.is_empty()).map(str::to_string);
     let corpus = body.get("corpus").and_then(Value::as_str).filter(|c| !c.is_empty()).map(str::to_string);
     if let Some(c) = corpus.as_deref().filter(|c| *c != "ru_hard") {
         return refuse(StatusCode::BAD_REQUEST, "bad_project", t!("speech-corpus-unknown", corpus = c.to_string()));
@@ -149,6 +168,26 @@ pub async fn create(State(st): State<AppState>, Json(body): Json<Value>) -> Resp
             project.settings.params.seed_mode = "fixed".into();
             project.settings.params.seed = seed % crate::engines::tts_host::SEED_RANGE;
         }
+        let params = &mut project.settings.params;
+        if let Some(v) = sampling.temperature {
+            params.temperature = v;
+        }
+        if let Some(v) = sampling.top_k {
+            params.top_k = v;
+        }
+        if let Some(v) = sampling.top_p {
+            params.top_p = v;
+        }
+        if let Some(v) = sampling.max_tokens {
+            params.max_tokens = v;
+        }
+        if let Some(v) = sampling.steps {
+            params.steps = v;
+        }
+        if let Some(l) = loudness {
+            project.settings.loudness = l;
+        }
+        crate::speech::validate(&project)?;
         project.key = key;
         if !direction.is_empty() {
             for b in project.chapters.iter_mut().flat_map(|c| c.blocks.iter_mut()) {

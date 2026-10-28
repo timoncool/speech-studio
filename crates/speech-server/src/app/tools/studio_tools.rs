@@ -233,8 +233,8 @@ pub(super) fn tools() -> Vec<Tool> {
         },
         Tool {
             name: "openai_api_speech",
-            description: "Call /v1/audio/speech as a program would (to check what it gets): model (an engine alias from openai_api_status), input text, voice (a library voice name), response_format (mp3 by default, wav, flac, aac, pcm), speed (0.25 to 4), instructions (the direction). Answers the sound as a file on this computer.",
-            schema: || object(json!({ "model": { "type": "string" }, "input": { "type": "string" }, "voice": { "type": "string" }, "response_format": { "type": "string", "enum": ["mp3", "wav", "flac", "aac", "pcm"] }, "speed": { "type": "number" }, "instructions": { "type": "string" } }), &["model", "input", "voice"]),
+            description: "Call /v1/audio/speech as a program would (to check what it gets): model (an engine alias from openai_api_status), input text, voice (a library voice name), response_format (mp3 by default, wav, flac, aac, pcm), speed (0.25 to 4), instructions (the direction), and the studio's own engine settings over the engine's defaults: seed, temperature, top_k, top_p, max_tokens, steps (Supertonic), loudness (off, video, podcast, acx). Answers the sound as a file on this computer.",
+            schema: || object(json!({ "model": { "type": "string" }, "input": { "type": "string" }, "voice": { "type": "string" }, "response_format": { "type": "string", "enum": ["mp3", "wav", "flac", "aac", "pcm"] }, "speed": { "type": "number" }, "instructions": { "type": "string" }, "seed": { "type": "integer", "minimum": 0 }, "temperature": { "type": "number" }, "top_k": { "type": "integer", "minimum": 0 }, "top_p": { "type": "number" }, "max_tokens": { "type": "integer", "minimum": 0 }, "steps": { "type": "integer", "minimum": 1 }, "loudness": { "type": "string", "enum": ["off", "video", "podcast", "acx"] } }), &["model", "input", "voice"]),
             call: |args| post("/v1/audio/speech".into(), args.clone()),
         },
         Tool {

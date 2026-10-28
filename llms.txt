@@ -9,7 +9,7 @@ For an agent given this repository: install the studio from the latest release, 
 - MCP endpoint: `http://127.0.0.1:8797/mcp` (Streamable HTTP, stateless JSON-RPC)
 - Claude Code: `claude mcp add --transport http speech-studio http://127.0.0.1:8797/mcp`
 - Other clients: `{ "mcpServers": { "speech-studio": { "type": "streamable-http", "url": "http://127.0.0.1:8797/mcp" } } }`
-- OpenAI audio API: `POST http://127.0.0.1:8797/v1/audio/speech`, `POST /v1/audio/transcriptions`, `GET /v1/models`
+- OpenAI audio API: `POST http://127.0.0.1:8797/v1/audio/speech`, `POST /v1/audio/transcriptions`, `GET /v1/models`; speech also takes the engine's project settings: `seed`, `temperature`, `top_k`, `top_p`, `max_tokens`, `steps` (Supertonic), `loudness` (off, video, podcast, acx)
 - Only programs on this computer and the studio's own window may connect.
 
 ## Docs

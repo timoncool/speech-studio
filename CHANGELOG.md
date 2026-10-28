@@ -10,6 +10,7 @@ release notes on GitHub are taken from the release's section.
 
 - **The interface can be scaled** ([#16](https://github.com/timoncool/speech-studio/issues/16)): Settings → Appearance → Interface scale draws the whole studio from 90 to 150 % and keeps it for the next start; Ctrl + plus and Ctrl + minus, or Ctrl with the mouse wheel, change it too, and Ctrl + 0 returns to 100 %.
 - **The voice catalogue filters, searches and plays before you download**: the extra voices come with their gender, age (adult or child), language, description and length, so the library's "Open cloud voices" filters by gender, age, language and minimum length, searches the name and description, plays a sample, and downloads the ones picked or everything the filters show, each with its sample transcript. A downloaded voice already carries its language, gender and age. The voices are downloaded as they are chosen, not bundled with the program.
+- **The API takes the engine's settings** ([#17](https://github.com/timoncool/speech-studio/issues/17)): `POST /v1/audio/speech` and the MCP tool `speak_text` accept, beyond OpenAI's fields, the project settings of the local engines — `seed`, `temperature`, `top_k`, `top_p`, `max_tokens`, `steps` (Supertonic) and `loudness` (off, video, podcast, acx) — each over the engine's default, as Project settings set them in the window.
 
 ### Fixed
 

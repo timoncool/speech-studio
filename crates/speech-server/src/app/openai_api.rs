@@ -144,7 +144,8 @@ pub async fn models(headers: HeaderMap) -> Response {
     )
 }
 
-/// POST /v1/audio/speech {model, input, voice, response_format?, speed?, instructions?}
+/// POST /v1/audio/speech {model, input, voice, response_format?, speed?, instructions?, seed?, temperature?, top_k?, top_p?,
+/// max_tokens?, steps?, loudness?}
 pub async fn speech(headers: HeaderMap, Json(body): Json<Value>) -> Response {
     let started = Instant::now();
     let row = Logged {
@@ -207,6 +208,12 @@ where
     }
     if let Some(instructions) = body.get("instructions").and_then(Value::as_str).filter(|v| !v.trim().is_empty()) {
         args["direction"] = json!(instructions.trim());
+    }
+    // beyond OpenAI's fields: the project settings of the studio's own engines
+    for setting in std::iter::once(&"seed").chain(crate::app::tools::ENGINE_SETTINGS) {
+        if let Some(v) = body.get(*setting).filter(|v| !v.is_null()) {
+            args[*setting] = v.clone();
+        }
     }
     let done = match call(args).await {
         Ok(v) if v["done"] == true => v,
