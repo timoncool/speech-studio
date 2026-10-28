@@ -378,6 +378,10 @@ fn synth_block_with(p: &SpeechPaths, pid: &str, project: &SpeechProject, b: &Blo
     let continued = sp::continuation_source(project, b).filter(|(_, t)| own_ref.is_none() && clones && continues && t.duration > 0.5 && t.duration <= limit + 0.5);
     if let (None, None, Some(v)) = (own_ref, &continued, voice.as_deref().filter(|_| clones)) {
         let vp = crate::voices::VoicePaths { repo_root: p.repo_root.clone(), models_root: p.models_root.clone(), voices_dir: p.voices_dir.clone() };
+        // a reference without its text is heard here, as «Recognise the reference text» would do
+        if crate::voices::read_transcript(&p.voices_dir, v).is_none_or(|t| t.trim().is_empty()) {
+            crate::voices::transcribe(&vp, v, &|_| {})?;
+        }
         crate::voices::ensure_words(&vp, v, limit)?;
     }
     let reference = match (own_ref, continued, voice.as_deref().filter(|_| clones)) {
@@ -1111,6 +1115,18 @@ fn synth_scope(p: &SpeechPaths, pid: &str, scope: &Scope, progress: &dyn Fn(Valu
             blocks.push_str(", …");
         }
         return Err(t!("speech-unknown-voice-blocks", blocks = blocks));
+    }
+    // a library voice without its reference text is heard once here, before the takes' keys are made of that text
+    let mut heard: Vec<String> = Vec::new();
+    for b in project.blocks().filter(|b| wanted.contains(&b.id) && !b.hidden && b.own_ref.as_ref().is_none_or(|r| r.file.is_empty())) {
+        let Some(voice) = project.voice_of(b) else { continue };
+        let clones = crate::engines::get(project.engine_of(b)).is_some_and(|e| e.clone != "none" && !e.presets.iter().any(|x| x.id == voice));
+        let untold = crate::voices::read_transcript(&p.voices_dir, &voice).is_none_or(|t| t.trim().is_empty());
+        if clones && untold && !heard.contains(&voice) && library.iter().any(|x| x.name == voice) {
+            let vp = crate::voices::VoicePaths { repo_root: p.repo_root.clone(), models_root: p.models_root.clone(), voices_dir: p.voices_dir.clone() };
+            crate::voices::transcribe(&vp, &voice, progress)?;
+            heard.push(voice);
+        }
     }
     // the build of the voicing device the local engines run on, once their models are here
     let mut builds: Vec<&str> = Vec::new();

@@ -4,7 +4,7 @@ import { AudioLines, Camera, Crop, Loader2, Pause, Play, RotateCcw, ScanText, Sc
 import { api, slot, type RefCandidate, type VoiceAge, type VoiceCard, type VoiceConsent, type VoiceEntry, type VoiceGender } from "../../lib/api";
 import { named } from "../../lib/a11y";
 import { useEscapeLayer } from "../../lib/escape";
-import { errorText, prettyVoice } from "../../lib/voices";
+import { errorText, voiceLabel } from "../../lib/voices";
 import { followJob } from "../../lib/followJob";
 import ConfirmDialog from "../ConfirmDialog";
 import VoiceAvatar from "./VoiceAvatar";
@@ -127,7 +127,7 @@ export default function VoiceEditor({ voice, all, onClose, onChanged, onRenamed,
           </button>
           <input ref={photoInput} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) photo(f); e.target.value = ""; }} />
           <div className="min-w-0 flex-1">
-            <div id="voice-edit-title" className="font-semibold truncate">{prettyVoice(voice.name)}</div>
+            <div id="voice-edit-title" className="font-semibold truncate">{voiceLabel(voice)}</div>
             <div className="text-[11px] text-[var(--color-muted)]">{voice.card.cleaned ? t("voices.cleanedBadge") : t("voices.notCleaned")} · {voice.audio.toUpperCase()}</div>
           </div>
           <button onClick={() => setCard({ favorite: !voice.card.favorite })} aria-pressed={voice.card.favorite} {...named(t("voices.favorite"))}
@@ -186,7 +186,7 @@ export default function VoiceEditor({ voice, all, onClose, onChanged, onRenamed,
               <label className={label} htmlFor="ve-variant-of">{t("voices.variantOf")} <Hint text={t("hint.voiceVariantOf")} /></label>
               <select id="ve-variant-of" value={voice.card.variant_of} onChange={(e) => setCard(e.target.value ? { variant_of: e.target.value, variant: variant.trim() || t("voices.variantDefault") } : { variant_of: "", variant: "" })} className={field}>
                 <option value="">{t("voices.variantNone")}</option>
-                {all.filter((v) => v.name !== voice.name && !v.card.variant_of).map((v) => <option key={v.name} value={v.name}>{prettyVoice(v.name)}</option>)}
+                {all.filter((v) => v.name !== voice.name && !v.card.variant_of).map((v) => <option key={v.name} value={v.name}>{voiceLabel(v)}</option>)}
               </select>
             </div>
             {voice.card.variant_of && (
@@ -275,7 +275,7 @@ export default function VoiceEditor({ voice, all, onClose, onChanged, onRenamed,
         </div>
       </aside>
       {confirmDelete && (
-        <ConfirmDialog title={t("voices.deleteTitle")} message={t("voices.deleteMessage", { name: prettyVoice(voice.name) })} confirmLabel={t("voices.delete")} danger
+        <ConfirmDialog title={t("voices.deleteTitle")} message={t("voices.deleteMessage", { name: voiceLabel(voice) })} confirmLabel={t("voices.delete")} danger
           onCancel={() => setConfirmDelete(false)}
           onConfirm={async () => { await api.voicesDelete(voice.name); setConfirmDelete(false); onDeleted(); }} />
       )}

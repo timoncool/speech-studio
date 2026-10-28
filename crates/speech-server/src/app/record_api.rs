@@ -258,6 +258,14 @@ pub(super) async fn voices_get(State(st): State<AppState>, Json(body): Json<Valu
                     if let Some(a) = e["age_group"].as_str().filter(|a| *a == "child" || *a == "adult") {
                         card.age = a.to_string();
                     }
+                    if let Some(d) = e["displayName"].as_str().filter(|s| !s.is_empty() && *s != name.as_str()) {
+                        card.display = d.to_string();
+                    }
+                    if let Some(d) = e["description"].as_str().map(str::trim).filter(|s| !s.is_empty()) {
+                        card.description = d.to_string();
+                    }
+                    card.birth_year = e["birth_year"].as_u64().and_then(|y| u32::try_from(y).ok());
+                    card.duration_s = e["duration_s"].as_f64().filter(|d| *d > 0.0);
                 }
             }
             if let Err(e) = voice_library::write_card(&st.voices_dir, &base, &card) {

@@ -70,7 +70,8 @@ fn heard_reference_language(p: &VoicePaths, audio: &Path, progress: &dyn Fn(Valu
 pub fn transcribe(p: &VoicePaths, name: &str, progress: &dyn Fn(Value)) -> Result<Value, String> {
     let audio = lib::audio_path(&p.voices_dir, name).ok_or_else(|| t!("voice-missing", name = name.to_string()))?;
     let card = lib::read_card(&p.voices_dir, name)?;
-    progress(json!({ "type": "progress", "stage": "voice_transcript", "msg": t!("voice-transcribing", name = name.to_string()) }));
+    let shown = if card.display.is_empty() { name.to_string() } else { card.display.clone() };
+    progress(json!({ "type": "progress", "stage": "voice_transcript", "msg": t!("voice-transcribing", name = shown) }));
     crate::engines::tts_host::make_room();
     crate::app::ensure_job_components(&p.repo_root, &p.models_root, false, false, &|ev| progress(ev))?;
     let heard = recognise_reference(p, &audio, &card.lang, name, &|ev| progress(ev))?;

@@ -7,7 +7,9 @@ import { named } from "../../lib/a11y";
 import { useEscapeLayer } from "../../lib/escape";
 import { openSettings } from "../../lib/settingsNav";
 import { SETTINGS_CHANGED, useChanged } from "../../lib/mcpBridge";
-import { errorText, prettyVoice, useVoices } from "../../lib/voices";
+import { errorText, langName, prettyVoice, useVoices, voiceLabel } from "../../lib/voices";
+import { applyVoiceFilter, NO_FILTER, type VoiceFacts, type VoiceFilter } from "../../lib/voiceFilter";
+import VoiceFilterBar from "./VoiceFilterBar";
 import { followJob } from "../../lib/followJob";
 import { useStore } from "../../store";
 import VoiceAvatar from "./VoiceAvatar";
@@ -23,13 +25,12 @@ const tool = "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border b
 
 const SOURCES = ["pack", "file", "mic", "russia_voices", "speaker"] as const;
 
-type Filter = { q: string; gender: "all" | "female" | "male"; lang: string; source: string; fav: boolean };
 
 /** The voice library: every voice of the studio as a persona card, with search, filters and every way to add voices. */
 export default function VoiceLibrary({ onClose, onPick }: { onClose: () => void; onPick?: (name: string) => void }) {
   const { t } = useTranslation();
   const { listing, error: loadError, reload, patch } = useVoices();
-  const [filter, setFilter] = useState<Filter>({ q: "", gender: "all", lang: "", source: "", fav: false });
+  const [filter, setFilter] = useState<VoiceFilter>(NO_FILTER);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
@@ -54,16 +55,14 @@ export default function VoiceLibrary({ onClose, onPick }: { onClose: () => void;
   const setCleanOn = (on: boolean) => { api.setSelection("voice_clean", on ? "1" : "0").then(setSel, (e: unknown) => setError(errorText(e))); };
 
   const voices = useMemo(() => listing?.voices ?? [], [listing]);
-  const langs = useMemo(() => [...new Set(voices.map((v) => v.card.lang).filter(Boolean))].sort(), [voices]);
+  const langs = useMemo(() => [...new Set(voices.map((v) => v.card.lang).filter(Boolean))].sort((a, b) => langName(a).localeCompare(langName(b))), [voices]);
   const sources = useMemo(() => [...new Set(voices.map((v) => v.card.source).filter(Boolean))].sort(), [voices]);
-  const shown = voices.filter((v) => {
-    const q = filter.q.trim().toLowerCase();
-    return (filter.gender === "all" || v.card.gender === filter.gender)
-      && (!filter.lang || v.card.lang === filter.lang)
-      && (!filter.source || v.card.source === filter.source)
-      && (!filter.fav || v.card.favorite)
-      && (!q || prettyVoice(v.name).toLowerCase().includes(q) || v.card.tags.some((tag) => tag.includes(q)));
-  }).sort((a, b) => Number(b.card.favorite) - Number(a.card.favorite));
+  const facts = (v: VoiceEntry): VoiceFacts => ({
+    label: voiceLabel(v), gender: v.card.gender, age: v.card.age, lang: v.card.lang, description: v.card.description ?? "",
+    tags: [v.name, ...v.card.tags], source: v.card.source, favorite: v.card.favorite, duration: v.card.duration_s ?? null, born: v.card.birth_year ?? null,
+  });
+  // favourites stay on top in every order
+  const shown = applyVoiceFilter(voices, facts, filter).sort((a, b) => Number(b.card.favorite) - Number(a.card.favorite));
   const sourceLabel = (s: string) => (SOURCES.includes(s as (typeof SOURCES)[number]) ? t(`voices.src_${s as (typeof SOURCES)[number]}`) : s);
   const editingVoice = editing ? voices.find((v) => v.name === editing) ?? null : null;
   const names = useMemo(() => new Set(voices.map((v) => v.name)), [voices]);
@@ -146,7 +145,6 @@ export default function VoiceLibrary({ onClose, onPick }: { onClose: () => void;
       <div role="dialog" aria-modal="true" aria-labelledby="voices-title" className="w-[min(96vw,1100px)] h-[min(92vh,860px)] flex flex-col rounded-xl glass-panel anim-pop overflow-hidden" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-3 px-5 py-3.5 border-b border-[var(--color-border)]">
           <h2 id="voices-title" className="font-semibold whitespace-nowrap">{t("voices.title")}</h2>
-          {listing && <span className="mono text-[11px] text-[var(--color-muted)]">{shown.length}/{voices.length}</span>}
           <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
             <button onClick={() => setRecording(true)} className={tool}><Mic size={13} />{t("voices.record")}</button>
             <button onClick={() => fileInput.current?.click()} disabled={!!busy} className={tool}>{busy === "import" ? <Loader2 size={13} className="animate-spin" /> : <FileAudio size={13} />}{t("voices.importFiles")}</button>
@@ -162,25 +160,10 @@ export default function VoiceLibrary({ onClose, onPick }: { onClose: () => void;
         </div>
 
         <div className="flex flex-wrap items-center gap-2 px-5 py-2.5 border-b border-[var(--color-border)]">
-          <input value={filter.q} onChange={(e) => setFilter({ ...filter, q: e.target.value })} placeholder={t("voices.search")} aria-label={t("voices.search")}
-            className="flex-1 min-w-[180px] bg-[var(--color-surface-2)] border border-[var(--color-border)] rounded-lg px-2.5 py-1.5 text-[13px] focus:border-[var(--color-accent)] focus:outline-none" />
-          <div className="flex rounded-lg border border-[var(--color-border)] overflow-hidden text-[12px]" role="group" aria-label={t("voices.gender")}>
-            {(["all", "female", "male"] as const).map((g) => (
-              <button key={g} onClick={() => setFilter({ ...filter, gender: g })} aria-pressed={filter.gender === g}
-                className={`px-2.5 py-1.5 ${filter.gender === g ? "bg-[var(--color-accent)] text-[var(--color-on-accent)]" : "text-[var(--color-muted)] hover:text-[var(--color-text)]"}`}>{t(`voices.gender_${g}`)}</button>
-            ))}
+          <div className="flex-1 min-w-[320px]">
+            <VoiceFilterBar filter={filter} onChange={setFilter} languages={langs} langLabel={langName} sources={sources} sourceLabel={sourceLabel}
+              favorites shown={shown.length} total={voices.length} t={t} />
           </div>
-          <select value={filter.lang} onChange={(e) => setFilter({ ...filter, lang: e.target.value })} aria-label={t("voices.lang")}
-            className="bg-[var(--color-surface-2)] border border-[var(--color-border)] rounded-lg px-2 py-1.5 text-[12px]">
-            <option value="">{t("voices.anyLang")}</option>
-            {langs.map((l) => <option key={l} value={l}>{l.toUpperCase()}</option>)}
-          </select>
-          <select value={filter.source} onChange={(e) => setFilter({ ...filter, source: e.target.value })} aria-label={t("voices.source")}
-            className="bg-[var(--color-surface-2)] border border-[var(--color-border)] rounded-lg px-2 py-1.5 text-[12px]">
-            <option value="">{t("voices.anySource")}</option>
-            {sources.map((s) => <option key={s} value={s}>{sourceLabel(s)}</option>)}
-          </select>
-          <button onClick={() => setFilter({ ...filter, fav: !filter.fav })} aria-pressed={filter.fav} className={`${tool} ${filter.fav ? "border-[var(--color-warn)] text-[var(--color-warn)]" : ""}`}><Star size={13} fill={filter.fav ? "currentColor" : "none"} />{t("voices.favorites")}</button>
           {untranscribed.length > 0 && (
             <Tip text={t("voices.transcribeAllHint")}><button onClick={transcribeAll} disabled={!!busy} className={tool}>
               {busy === "transcribeAll" ? <Loader2 size={13} className="animate-spin" /> : <ScanText size={13} />}{t("voices.transcribeAll", { n: untranscribed.length })}
@@ -221,23 +204,31 @@ export default function VoiceLibrary({ onClose, onPick }: { onClose: () => void;
               </div>
             </div>
           )}
-          {listing && voices.length > 0 && shown.length === 0 && <p className="text-center text-[13px] text-[var(--color-muted)] py-12">{t("voices.nothingFound")}</p>}
+          {listing && voices.length > 0 && shown.length === 0 && (
+            <div className="text-center py-12 space-y-2">
+              <p className="text-[13px] text-[var(--color-muted)]">{t("voices.nothingFound")}</p>
+              <button type="button" onClick={() => setFilter({ ...NO_FILTER, sort: filter.sort })} className="text-[12px] text-[var(--color-accent)] hover:underline">{t("voices.resetFilters")}</button>
+            </div>
+          )}
           <ul className="grid gap-2.5 [grid-template-columns:repeat(auto-fill,minmax(240px,1fr))]">
             {shown.map((v) => (
-              <li key={v.name} data-mcp-row={`voice ${prettyVoice(v.name)}${v.transcript ? "" : " (no reference text)"}`} className={`group relative rounded-xl border p-3 transition-colors ${selected.has(v.name) ? "border-[var(--color-accent)] bg-[color-mix(in_oklab,var(--color-accent)_7%,var(--color-surface))]" : "border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[color-mix(in_oklab,var(--color-accent)_45%,var(--color-border))]"}`}>
+              <li key={v.name} data-mcp-row={`voice ${voiceLabel(v)}${v.transcript ? "" : " (no reference text)"}`} className={`group relative rounded-xl border p-3 transition-colors ${selected.has(v.name) ? "border-[var(--color-accent)] bg-[color-mix(in_oklab,var(--color-accent)_7%,var(--color-surface))]" : "border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[color-mix(in_oklab,var(--color-accent)_45%,var(--color-border))]"}`}>
                 <div className="flex items-start gap-2.5">
                   <button onClick={() => setEditing(v.name)} className="rounded-full" {...named(t("voices.edit"))}><VoiceAvatar voice={v} /></button>
                   <div className="min-w-0 flex-1">
-                    <button onClick={() => setEditing(v.name)} className="block w-full text-left text-[13px] font-semibold truncate hover:text-[var(--color-accent)]" title={v.name}>{prettyVoice(v.name)}</button>
+                    <button onClick={() => setEditing(v.name)} className="block w-full text-left text-[13px] font-semibold truncate hover:text-[var(--color-accent)]" title={v.name}>{voiceLabel(v)}</button>
                     <div className="mt-1 flex flex-wrap gap-1">
                       {v.card.gender && <span className={chip}>{t(`voices.gender_${v.card.gender}`)}</span>}
                       {v.card.age && <span className={chip}>{t(`voices.age_${v.card.age}`)}</span>}
                       {v.card.lang && <span className={chip}>{v.card.lang}</span>}
-                      {v.card.cleaned && <span className={`${chip} text-[var(--color-accent)]`}>{t("voices.cleanedBadge")}</span>}
+                      {typeof v.card.duration_s === "number" && <span className={chip}>{t("voices.seconds", { s: Math.round(v.card.duration_s) })}</span>}
+                      {typeof v.card.birth_year === "number" && <span className={chip}>{t("voices.born", { year: v.card.birth_year })}</span>}
+                      {v.card.cleaned &&<span className={`${chip} text-[var(--color-accent)]`}>{t("voices.cleanedBadge")}</span>}
                       {v.card.variant_of && <span className={chip}>{t("voices.variantBadge", { variant: v.card.variant, of: prettyVoice(v.card.variant_of) })}</span>}
                     </div>
+                    {v.card.description && <p className="mt-1 text-[11px] text-[var(--color-muted)] line-clamp-2" title={v.card.description}>{v.card.description}</p>}
                   </div>
-                  <input type="checkbox" checked={selected.has(v.name)} onChange={() => toggle(v.name)} aria-label={t("voices.select", { name: prettyVoice(v.name) })}
+                  <input type="checkbox" checked={selected.has(v.name)} onChange={() => toggle(v.name)} aria-label={t("voices.select", { name: voiceLabel(v) })}
                     className="mt-0.5 w-3.5 h-3.5 accent-[var(--color-accent)] opacity-60 group-hover:opacity-100 focus:opacity-100" />
                 </div>
                 {v.card.tags.length > 0 && <div className="mt-2 text-[11px] text-[var(--color-muted)] truncate">#{v.card.tags.join(" #")}</div>}

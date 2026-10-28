@@ -1,5 +1,5 @@
 import { api, type VoiceEntry } from "../../lib/api";
-import { prettyVoice } from "../../lib/voices";
+import { voiceLabel } from "../../lib/voices";
 
 const TINTS = ["#4cc2ff", "#a5b8ff", "#7ee0c3", "#f7a8c8", "#ffc46b", "#b8a4ff"];
 
@@ -11,7 +11,7 @@ function tint(name: string): string {
 
 /** The voice's photo, or its initial on a colour of its own. */
 export default function VoiceAvatar({ voice, size = 44, rev = 0 }: { voice: VoiceEntry; size?: number; rev?: number }) {
-  const label = prettyVoice(voice.name);
+  const label = voiceLabel(voice);
   if (voice.photo) {
     return <img src={api.voicePhotoUrl(voice.name, rev)} alt="" width={size} height={size} className="rounded-full object-cover shrink-0 border border-[var(--color-border)]" style={{ width: size, height: size }} />;
   }

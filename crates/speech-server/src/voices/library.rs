@@ -48,6 +48,13 @@ pub struct VoiceCard {
     pub license: String,
     /// A long reference gives each new take its next good piece instead of always the best one.
     pub rotate: bool,
+    /// The name its source gives the voice (the cloud catalogue's «Алана Хасанова»), shown instead of the file's.
+    pub display: String,
+    /// Who the voice is, as its source describes it (the cloud catalogue's line).
+    pub description: String,
+    /// The speaker's year of birth and the recording's length in seconds, as its source gives them.
+    pub birth_year: Option<u32>,
+    pub duration_s: Option<f64>,
 }
 
 impl Default for VoiceCard {
@@ -67,6 +74,10 @@ impl Default for VoiceCard {
             variant: String::new(),
             license: String::new(),
             rotate: false,
+            display: String::new(),
+            description: String::new(),
+            birth_year: None,
+            duration_s: None,
         }
     }
 }

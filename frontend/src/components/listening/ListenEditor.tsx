@@ -9,7 +9,7 @@ import {
 } from "../../lib/listen";
 import { findTranscriptWordMatches } from "../../lib/transcriptFuzzy";
 import { followJob } from "../../lib/followJob";
-import { errorText, prettyVoice } from "../../lib/voices";
+import { errorText, libraryVoiceName } from "../../lib/voices";
 import { named } from "../../lib/a11y";
 import { LAYER_OPENED } from "../../lib/escape";
 import { useStore } from "../../store";
@@ -220,7 +220,7 @@ export default function ListenEditor({ pid, onBack, onOpen }: { pid: string; onB
     setFailure(null);
     try { setLikeness(Object.fromEntries((await listenApi.speakersMatch(pid)).speakers.map((m) => [m.speaker, m]))); } catch (e) { setFailure(errorText(e)); } finally { setBusy(null); }
   };
-  const likeName = (m: SpeakerMatch) => (m.best?.kind === "voice" ? prettyVoice(m.best.name) : m.best?.name ?? "");
+  const likeName = (m: SpeakerMatch) => (m.best?.kind === "voice" ? libraryVoiceName(m.best.name) : m.best?.name ?? "");
   const remember = async (speaker: string) => {
     setBusy("remember");
     setNotice(null);
