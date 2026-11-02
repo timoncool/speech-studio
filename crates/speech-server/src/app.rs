@@ -51,7 +51,7 @@ mod setup_api;
 mod state;
 mod ui_api;
 pub use bootstrap::{serve, serve_blocking};
-pub(crate) use files::{reveal_in_explorer, serve_file_range};
+pub(crate) use files::{open_folder, reveal_in_explorer, serve_file_range};
 pub(crate) use jobs_api::enqueue_error;
 pub use router::build_router;
 pub use runtime::{apply_gpu_choice, augment_path_for_tools, ensure_library_path, init_proxy_route, set_ort_dylib_env};

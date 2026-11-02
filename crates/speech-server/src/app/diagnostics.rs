@@ -351,13 +351,16 @@ pub async fn reveal_report(State(st): State<AppState>, Json(body): Json<Value>) 
     Json(json!({ "ok": true })).into_response()
 }
 
-/// POST /diagnostics/logs/reveal: the folder with the helpers' logs (llama-server and the like) in the file manager.
 pub async fn reveal_logs(State(st): State<AppState>) -> Response {
     let dir = st.repo_root.join("logs");
     if let Err(e) = std::fs::create_dir_all(&dir) {
         return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "io", "detail": format!("{}: {e}", dir.display()) }))).into_response();
     }
-    crate::app::reveal_in_explorer(dir.to_string_lossy().into_owned());
+    // open the folder itself; `reveal_in_explorer` would run `explorer /select,<dir>`, which selects the folder in
+    // its parent and, on a path with a space, is misparsed into opening Documents instead (#20).
+    if let Err(e) = crate::app::open_folder(&dir) {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": "io", "detail": format!("{}: {e}", dir.display()) }))).into_response();
+    }
     Json(json!({ "ok": true })).into_response()
 }
 

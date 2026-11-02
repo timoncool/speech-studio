@@ -11,7 +11,7 @@ use std::path::Path;
 mod tests;
 
 /// Открыть каталог в проводнике (без выделения файла).
-pub(super) fn open_folder(dir: &Path) -> std::io::Result<()> {
+pub(crate) fn open_folder(dir: &Path) -> std::io::Result<()> {
     #[cfg(windows)]
     let cmd = "explorer.exe";
     #[cfg(target_os = "macos")]
