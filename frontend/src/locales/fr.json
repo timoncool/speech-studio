@@ -71,6 +71,8 @@
       "networkHint": "Proxy pour le téléchargement des modèles et le cloud",
       "interface": "Langue et sons",
       "interfaceHint": "Langue de l'interface et sons de notification",
+      "voicegate": "Filtre vocal",
+      "voicegateHint": "Démarrer une conversation seulement sur votre voix",
       "agent": "Agent IA (MCP)",
       "agentHint": "Connecter un agent IA et choisir l’assistant",
       "about": "À propos",
@@ -2108,6 +2110,29 @@
       "ono_anna": "Voix féminine japonaise espiègle, légère et agile.",
       "sohee": "Voix féminine coréenne chaleureuse et très expressive."
     }
+  },
+  "voiceGate": {
+    "section": "Filtre vocal",
+    "sectionHint": "Démarre une conversation uniquement sur votre voix",
+    "enable": "Activer uniquement sur ma voix",
+    "enableHint": "En Live, une conversation ne démarre que lorsque vous parlez : configurez une fois, puis parlez simplement",
+    "myVoice": "Ma voix",
+    "enrolled": "Votre voix est configurée",
+    "notEnrolled": "Pas encore configurée",
+    "enrollPrompt": "Dites à voix haute : « C'est ma voix, je configure Speech Studio. »",
+    "enroll": "Enregistrer ma voix",
+    "reEnroll": "Réenregistrer",
+    "enrollDone": "Terminé",
+    "forget": "Supprimer",
+    "sensitivity": "Sensibilité",
+    "sensitivityHint": "Plus haut = plus strict : moins de fausses activations, mais parlez clairement",
+    "wakeWord": "Mot d'activation",
+    "wakeWordHint": "Exiger aussi ce mot avant d'activer",
+    "wakeWordSoon": "Apparaît une fois le modèle de mot d'activation installé",
+    "anySpeech": "N'importe quelle parole de moi",
+    "autostart": "Lancer à la connexion",
+    "autostartHint": "Lancer Speech Studio au démarrage de l'ordinateur, pour parler à l'agent tout de suite",
+    "privacy": "Votre voix reste sur cet appareil : l'empreinte est stockée localement, rien n'est envoyé nulle part, et vous pouvez la supprimer à tout moment."
   },
   "transport": {
     "label": "Lecteur",

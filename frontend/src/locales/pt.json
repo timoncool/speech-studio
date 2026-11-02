@@ -71,6 +71,8 @@
       "networkHint": "Proxy para baixar modelos e para a nuvem",
       "interface": "Idioma e sons",
       "interfaceHint": "Idioma da interface e sons de notificação",
+      "voicegate": "Porta de voz",
+      "voicegateHint": "Começar uma conversa só com a sua voz",
       "agent": "Agente (MCP)",
       "agentHint": "Conectar um agente de IA e escolher o assistente",
       "about": "Sobre",
@@ -2108,6 +2110,29 @@
       "ono_anna": "Voz feminina japonesa brincalhona, leve e ágil.",
       "sohee": "Voz feminina coreana calorosa e cheia de emoção."
     }
+  },
+  "voiceGate": {
+    "section": "Porta de voz",
+    "sectionHint": "Começa uma conversa só com a sua voz",
+    "enable": "Ativar só com a minha voz",
+    "enableHint": "No Live, uma conversa começa só quando você fala: configure uma vez e depois é só falar",
+    "myVoice": "Minha voz",
+    "enrolled": "Sua voz está configurada",
+    "notEnrolled": "Ainda não configurada",
+    "enrollPrompt": "Diga em voz alta: «Esta é a minha voz, estou configurando o Speech Studio.»",
+    "enroll": "Gravar minha voz",
+    "reEnroll": "Gravar de novo",
+    "enrollDone": "Pronto",
+    "forget": "Excluir",
+    "sensitivity": "Sensibilidade",
+    "sensitivityHint": "Mais alto é mais rígido: menos ativações falsas, mas fale com clareza",
+    "wakeWord": "Palavra de ativação",
+    "wakeWordHint": "Exigir também esta palavra antes de ativar",
+    "wakeWordSoon": "Aparece quando o modelo de palavra de ativação é instalado",
+    "anySpeech": "Qualquer fala minha",
+    "autostart": "Iniciar ao fazer login",
+    "autostartHint": "Abrir o Speech Studio ao ligar o computador, para falar com o agente logo",
+    "privacy": "Sua voz fica neste dispositivo: a impressão é guardada localmente, não é enviada a lugar nenhum, e você pode excluí-la quando quiser."
   },
   "transport": {
     "label": "Reprodutor",

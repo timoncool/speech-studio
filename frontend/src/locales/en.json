@@ -71,6 +71,8 @@
       "networkHint": "Proxy for model downloads and the cloud",
       "interface": "Language & sounds",
       "interfaceHint": "Interface language and notification sounds",
+      "voicegate": "Voice gate",
+      "voicegateHint": "Start a conversation only on your voice",
       "agent": "Agent (MCP)",
       "agentHint": "Connect an AI agent and choose the assistant",
       "about": "About",
@@ -2108,6 +2110,29 @@
       "ono_anna": "Playful Japanese female voice with a light, nimble timbre.",
       "sohee": "Warm Korean female voice with rich emotion."
     }
+  },
+  "voiceGate": {
+    "section": "Voice gate",
+    "sectionHint": "Start a conversation only on your voice",
+    "enable": "Activate only on my voice",
+    "enableHint": "In Live, a conversation starts only when you speak — set up once, then just talk",
+    "myVoice": "My voice",
+    "enrolled": "Your voice is set up",
+    "notEnrolled": "Not set up yet",
+    "enrollPrompt": "Say out loud: “This is my voice, I'm setting up Speech Studio.”",
+    "enroll": "Record my voice",
+    "reEnroll": "Record again",
+    "enrollDone": "Done",
+    "forget": "Delete",
+    "sensitivity": "Sensitivity",
+    "sensitivityHint": "Higher is stricter — fewer false activations, but speak clearly",
+    "wakeWord": "Wake word",
+    "wakeWordHint": "Also require this word before activating",
+    "wakeWordSoon": "Appears once the wake-word model is installed",
+    "anySpeech": "Any speech from me",
+    "autostart": "Start on login",
+    "autostartHint": "Launch Speech Studio when the computer starts, so you can talk to the agent right away",
+    "privacy": "Your voice stays on this device: the voiceprint is stored locally, nothing is sent anywhere, and you can delete it any time."
   },
   "transport": {
     "label": "Player",

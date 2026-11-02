@@ -71,6 +71,8 @@
       "networkHint": "用于下载模型和云端的代理",
       "interface": "语言与声音",
       "interfaceHint": "界面语言与通知音效",
+      "voicegate": "声音门控",
+      "voicegateHint": "仅在您说话时开始对话",
       "agent": "智能体 (MCP)",
       "agentHint": "连接 AI 智能体并选择助手",
       "about": "关于",
@@ -2108,6 +2110,29 @@
       "ono_anna": "俏皮的日语女声，轻盈灵动。",
       "sohee": "温暖的韩语女声，情感丰富。"
     }
+  },
+  "voiceGate": {
+    "section": "声音门控",
+    "sectionHint": "仅在您说话时开始对话",
+    "enable": "仅在我的声音时激活",
+    "enableHint": "在 Live 模式下，仅当您说话时才开始对话——设置一次，之后直接说即可",
+    "myVoice": "我的声音",
+    "enrolled": "您的声音已设置",
+    "notEnrolled": "尚未设置",
+    "enrollPrompt": "请朗读：“这是我的声音，我正在设置 Speech Studio。”",
+    "enroll": "录制我的声音",
+    "reEnroll": "重新录制",
+    "enrollDone": "完成",
+    "forget": "删除",
+    "sensitivity": "灵敏度",
+    "sensitivityHint": "越高越严格：误触发更少，但请清晰地说",
+    "wakeWord": "唤醒词",
+    "wakeWordHint": "激活前还需听到此词",
+    "wakeWordSoon": "安装唤醒词模型后出现",
+    "anySpeech": "我的任何话语",
+    "autostart": "登录时启动",
+    "autostartHint": "开机时启动 Speech Studio，让您能立即与智能体对话",
+    "privacy": "您的声音保留在本设备上：声纹存储在本地，不会发送到任何地方，您可以随时删除。"
   },
   "transport": {
     "label": "播放器",
