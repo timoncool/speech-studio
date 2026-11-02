@@ -475,21 +475,45 @@ pub async fn listen_start(State(st): State<AppState>, headers: HeaderMap, body: 
     started
 }
 
-/// While the microphone is on, a phrase the person starts interrupts what the studio says; one watcher at a time.
+/// A one-shot partial this long is already clearly a turn, not a cough or a stray word, and cuts the studio off at once.
+const FLOOR_WORDS_STRONG: usize = 4;
+
+/// Whether a floor-taking phrase is confirmed ongoing speech rather than a brief cough or a one-off mis-recognition.
+/// `base` is the word count when the phrase was first seen this turn (None on the first sighting). A short 2–3 word
+/// phrase must GROW to count — a cough comes out as a short static partial that never grows and so is ignored — while a
+/// phrase of `FLOOR_WORDS_STRONG` words or more is clearly a turn straight away.
+fn floor_grew(base: Option<usize>, words: usize) -> bool {
+    words >= FLOOR_WORDS_STRONG || matches!(base, Some(b) if words > b)
+}
+
 fn watch_interruptions(workspace: std::path::PathBuf, queue: jobs::JobQueue) {
     if LISTENING.swap(true, std::sync::atomic::Ordering::Relaxed) {
         return;
     }
     tokio::spawn(async move {
-        let mut heard = String::new();
+        // the word count a floor-taking phrase was first seen at this turn, and whether the studio was already cut off
+        let mut base: Option<usize> = None;
+        let mut cut = false;
         while LISTENING.load(std::sync::atomic::Ordering::Relaxed) {
             let state = crate::listening::recognition::state();
             let partial = state["partial"]["text"].as_str().unwrap_or_default().to_string();
-            if partial != heard && takes_the_floor(&partial) && !is_echo(&partial) {
-                interrupt(&workspace, &queue);
-                heard = partial;
+            if takes_the_floor(&partial) && !is_echo(&partial) {
+                let words = crate::audio::qc::normalize(&partial).len();
+                // cut the studio off only once the person is really speaking over it: a cough is a short static partial
+                // that never grows, so it no longer stops the agent mid-answer
+                if !cut && floor_grew(base, words) {
+                    interrupt(&workspace, &queue);
+                    cut = true;
+                }
+                if base.is_none() {
+                    base = Some(words);
+                }
+            } else {
+                // silence, a backchannel or a brief noise: the turn is over, arm again for the next one
+                base = None;
+                cut = false;
             }
-            tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+            tokio::time::sleep(std::time::Duration::from_millis(120)).await;
         }
     });
 }
@@ -648,6 +672,16 @@ mod tests {
         assert!(!takes_the_floor(""));
         assert!(takes_the_floor("подожди, стоп"));
         assert!(takes_the_floor("Что случилось?"));
+    }
+
+    #[test]
+    fn a_short_floor_taking_phrase_must_grow_to_cut_the_studio_off() {
+        // a cough recognised as two static words never grows, so it does not interrupt — the bug the person hit
+        assert!(!floor_grew(None, 2)); // first sighting of a short phrase: wait and see
+        assert!(!floor_grew(Some(2), 2)); // still two words a poll later: a cough, left alone
+        assert!(!floor_grew(Some(3), 3)); // three static words: still not confirmed
+        assert!(floor_grew(Some(2), 3)); // it grew: the person is speaking over the studio
+        assert!(floor_grew(None, FLOOR_WORDS_STRONG)); // a long phrase in one shot is clearly a turn at once
     }
 
     #[tokio::test]
