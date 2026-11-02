@@ -1090,6 +1090,7 @@
     "voiceTheMissing": "Locutar lo que falta",
     "exportDurationAllowed": "Duración permitida: la exportación usará estas tomas",
     "allowDuration": "Permitir la diferencia de duración",
+    "allowUnvoiced": "Exportar sin los {n} bloques sin voz",
     "format": "Formato",
     "exportLoudness": "Volumen: {{preset}}",
     "exportRun": "Crear el archivo",
@@ -2122,7 +2123,10 @@
     "position": "Posición en el bloque",
     "rate": "Velocidad",
     "idle": "Bloques con voz: {{voiced}} de {{total}} · {{length}}",
-    "edit": "Editar la frase: pausa y selecciona la oración que suena en su bloque"
+    "edit": "Editar la frase: pausa y selecciona la oración que suena en su bloque",
+    "volume": "Volumen",
+    "mute": "Silenciar",
+    "unmute": "Activar sonido"
   },
   "batch": {
     "speechTitle": "Lote de locución",
@@ -2360,6 +2364,7 @@
     "projectVoice": "La voz por defecto para todos los personajes y bloques sin voz propia.",
     "castCard": "Los ajustes de este personaje: sus bloques los usan si no tienen los suyos. Género y edad sirven para «Elegir voces».",
     "allowDuration": "Crear el archivo aunque algunas réplicas no quepan en su tiempo de subtítulo: durarán más de lo debido.",
+    "allowUnvoiced": "Crear el archivo con lo que está doblado, omitiendo los bloques que no se pudieron doblar; el resultado indica cuántos se omitieron.",
     "exportFormat": "El formato del archivo. WAV y FLAC sin pérdida (FLAC ocupa menos), MP3, OGG y M4A comprimidos, M4B es un audiolibro con capítulos.",
     "exportQuality": "La frecuencia, la resolución o el bitrate del archivo. «Como el formato» usa los valores habituales del formato elegido.",
     "perBlock": "Cada bloque como archivo propio en lugar de uno solo, para montaje o un juego.",

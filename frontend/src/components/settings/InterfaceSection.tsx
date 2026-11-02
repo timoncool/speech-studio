@@ -8,7 +8,7 @@ import { playSfx, setSfxEnabled, sfxEnabled } from "../../lib/sfx";
 import SettingSwitch from "./SettingSwitch";
 import ShortcutsSection from "./ShortcutsSection";
 import { THEMES, savedTheme, setTheme, type Theme } from "../../lib/theme";
-import { masterVolume, setMasterVolume } from "../../lib/masterVolume";
+import { masterVolume, setMasterVolume, MASTER_VOLUME_EVENT } from "../../lib/masterVolume";
 import { setUiScale, storedUiScale, UI_SCALE_EVENT, UI_SCALE_MAX, UI_SCALE_MIN, UI_SCALE_STEP } from "../../lib/uiScale";
 
 const langName = (code: Lang) => DUB_LANGS.find((l) => l.code === code)?.name ?? code;
@@ -27,8 +27,13 @@ export default function InterfaceSection() {
   const scaleId = useId();
   useEffect(() => {
     const onScale = (e: Event) => setScale((e as CustomEvent<number>).detail);
+    const onVolume = (e: Event) => setVolume(Math.round((e as CustomEvent<number>).detail * 100));
     window.addEventListener(UI_SCALE_EVENT, onScale);
-    return () => window.removeEventListener(UI_SCALE_EVENT, onScale);
+    window.addEventListener(MASTER_VOLUME_EVENT, onVolume);
+    return () => {
+      window.removeEventListener(UI_SCALE_EVENT, onScale);
+      window.removeEventListener(MASTER_VOLUME_EVENT, onVolume);
+    };
   }, []);
   return (
     <div className="space-y-3">

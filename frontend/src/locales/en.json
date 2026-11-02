@@ -1090,6 +1090,7 @@
     "voiceTheMissing": "Voice the missing",
     "exportDurationAllowed": "Duration allowed: the export goes with these takes",
     "allowDuration": "Allow the duration mismatch",
+    "allowUnvoiced": "Export without the {n} unvoiced blocks",
     "format": "Format",
     "exportLoudness": "Loudness: {{preset}}",
     "exportRun": "Make the file",
@@ -2122,7 +2123,10 @@
     "position": "Position in the block",
     "rate": "Speed",
     "idle": "Voiced {{voiced}} of {{total}} blocks · {{length}}",
-    "edit": "Edit the line: pause and select the sentence being read in its block"
+    "edit": "Edit the line: pause and select the sentence being read in its block",
+    "volume": "Volume",
+    "mute": "Mute",
+    "unmute": "Unmute"
   },
   "batch": {
     "speechTitle": "Voicing batch",
@@ -2360,6 +2364,7 @@
     "projectVoice": "The default voice for every character and block without one of its own.",
     "castCard": "This character's settings: their blocks use them unless a block has its own. Gender and age are what Pick voices goes by.",
     "allowDuration": "Build the file even if some lines did not fit their subtitle time: they will run longer than they should.",
+    "allowUnvoiced": "Build the file from what is voiced, leaving out the blocks that could not be voiced; the result says how many were skipped.",
     "exportFormat": "The file format. WAV and FLAC are lossless (FLAC is smaller), MP3, OGG and M4A are compressed, M4B is an audiobook with chapters.",
     "exportQuality": "The file's sample rate, bit depth or bitrate. «As the format» uses the usual values for the chosen format.",
     "perBlock": "Each block as a file of its own instead of one file, for editing or a game.",

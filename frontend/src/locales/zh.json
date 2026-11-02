@@ -1090,6 +1090,7 @@
     "voiceTheMissing": "为缺失部分配音",
     "exportDurationAllowed": "已允许时长不符：导出将使用这些配音",
     "allowDuration": "允许时长不符",
+    "allowUnvoiced": "导出时跳过 {n} 个未配音段落",
     "format": "格式",
     "exportLoudness": "响度：{{preset}}",
     "exportRun": "生成文件",
@@ -2122,7 +2123,10 @@
     "position": "段落内的位置",
     "rate": "速度",
     "idle": "已配音段落：{{voiced}} / {{total}} · {{length}}",
-    "edit": "修改这句：暂停并在所在块中选中正在朗读的句子"
+    "edit": "修改这句：暂停并在所在块中选中正在朗读的句子",
+    "volume": "音量",
+    "mute": "静音",
+    "unmute": "取消静音"
   },
   "batch": {
     "speechTitle": "批量配音",
@@ -2360,6 +2364,7 @@
     "projectVoice": "所有没有自己声音的角色和块的默认声音。",
     "castCard": "此角色的设置：其块在没有自己的设置时使用它们。「挑选声音」依据性别和年龄。",
     "allowDuration": "即使部分台词放不进字幕时间也生成文件：它们会比应有的时长更长。",
+    "allowUnvoiced": "用已配音的部分生成文件，跳过无法配音的段落；结果会显示跳过了多少个。",
     "exportFormat": "文件格式。WAV 和 FLAC 无损（FLAC 更小），MP3、OGG 和 M4A 为压缩格式，M4B 是带章节的有声书。",
     "exportQuality": "文件的采样率、位深或码率。「按格式」使用所选格式的常用值。",
     "perBlock": "每个块单独成文件，而不是一个文件，便于剪辑或游戏使用。",

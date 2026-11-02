@@ -10,6 +10,10 @@ export type VoiceFacts = {
   favorite: boolean;
   duration: number | null;
   born: number | null;
+  /** Everything the text box searches by: the name, description and tags, plus every aspect of the dataset the list
+   * has — gender, age, language (its name), year of birth and source — each in the window's words, so a search like
+   * "ребёнок", "arabic" or "2004" finds the voice. The caller builds it; empty falls back to name and description. */
+  search?: string;
 };
 
 export type VoiceSort = "name" | "duration" | "young";
@@ -43,7 +47,7 @@ export function applyVoiceFilter<T>(items: T[], facts: (item: T) => VoiceFacts, 
     (!f.source || v.source === f.source) &&
     (!f.fav || v.favorite) &&
     (f.minDur === 0 || (v.duration ?? 0) >= f.minDur) &&
-    (!needle || [v.label, v.description, ...v.tags].some((s) => s.toLowerCase().includes(needle))));
+    (!needle || (v.search ?? [v.label, v.description, ...v.tags].join(" ")).toLowerCase().includes(needle)));
   const last = (n: number | null, value: (n: number) => number) => (n === null ? Number.POSITIVE_INFINITY : value(n));
   rows.sort((a, b) =>
     f.sort === "duration" ? last(a.v.duration, (n) => -n) - last(b.v.duration, (n) => -n) || a.v.label.localeCompare(b.v.label)

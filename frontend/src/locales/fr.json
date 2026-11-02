@@ -1090,6 +1090,7 @@
     "voiceTheMissing": "Mettre en voix ce qui manque",
     "exportDurationAllowed": "Durée autorisée : l’export utilisera ces prises",
     "allowDuration": "Autoriser l’écart de durée",
+    "allowUnvoiced": "Exporter sans les {n} blocs non doublés",
     "format": "Format",
     "exportLoudness": "Volume : {{preset}}",
     "exportRun": "Créer le fichier",
@@ -2122,7 +2123,10 @@
     "position": "Position dans le bloc",
     "rate": "Vitesse",
     "idle": "Blocs doublés : {{voiced}} sur {{total}} · {{length}}",
-    "edit": "Modifier la phrase : pause et sélection de la phrase lue dans son bloc"
+    "edit": "Modifier la phrase : pause et sélection de la phrase lue dans son bloc",
+    "volume": "Volume",
+    "mute": "Couper le son",
+    "unmute": "Rétablir le son"
   },
   "batch": {
     "speechTitle": "Lot de doublage",
@@ -2360,6 +2364,7 @@
     "projectVoice": "La voix par défaut de tous les personnages et blocs sans voix propre.",
     "castCard": "Les réglages de ce personnage : ses blocs les utilisent s’ils n’ont pas les leurs. Le genre et l’âge servent à « Choisir les voix ».",
     "allowDuration": "Créer le fichier même si certaines répliques ne tiennent pas dans leur temps de sous-titre : elles dureront plus longtemps que prévu.",
+    "allowUnvoiced": "Créer le fichier à partir de ce qui est doublé, en laissant de côté les blocs qui n’ont pas pu l’être ; le résultat indique combien ont été ignorés.",
     "exportFormat": "Le format du fichier. WAV et FLAC sans perte (FLAC plus léger), MP3, OGG et M4A compressés, M4B est un livre audio avec chapitres.",
     "exportQuality": "La fréquence, la profondeur ou le débit du fichier. « Selon le format » utilise les valeurs habituelles du format choisi.",
     "perBlock": "Chaque bloc dans son propre fichier au lieu d’un seul, pour le montage ou un jeu.",

@@ -57,13 +57,16 @@ export default function VoiceLibrary({ onClose, onPick }: { onClose: () => void;
   const voices = useMemo(() => listing?.voices ?? [], [listing]);
   const langs = useMemo(() => [...new Set(voices.map((v) => v.card.lang).filter(Boolean))].sort((a, b) => langName(a).localeCompare(langName(b))), [voices]);
   const sources = useMemo(() => [...new Set(voices.map((v) => v.card.source).filter(Boolean))].sort(), [voices]);
+  const sourceLabel = (s: string) => (SOURCES.includes(s as (typeof SOURCES)[number]) ? t(`voices.src_${s as (typeof SOURCES)[number]}`) : s);
   const facts = (v: VoiceEntry): VoiceFacts => ({
     label: voiceLabel(v), gender: v.card.gender, age: v.card.age, lang: v.card.lang, description: v.card.description ?? "",
     tags: [v.name, ...v.card.tags], source: v.card.source, favorite: v.card.favorite, duration: v.card.duration_s ?? null, born: v.card.birth_year ?? null,
+    search: [voiceLabel(v), v.card.description ?? "", v.name, ...v.card.tags, v.card.lang, langName(v.card.lang),
+      v.card.gender ? t(`voices.gender_${v.card.gender as "female" | "male"}`) : "", v.card.age ? t(`voices.age_${v.card.age as "adult" | "child"}`) : "",
+      v.card.source ? sourceLabel(v.card.source) : "", v.card.birth_year ? String(v.card.birth_year) : ""].filter(Boolean).join(" "),
   });
   // favourites stay on top in every order
   const shown = applyVoiceFilter(voices, facts, filter).sort((a, b) => Number(b.card.favorite) - Number(a.card.favorite));
-  const sourceLabel = (s: string) => (SOURCES.includes(s as (typeof SOURCES)[number]) ? t(`voices.src_${s as (typeof SOURCES)[number]}`) : s);
   const editingVoice = editing ? voices.find((v) => v.name === editing) ?? null : null;
   const names = useMemo(() => new Set(voices.map((v) => v.name)), [voices]);
 

@@ -36,6 +36,7 @@ export default function ExportDialog({ pid, project, onChange, flush, onClose, o
   const [perBlock, setPerBlock] = useState(false);
   const [partMinutes, setPartMinutes] = useState(0);
   const [allowDuration, setAllowDuration] = useState(false);
+  const [allowUnvoiced, setAllowUnvoiced] = useState(false);
   const [withStems, setWithStems] = useState(false);
   const [stems, setStems] = useState<string | null>(null);
   const [table, setTable] = useState<string | null>(null);
@@ -71,7 +72,7 @@ export default function ExportDialog({ pid, project, onChange, flush, onClose, o
     setError(null);
     try {
       await flush();
-      const { job_id } = await speechApi.export(pid, format, undefined, perBlock, perBlock ? 0 : Math.max(partMinutes, 0), allowDuration, { sample_rate: rate || undefined, bits: bits || undefined, kbps: kbps || undefined }, !perBlock && partMinutes === -1, !perBlock && withStems);
+      const { job_id } = await speechApi.export(pid, format, undefined, perBlock, perBlock ? 0 : Math.max(partMinutes, 0), allowDuration, { sample_rate: rate || undefined, bits: bits || undefined, kbps: kbps || undefined }, !perBlock && partMinutes === -1, !perBlock && withStems, allowUnvoiced);
       const r = (await followJob(job_id, "export")) as { file: string; files?: string[]; subtitles?: string; subtitle_files?: string[]; timings?: string; player?: string; recipe?: string; chapters?: string | null; parts?: Part[] | null; acx?: AcxReport | null; stems?: string | null; table?: string; manifest?: string };
       if (r.files) { setClips(r.files); setRecipe(r.recipe ?? null); return; }
       setAcx(r.acx ?? null);
@@ -88,8 +89,8 @@ export default function ExportDialog({ pid, project, onChange, flush, onClose, o
       onDone(r.file);
     } catch (e) { setError(errorText(e)); } finally { setBusy(false); }
   };
-  const blocking = (problems ?? []).filter((p) => !(allowDuration && p.state === "duration"));
-  const toVoice = blocking.filter((p) => p.state !== "duration").map((p) => p.block);
+  const blocking = (problems ?? []).filter((p) => !(allowDuration && p.state === "duration") && !(allowUnvoiced && p.state !== "duration"));
+  const unvoiced = (problems ?? []).filter((p) => p.state !== "duration").map((p) => p.block);
   const tooLong = (problems ?? []).some((p) => p.state === "duration");
   const counts = (problems ?? []).reduce<Record<string, number>>((a, p) => { a[p.state] = (a[p.state] ?? 0) + 1; return a; }, {});
   return (
@@ -106,10 +107,15 @@ export default function ExportDialog({ pid, project, onChange, flush, onClose, o
             <ul className="text-[12px] text-[var(--color-muted)] space-y-0.5">
               {Object.entries(counts).map(([state, n]) => <li key={state}>{t(`speech.state_${state as ExportProblem["state"]}`)}: {n}</li>)}
             </ul>
-            {toVoice.length > 0 && <button onClick={() => onVoiceMissing(toVoice)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--color-accent)] text-[var(--color-on-accent)] text-[12px] font-semibold"><Sparkles size={13} />{t("speech.voiceTheMissing")}</button>}
+            {unvoiced.length > 0 && <button onClick={() => onVoiceMissing(unvoiced)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--color-accent)] text-[var(--color-on-accent)] text-[12px] font-semibold"><Sparkles size={13} />{t("speech.voiceTheMissing")}</button>}
             {tooLong && (
               <label className="flex items-center gap-2 text-[12px] cursor-pointer">
                 <input type="checkbox" checked={allowDuration} onChange={(e) => setAllowDuration(e.target.checked)} className="w-4 h-4 accent-[var(--color-accent)]" />{t("speech.allowDuration")} <Hint text={t("hint.allowDuration")} />
+              </label>
+            )}
+            {unvoiced.length > 0 && (
+              <label className="flex items-center gap-2 text-[12px] cursor-pointer">
+                <input type="checkbox" checked={allowUnvoiced} onChange={(e) => setAllowUnvoiced(e.target.checked)} className="w-4 h-4 accent-[var(--color-accent)]" />{t("speech.allowUnvoiced", { n: unvoiced.length })} <Hint text={t("hint.allowUnvoiced")} />
               </label>
             )}
           </div>
