@@ -13,6 +13,7 @@ mod platform;
 mod setup;
 mod speech;
 mod text;
+mod voice_gate;
 mod voices;
 
 pub use app::flush_hub_on_exit;

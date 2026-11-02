@@ -1368,6 +1368,19 @@ pub fn manifest() -> Vec<Component> {
             markers: &[Marker { rel: "models/faces/wespeaker/voxceleb_resnet34_LM.onnx", expect: 26_530_309 }],
             external_url: None,
         },
+        // Voice gate for Live: ReDimNet2-B3 speaker verification (PalabraAI, MIT; SOTA 0.42% EER on VoxCeleb1-O), the
+        // waveform-input ONNX (mel frontend in the graph) so the studio recognises the owner's own voice. Pulled on use.
+        Component {
+            id: "voice-gate",
+            name: t!("setup-comp-voice-gate-name"),
+            purpose: t!("setup-comp-voice-gate-purpose"),
+            requirement: Requirement::Optional,
+            delivery: Delivery::Download,
+            size: 19_369_751,
+            files: &[FileSpec { url: "https://huggingface.co/diarizeapp/redimnet2-b3-onnx/resolve/96144a5d37ba2900e5ba61e726d7cdd7f0c087a8/redimnet2_b3_lm.onnx", dest_rel: "models/voice-gate/redimnet2_b3_lm.onnx", size: 19_369_751, sha256: "23db044710b8a30b1208ac4f6ed9a909398232a99c53e66313720b295051d014", extract: Extract::None }],
+            markers: &[Marker { rel: "models/voice-gate/redimnet2_b3_lm.onnx", expect: 19_369_751 }],
+            external_url: None,
+        },
         // Ударения, «ё» и омографы русского текста: RUAccent (MIT) — словарь, символьная сеть и сеть омографов
         // tiny2, обе int8; ревизия закреплена.
         Component {
