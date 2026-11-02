@@ -146,7 +146,24 @@ fn library(dir: &Path) -> Result<Api, String> {
     if let Some((_, api)) = loaded.as_ref() {
         return Ok(*api);
     }
-    let lib = unsafe { Library::new(dir.join(LIBRARY)) }.map_err(|e| format!("{}: {e}", dir.join(LIBRARY).display()))?;
+    let path = dir.join(LIBRARY);
+    // Loading the library the instant the disk or device is busy can fail transiently (LoadLibraryExW returns nothing
+    // with no error of its own); a couple of backed-off retries recover it (#21). A missing dependency keeps failing
+    // and is reported after the last try.
+    let mut attempt = unsafe { Library::new(&path) };
+    let mut wait = std::time::Duration::from_millis(250);
+    for _ in 0..2 {
+        match &attempt {
+            Err(e) if format!("{e}").contains("LoadLibraryExW failed") => {
+                tracing::warn!("qwen3-tts: library load failed, retrying in {} ms: {e}", wait.as_millis());
+                std::thread::sleep(wait);
+                wait *= 2;
+                attempt = unsafe { Library::new(&path) };
+            }
+            _ => break,
+        }
+    }
+    let lib = attempt.map_err(|e| format!("{}: {e}", path.display()))?;
     let api = unsafe {
         macro_rules! sym {
             ($name:literal) => {

@@ -124,9 +124,6 @@ impl dub_asr::AsrEngine for ServerUnloading {
     }
 }
 
-/// The recogniser of a choice; CrisperWhisper starts audiocpp_server, and its refusal is an error with the cause.
-/// `prompt` — the topic and terms to expect; only CrisperWhisper takes one. Nemotron is told the language «auto» hears.
-
 pub fn build_engine(choice: &AsrChoice, prompt: Option<String>) -> Result<Box<dyn dub_asr::AsrEngine>, String> {
     tracing::info!("recognition: {} [{}]", choice.label(), choice.describe());
     let engine: Box<dyn dub_asr::AsrEngine> = match choice {
@@ -138,7 +135,7 @@ pub fn build_engine(choice: &AsrChoice, prompt: Option<String>) -> Result<Box<dy
                 engine_dir: dub_asr::tcpp::engine_dir(models_root, *build),
                 langid: dub_asr::tcpp::helper_path(models_root, &dub_asr::tcpp::LANGID),
             };
-            return Ok(Box::new(ServerUnloading(dub_asr::acpp::AcppAsr::new(server, id, language).with_prompt(prompt), id)));
+            return Ok(Box::new(LoadRetry(Box::new(ServerUnloading(dub_asr::acpp::AcppAsr::new(server, id, language).with_prompt(prompt), id)))));
         }
         AsrChoice::Server { repo_root, models_root, choice, model, .. } => {
             let id = model.id;
@@ -148,11 +145,82 @@ pub fn build_engine(choice: &AsrChoice, prompt: Option<String>) -> Result<Box<dy
             Box::new(ServerUnloading(dub_asr::acpp::AcppAsr::new(server, id, language), id))
         }
     };
+    // The heard-language helper and the Parakeet/Nemotron engine both load transcribe.dll the first time recognition
+    // needs them; LoadRetry re-attempts a recognition whose only failure was that transient load (#21).
     match choice {
         AsrChoice::Ggml { models_root, build, model } | AsrChoice::Server { models_root, build, model, .. } => {
-            Ok(dub_asr::tcpp::with_heard_language(engine, models_root, *build, model))
+            Ok(Box::new(LoadRetry(dub_asr::tcpp::with_heard_language(engine, models_root, *build, model))))
         }
-        _ => Ok(engine),
+        _ => Ok(Box::new(LoadRetry(engine))),
+    }
+}
+
+
+/// Retries a recognition whose only failure was a transient library load.
+///
+/// transcribe.dll (the VoxLingua107 heard-language helper and the Parakeet/Nemotron engine) and its CUDA modules are
+/// loaded the instant recognition first needs them. On a busy GPU or a slow or antivirus-scanned disk `LoadLibraryExW`
+/// can return nothing with no error of its own, failing a recognition that the same call makes a moment later (#21:
+/// the third re-voicing failed on `transcribe.dll: LoadLibraryExW failed`). The library caches on the first success,
+/// so a retry only re-runs the load, never the whole session.
+struct LoadRetry(Box<dyn dub_asr::AsrEngine>);
+
+const LOAD_RETRIES: usize = 2;
+
+/// A load that failed with no OS error of its own — the transient loader failure, not a missing dependency.
+fn transient_library_load(e: &dub_asr::AsrError) -> bool {
+    e.to_string().contains("LoadLibraryExW failed")
+}
+
+fn retry_load<T>(mut run: impl FnMut() -> Result<T, dub_asr::AsrError>) -> Result<T, dub_asr::AsrError> {
+    let mut out = run();
+    let mut wait = std::time::Duration::from_millis(250);
+    for _ in 0..LOAD_RETRIES {
+        match &out {
+            Err(e) if transient_library_load(e) => {
+                tracing::warn!("recognition: library load failed, retrying in {} ms: {e}", wait.as_millis());
+                std::thread::sleep(wait);
+                wait *= 2;
+                out = run();
+            }
+            _ => break,
+        }
+    }
+    out
+}
+
+/// A batch where the load failed fails every file with the same error (`TcppEngine::many`): retry the whole batch.
+fn retry_load_batch<T>(mut run: impl FnMut() -> Vec<Result<T, dub_asr::AsrError>>) -> Vec<Result<T, dub_asr::AsrError>> {
+    let mut out = run();
+    let mut wait = std::time::Duration::from_millis(250);
+    for _ in 0..LOAD_RETRIES {
+        if out.iter().any(|r| matches!(r, Err(e) if transient_library_load(e))) {
+            tracing::warn!("recognition: library load failed, retrying the batch in {} ms", wait.as_millis());
+            std::thread::sleep(wait);
+            wait *= 2;
+            out = run();
+        } else {
+            break;
+        }
+    }
+    out
+}
+
+impl dub_asr::AsrEngine for LoadRetry {
+    fn transcribe(&mut self, wav: &Path, lang: &str) -> Result<Vec<dub_asr::Segment>, dub_asr::AsrError> {
+        retry_load(|| self.0.transcribe(wav, lang))
+    }
+
+    fn transcribe_turns(&mut self, wav: &Path, turns: &[dub_asr::Turn], lang: &str) -> Result<Vec<dub_asr::SpeakerSegment>, dub_asr::AsrError> {
+        retry_load(|| self.0.transcribe_turns(wav, turns, lang))
+    }
+
+    fn transcribe_many(&mut self, files: &[PathBuf], lang: &str) -> Vec<Result<String, dub_asr::AsrError>> {
+        retry_load_batch(|| self.0.transcribe_many(files, lang))
+    }
+
+    fn transcribe_many_words(&mut self, files: &[PathBuf], lang: &str) -> Vec<Result<Vec<dub_asr::Word>, dub_asr::AsrError>> {
+        retry_load_batch(|| self.0.transcribe_many_words(files, lang))
     }
 }
 

@@ -101,10 +101,12 @@ pub fn higgs() -> Engine {
         id: "higgs",
         name: "Higgs Audio v3",
         languages: HIGGS_LANGS,
+        // defaults as audio.cpp recommends for Higgs v3 (model_specs/higgs_audio_tts.json): temperature 0.8,
+        // top_k 30, top_p 0.8 (plus its own repetition penalty 1.1) — the engine running the voice, not the Python one.
         params: vec![
-            ParamSpec { key: "temperature", kind: "float", min: 0.05, max: 2.0, step: 0.05, default: 1.0 },
-            ParamSpec { key: "top_k", kind: "int", min: 1.0, max: 500.0, step: 1.0, default: 50.0 },
-            ParamSpec { key: "top_p", kind: "float", min: 0.05, max: 1.0, step: 0.01, default: 0.95 },
+            ParamSpec { key: "temperature", kind: "float", min: 0.05, max: 2.0, step: 0.05, default: 0.8 },
+            ParamSpec { key: "top_k", kind: "int", min: 1.0, max: 500.0, step: 1.0, default: 30.0 },
+            ParamSpec { key: "top_p", kind: "float", min: 0.05, max: 1.0, step: 0.01, default: 0.8 },
             ParamSpec { key: "max_tokens", kind: "int", min: 0.0, max: MAX_TOKENS_LIMIT as f64, step: 64.0, default: 0.0 },
         ],
         seed_modes: &["random", "fixed", "inc", "dec"],
@@ -234,10 +236,12 @@ pub fn qwen() -> Engine {
         id: crate::engines::qwen_tts::ENGINE,
         name: "Qwen3-TTS",
         languages: crate::engines::qwen_tts::LANGS,
+        // defaults as qwentts.cpp ships (src/sampling-defaults.h): temperature 0.9, top_k 50, top_p 1.0 (and its own
+        // repetition penalty 1.05) — the engine running the voice.
         params: vec![
-            ParamSpec { key: "temperature", kind: "float", min: 0.05, max: 2.0, step: 0.05, default: 0.7 },
+            ParamSpec { key: "temperature", kind: "float", min: 0.05, max: 2.0, step: 0.05, default: 0.9 },
             ParamSpec { key: "top_k", kind: "int", min: 1.0, max: 500.0, step: 1.0, default: 50.0 },
-            ParamSpec { key: "top_p", kind: "float", min: 0.05, max: 1.0, step: 0.01, default: 0.9 },
+            ParamSpec { key: "top_p", kind: "float", min: 0.05, max: 1.0, step: 0.01, default: 1.0 },
             ParamSpec { key: "max_tokens", kind: "int", min: 0.0, max: 2048.0, step: 64.0, default: 0.0 },
         ],
         seed_modes: &["random", "fixed", "inc", "dec"],
@@ -349,6 +353,21 @@ pub fn is_cloud(id: &str) -> bool {
 
 pub fn get(id: &str) -> Option<Engine> {
     all().into_iter().find(|e| e.id == id)
+}
+
+
+/// Рекомендуемые дефолты движка для повтора: `params` с температурой, top_k и top_p из его `ParamSpec`-дефолтов
+/// (остальное — как у пользователя). После дефектного дубля `synth` повторяет на них, потому что на совсем низкой
+/// температуре движок уходит за конец фразы.
+pub fn recommended_sampling(id: &str, params: &tts_host::Params) -> tts_host::Params {
+    let specs = get(id).map(|e| e.params).unwrap_or_default();
+    let def = |key: &str, fallback: f64| specs.iter().find(|s| s.key == key).map_or(fallback, |s| s.default);
+    tts_host::Params {
+        temperature: def("temperature", params.temperature),
+        top_k: def("top_k", f64::from(params.top_k)).round() as u32,
+        top_p: def("top_p", params.top_p),
+        ..params.clone()
+    }
 }
 
 /// Язык проекта годится движку; `auto` годится всегда — язык берётся по письму блока.

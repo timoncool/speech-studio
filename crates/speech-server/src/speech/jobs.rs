@@ -461,6 +461,7 @@ fn synth_block_with(p: &SpeechPaths, pid: &str, project: &SpeechProject, b: &Blo
                         }
                         // Drama 3 читает указание стилевой приставкой строки: `[тихо и устало] текст`
                         let styled = Some(b.direction.trim()).filter(|d| drama && !d.is_empty()).map(|d| format!("[{d}] {phrase}"));
+                        let recommended = crate::engines::recommended_sampling(own, params);
                         let req = tts_host::Request {
                             text: styled.as_deref().unwrap_or(phrase),
                             lang,
@@ -469,6 +470,7 @@ fn synth_block_with(p: &SpeechPaths, pid: &str, project: &SpeechProject, b: &Blo
                             preset: preset.as_deref(),
                             instruct: Some(b.direction.trim()).filter(|d| !d.is_empty() && crate::engines::qwen_tts::is_engine(own)),
                             params,
+                            recommended: &recommended,
                             fresh_seed: fresh.wrapping_add(salt).wrapping_add(k as u64).wrapping_add((j as u64) << 32),
                             live: live.filter(|_| !retimed).cloned(),
                         };
@@ -1722,6 +1724,8 @@ pub struct ExportOpts {
     pub stems: bool,
     /// Экспортировать, хотя дубли не влезли в реплику по длительности.
     pub allow_duration: bool,
+    /// Экспортировать готовое, пропустив блоки без дубля (не озвучены, упали, файл дубля пропал).
+    pub allow_unvoiced: bool,
     pub quality: crate::audio::media::Quality,
 }
 
@@ -1731,7 +1735,23 @@ pub fn export(p: &SpeechPaths, pid: &str, opts: &ExportOpts, progress: &dyn Fn(V
         return Err(t!("media-bad-format", format = opts.format.clone()));
     }
     let project = crate::speech::load(&p.workspace, pid)?;
-    let problems: Vec<Value> = export_check(p, pid, &project).into_iter().filter(|x| !(opts.allow_duration && x["state"] == "duration")).collect();
+    let check = export_check(p, pid, &project);
+    // allow_unvoiced lets the done part export: a block with no usable take (not voiced, failed, or its take file
+    // gone) is left out of the file and counted; "duration" (a take that is there but too long) is allow_duration's.
+    let skip_unvoiced: std::collections::HashSet<String> = if opts.allow_unvoiced {
+        check
+            .iter()
+            .filter(|x| x["state"] != "duration" && x["state"] != "modified")
+            .filter_map(|x| x["block"].as_str().map(str::to_string))
+            .collect()
+    } else {
+        std::collections::HashSet::new()
+    };
+    let problems: Vec<Value> = check
+        .into_iter()
+        .filter(|x| !(opts.allow_duration && x["state"] == "duration"))
+        .filter(|x| !(opts.allow_unvoiced && x["state"] != "duration"))
+        .collect();
     if !problems.is_empty() {
         return Err(t!("speech-export-not-ready", count = problems.len() as i64));
     }
@@ -1740,7 +1760,7 @@ pub fn export(p: &SpeechPaths, pid: &str, opts: &ExportOpts, progress: &dyn Fn(V
         .iter()
         .filter(|c| opts.chapter.as_ref().is_none_or(|id| &c.id == id))
         .flat_map(|c| c.blocks.iter())
-        .filter(|b| !b.hidden && !b.text.trim().is_empty())
+        .filter(|b| !b.hidden && !b.text.trim().is_empty() && !skip_unvoiced.contains(&b.id))
         .collect();
     if blocks.is_empty() {
         return Err(t!("speech-export-empty"));
@@ -2078,7 +2098,7 @@ pub fn export(p: &SpeechPaths, pid: &str, opts: &ExportOpts, progress: &dyn Fn(V
     let manifest = format!("{base}.sha256");
     std::fs::write(exports.join(&manifest), sha256_manifest(&exports, &built)?).map_err(|e| format!("{manifest}: {e}"))?;
     let first = outputs.first().cloned().unwrap_or(Value::Null);
-    Ok(json!({ "manifest": manifest, "stems": stems_zip, "table": first["table"], "file": first["file"], "subtitles": first["subtitles"], "subtitle_files": first["subtitle_files"], "timings": first["timings"], "player": first["player"], "recipe": first["recipe"], "chapters": first["chapters"], "path": first["path"], "parts": if outputs.len() > 1 { Value::Array(outputs) } else { Value::Null }, "tag_problems": tag_problems, "acx": acx_report, "duration": total, "marks": marks, "lufs_before": levelled.map(|l| l.before), "lufs": levelled.map(|l| l.after) }))
+    Ok(json!({ "manifest": manifest, "stems": stems_zip, "table": first["table"], "file": first["file"], "subtitles": first["subtitles"], "subtitle_files": first["subtitle_files"], "timings": first["timings"], "player": first["player"], "recipe": first["recipe"], "chapters": first["chapters"], "path": first["path"], "parts": if outputs.len() > 1 { Value::Array(outputs) } else { Value::Null }, "tag_problems": tag_problems, "acx": acx_report, "duration": total, "marks": marks, "skipped": skip_unvoiced.len(), "lufs_before": levelled.map(|l| l.before), "lufs": levelled.map(|l| l.after) }))
 }
 
 /// How a block was voiced: the take in the file and what made it, to make it again.

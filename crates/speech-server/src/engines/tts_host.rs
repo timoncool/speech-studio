@@ -144,9 +144,6 @@ pub fn higgs(repo_root: &Path, models_root: &Path) -> Result<Tts, String> {
 /// Строк промпта Drama 3 на одну фразу: реф (~22 кадра на секунду) + текст + сгенерированное.
 const DRAMA_MAX_LEN: u32 = 2048;
 
-/// Загруженная Drama 3: только на CUDA; не та машина (см. `drama_unavailable`) или нет файлов — ошибка с причиной,
-/// Higgs её не подменяет. Видеопамяти берёт не больше лимита из настроек: не входит целиком — эксперты в оперативной
-/// памяти; другой лимит — перезагрузка. cuBLAS она находит в models/higgs-engine, который при старте кладётся в PATH.
 pub fn drama(models_root: &Path) -> Result<Tts, String> {
     let limit = crate::engines::models::drama_vram_limit_mb(models_root);
     let want = format!("{}:{limit}", crate::engines::models::DRAMA_TTS);
@@ -164,8 +161,24 @@ pub fn drama(models_root: &Path) -> Result<Tts, String> {
     if !crate::engines::models::drama_installed(models_root) {
         return Err(t!("render-drama-missing"));
     }
-    let e = drama::DramaEngine::load_limited(&crate::engines::models::drama_dll(models_root), &[], &models_root.join(crate::engines::models::DRAMA_TTS), DRAMA_MAX_LEN, limit)
-        .map_err(|e| drama_load_error(&e.to_string(), limit))?;
+    let dll = crate::engines::models::drama_dll(models_root);
+    let tts = models_root.join(crate::engines::models::DRAMA_TTS);
+    // Loading drama_engine.dll the instant the disk or device is busy can fail transiently (LoadLibraryExW returns
+    // nothing with no error of its own); a couple of backed-off retries recover it (#21).
+    let mut attempt = drama::DramaEngine::load_limited(&dll, &[], &tts, DRAMA_MAX_LEN, limit);
+    let mut wait = std::time::Duration::from_millis(250);
+    for _ in 0..2 {
+        match &attempt {
+            Err(e) if e.to_string().contains("LoadLibraryExW failed") => {
+                tracing::warn!("drama 3: library load failed, retrying in {} ms: {e}", wait.as_millis());
+                std::thread::sleep(wait);
+                wait *= 2;
+                attempt = drama::DramaEngine::load_limited(&dll, &[], &tts, DRAMA_MAX_LEN, limit);
+            }
+            _ => break,
+        }
+    }
+    let e = attempt.map_err(|e| drama_load_error(&e.to_string(), limit))?;
     let e = Arc::new(e);
     tracing::info!("voicing: Drama 3 on CUDA, VRAM limit {limit} MB (0: auto)");
     *slot = Some((want, Tts::Drama(e.clone())));
@@ -514,6 +527,8 @@ pub struct Request<'a> {
     /// Как говорить — указание движку, который его читает (Qwen3-TTS).
     pub instruct: Option<&'a str>,
     pub params: &'a Params,
+    /// Рекомендуемые дефолты движка — на них идёт повтор после дефектного дубля (см. `synth`).
+    pub recommended: &'a Params,
     /// Сид случайного режима: вызывающий даёт разный на каждый дубль.
     pub fresh_seed: u64,
     /// Куда отдавать звук по мере синтеза, если движок умеет потоком.
@@ -669,9 +684,10 @@ fn drama_frames(expected: f64, max_tokens: u32) -> u32 {
     ((expected * drama::FRAMES_PER_SECOND * 2.0).ceil() as u32 + 32).clamp(64, DRAMA_MAX_LEN)
 }
 
-/// Синтез фразы с повтором дефектного дубля: фиксированный сид — одна попытка, случайный — до трёх, каждая
-/// с новым сидом и температурой выше на 0,15. Фраза, которая звучит вслух по мере синтеза (агент говорит), — одна
-/// попытка, принятая и с дефектом: её уже услышали, повтор прозвучал бы второй раз.
+/// Синтез фразы с повтором дефектного дубля: фиксированный сид — одна попытка, случайный — до трёх. Первая идёт на
+/// запрошенных настройках (низкая температура у некоторых голосов звучит лучше всего), а повтор — на рекомендуемых
+/// дефолтах движка: на совсем низкой температуре движок уходит за конец фразы каждый раз. Фраза, которая звучит вслух
+/// по мере синтеза (агент говорит), — одна попытка, принятая и с дефектом: её уже услышали, повтор прозвучал бы второй раз.
 pub fn synth(engine: &Tts, req: &Request) -> Result<Synth, String> {
     req.params.checked()?;
     let expected = expected_secs(req.text, req.lang);
@@ -684,11 +700,13 @@ pub fn synth(engine: &Tts, req: &Request) -> Result<Synth, String> {
     let mut defects = Vec::new();
     for attempt in 0..tries {
         let seed = if fixed { req.params.seed } else { req.fresh_seed.wrapping_add(attempt as u64 * 7919) } % SEED_RANGE;
-        let temperature = (req.params.temperature + 0.15 * attempt as f64).min(2.0);
+        // the first attempt keeps the asked sampling; a retry falls back to the engine's recommended sampling (#18).
+        let p = if attempt == 0 { req.params } else { req.recommended };
+        let temperature = p.temperature;
         let opts = json!({
             "temperature": temperature,
-            "top_k": req.params.top_k,
-            "top_p": req.params.top_p,
+            "top_k": p.top_k,
+            "top_p": p.top_p,
             "max_tokens": cap,
             "allow_incomplete_generation": true,
             "seed": seed,
@@ -702,7 +720,7 @@ pub fn synth(engine: &Tts, req: &Request) -> Result<Synth, String> {
             preset: req.preset.map(str::to_string),
             instruct: req.instruct.map(str::to_string),
             opts,
-            drama: drama::Params { temperature: temperature as f32, top_k: req.params.top_k as i32, top_p: req.params.top_p as f32, seed, max_new: drama_frames(expected, req.params.max_tokens) },
+            drama: drama::Params { temperature: temperature as f32, top_k: p.top_k as i32, top_p: p.top_p as f32, seed, max_new: drama_frames(expected, req.params.max_tokens) },
             max_tokens: req.params.max_tokens,
             steps: req.params.steps,
             speed: req.params.speed,
@@ -831,10 +849,14 @@ mod tests {
 
     #[test]
     fn a_chosen_engine_brings_its_sampling_defaults() {
+        // the engines' own recommended sampling, verified against our forks: Drama 3 (drama-rs), Higgs v3
+        // (audio.cpp model_specs/higgs_audio_tts.json), Qwen3-TTS (qwentts.cpp).
         let mut p = Params::default();
         p.engine_defaults(&crate::engines::drama());
         assert_eq!((p.temperature, p.top_k, p.top_p), (1.0, 30, 0.9));
         p.engine_defaults(&crate::engines::higgs());
-        assert_eq!((p.top_k, p.top_p), (50, 0.95));
+        assert_eq!((p.temperature, p.top_k, p.top_p), (0.8, 30, 0.8));
+        p.engine_defaults(&crate::engines::qwen());
+        assert_eq!((p.temperature, p.top_k, p.top_p), (0.9, 50, 1.0));
     }
 }

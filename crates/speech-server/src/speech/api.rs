@@ -562,6 +562,7 @@ pub async fn export(State(st): State<AppState>, AxPath(pid): AxPath<String>, Jso
         per_chapter: body.get("per_chapter").and_then(Value::as_bool).unwrap_or(false),
         stems: body.get("stems").and_then(Value::as_bool).unwrap_or(false),
         allow_duration: body.get("allow_duration").and_then(Value::as_bool).unwrap_or(false),
+        allow_unvoiced: body.get("allow_unvoiced").and_then(Value::as_bool).unwrap_or(false),
         quality: crate::audio::media::Quality {
             rate: body.get("sample_rate").and_then(Value::as_u64).map(|r| r as u32),
             bits: body.get("bits").and_then(Value::as_u64).map(|b| b as u16),

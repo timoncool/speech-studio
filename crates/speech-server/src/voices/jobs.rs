@@ -181,6 +181,7 @@ pub fn design(p: &VoicePaths, description: &str, sample: &str, lang: &str, count
             preset: None,
             instruct: Some(description),
             params: &params,
+            recommended: &params,
             fresh_seed: u64::from_str_radix(&id, 16).unwrap_or(0).wrapping_add(k as u64),
             live: None,
         };
