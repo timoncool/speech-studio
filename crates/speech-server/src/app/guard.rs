@@ -48,9 +48,23 @@ fn local_host(request: &Request) -> bool {
     LOCAL_HOSTS.iter().any(|local| local.eq_ignore_ascii_case(&name))
 }
 
-/// Middleware на весь роутер: чужой Origin или чужой Host -> 403 до любой ручки.
+/// Запрос, который браузер кросс-доменно может прислать только после CORS-preflight (его студия отклоняет для
+/// чужого источника): тело application/json. Локальный агент со своим Origin проходит через него.
+fn is_json_request(headers: &HeaderMap) -> bool {
+    headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value.trim_start().to_ascii_lowercase().starts_with("application/json"))
+}
+
 pub(crate) async fn origin_guard(request: Request, next: Next) -> Response {
-    if !local_origin(request.headers()) || !local_host(&request) {
+    // DNS-rebinding защищает Host: страница, перепривязавшая свой домен на 127.0.0.1, всё равно шлёт свой Host.
+    // Origin: кросс-доменный application/json POST браузер без CORS-preflight не отправит, а preflight чужого
+    // источника CORS отклоняет; поэтому локальный агент (Claude Code, DeepSeek, другая студия), который ставит
+    // свой не-локальный Origin, доходит до студии, а «простой» кросс-доменный POST, который мог бы подделать
+    // браузер, не проходит.
+    let allowed = local_host(&request) && (local_origin(request.headers()) || is_json_request(request.headers()));
+    if !allowed {
         let shown = |name: header::HeaderName| {
             request.headers().get(name).map(|value| String::from_utf8_lossy(value.as_bytes()).into_owned()).unwrap_or_default()
         };
@@ -141,6 +155,25 @@ mod tests {
         let (code, allowed) = status(request(Some("http://localhost:5173"), "127.0.0.1:8797")).await;
         assert_eq!(code, StatusCode::OK);
         assert_eq!(allowed.as_ref().and_then(|v| v.to_str().ok()), Some("http://localhost:5173"));
+    }
+
+    #[tokio::test]
+    async fn a_local_agent_with_its_own_origin_reaches_the_studio_with_json() {
+        // A local agent (Claude Code, DeepSeek, another studio) may set its own non-local Origin; a JSON body
+        // reaches the studio, because a browser could not send it cross-origin without a preflight the studio
+        // refuses. A simple cross-origin POST a page could forge is still refused.
+        let request = |origin: &str, ctype: Option<&str>| {
+            let mut builder =
+                Request::builder().method("POST").uri("/probe").header(header::HOST, "127.0.0.1:8797").header(header::ORIGIN, origin);
+            if let Some(ctype) = ctype {
+                builder = builder.header(header::CONTENT_TYPE, ctype);
+            }
+            builder.body(Body::empty()).unwrap()
+        };
+        assert_eq!(status(request("https://chat.deepseek.com", Some("application/json"))).await.0, StatusCode::OK);
+        assert_eq!(status(request("app://client", Some("application/json; charset=utf-8"))).await.0, StatusCode::OK);
+        assert_eq!(status(request("https://evil.example", Some("text/plain"))).await.0, StatusCode::FORBIDDEN);
+        assert_eq!(status(request("https://evil.example", None)).await.0, StatusCode::FORBIDDEN);
     }
 
     #[tokio::test]

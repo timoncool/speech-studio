@@ -63,8 +63,6 @@ pub use hub::flush_on_exit as flush_hub_on_exit;
 pub(crate) use hub::worked as hub_worked;
 pub(crate) use url_import::Fetches;
 
-pub(crate) use guard::{foreign_origin, local_origin};
-
 mod http;
 pub(crate) use http::{joined, refuse};
 
