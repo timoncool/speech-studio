@@ -186,12 +186,17 @@ async fn speak(args: &Value, until: Instant) -> Result<Value, String> {
     }
     let made = ok(Method::POST, "/projects".into(), Some(asked)).await?;
     let pid = made["project_id"].as_str().ok_or("POST /projects answered no project_id")?.to_string();
-    let want = format!("{}.{format}", made["project"]["name"].as_str().unwrap_or("speech"));
     let exports = ok(Method::GET, format!("/projects/{}/exports", segment(&pid)), None).await?;
-    if let Some(dir) = exports["dir"].as_str() {
-        let ready = exports["files"].as_array().is_some_and(|files| files.iter().any(|f| f["file"].as_str().is_some_and(|n| n.ends_with(&format!(".{format}")))));
-        if ready && made["existing"] == true {
-            return Ok(json!({ "done": true, "project_id": pid, "file": std::path::Path::new(dir).join(&want) }));
+    // Reuse an existing project's export of this format by its real name on disk, not one rebuilt from the project
+    // title: a title ending in "." would become "name..format" and never be found (#19 — the export job already
+    // strips a trailing dot when it writes the file).
+    if made["existing"] == true {
+        if let Some(dir) = exports["dir"].as_str() {
+            if let Some(file) =
+                exports["files"].as_array().into_iter().flatten().filter_map(|f| f["file"].as_str()).find(|n| n.ends_with(&format!(".{format}")))
+            {
+                return Ok(json!({ "done": true, "project_id": pid, "file": std::path::Path::new(dir).join(file) }));
+            }
         }
     }
     if let Some(active) = running_on(&pid).await? {
