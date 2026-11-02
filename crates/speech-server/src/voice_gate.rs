@@ -6,6 +6,7 @@
 use ort::session::Session;
 use ort::value::TensorRef;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 /// The embedder works on 16 kHz mono audio.
 pub const SR: u32 = 16_000;
@@ -82,6 +83,107 @@ pub fn cosine(a: &[f32], b: &[f32]) -> f32 {
     } else {
         dot / (na * nb)
     }
+}
+
+/// How the owner set the gate up. Off by default: the feature is opt-in.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct Config {
+    /// The gate is on: a conversation in Live starts only on the owner's voice.
+    pub enabled: bool,
+    /// Cosine at or above which the speech is the owner (conservative by default — fewer false activations).
+    pub threshold: f32,
+    /// A wake word that must also be heard, or None for any speech from the owner.
+    pub wake_word: Option<String>,
+    /// Start Speech Studio on login (per-OS). Off by default.
+    pub autostart: bool,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self { enabled: false, threshold: DEFAULT_THRESHOLD, wake_word: None, autostart: false }
+    }
+}
+
+/// The wake words on offer (filled when the wake-word model lands); empty for now, so the gate keys on the voice alone.
+pub fn wake_words() -> &'static [&'static str] {
+    &[]
+}
+
+/// The gate's own folder next to the model, where its settings and the owner's voice print live.
+fn gate_dir(models_root: &Path) -> PathBuf {
+    models_root.join("voice-gate")
+}
+
+/// The gate's settings; defaults (off) when none are saved.
+pub fn config(models_root: &Path) -> Config {
+    std::fs::read(gate_dir(models_root).join("config.json"))
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or_default()
+}
+
+/// Save the gate's settings.
+pub fn save_config(models_root: &Path, cfg: &Config) -> Result<(), String> {
+    let dir = gate_dir(models_root);
+    std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    let path = dir.join("config.json");
+    std::fs::write(&path, serde_json::to_vec_pretty(cfg).map_err(|e| e.to_string())?).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+/// The owner's enrolled voice print (192-d, L2-normalized), or None if no one has enrolled.
+pub fn owner_print(models_root: &Path) -> Option<Vec<f32>> {
+    std::fs::read(gate_dir(models_root).join("owner.json"))
+        .ok()
+        .and_then(|b| serde_json::from_slice::<Vec<f32>>(&b).ok())
+        .filter(|v| v.len() == EMB_DIM)
+}
+
+/// Whether the owner has enrolled a voice.
+pub fn enrolled(models_root: &Path) -> bool {
+    owner_print(models_root).is_some()
+}
+
+/// Forget the owner's voice (the privacy delete).
+pub fn forget_owner(models_root: &Path) -> Result<(), String> {
+    let path = gate_dir(models_root).join("owner.json");
+    if path.is_file() {
+        std::fs::remove_file(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    }
+    Ok(())
+}
+
+/// The embedder is loaded once and kept for the process.
+fn with_embedder<T>(models_root: &Path, gpu: bool, f: impl FnOnce(&mut Embedder) -> Result<T, String>) -> Result<T, String> {
+    static CACHE: Mutex<Option<Embedder>> = Mutex::new(None);
+    let mut slot = CACHE.lock().unwrap_or_else(|p| p.into_inner());
+    if slot.is_none() {
+        *slot = Some(Embedder::load(&model_path(models_root), gpu)?);
+    }
+    f(slot.as_mut().expect("just loaded"))
+}
+
+/// Enrol the owner from 16 kHz mono samples in [-1, 1]: keep their voice print. Returns the seconds used.
+pub fn enroll(models_root: &Path, gpu: bool, samples: &[f32]) -> Result<f64, String> {
+    let print = with_embedder(models_root, gpu, |e| e.embed(samples))?;
+    let dir = gate_dir(models_root);
+    std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    let path = dir.join("owner.json");
+    std::fs::write(&path, serde_json::to_vec(&print).map_err(|e| e.to_string())?).map_err(|e| format!("{}: {e}", path.display()))?;
+    Ok(samples.len() as f64 / SR as f64)
+}
+
+/// The cosine of this speech against the enrolled owner; None if no one is enrolled.
+pub fn score(models_root: &Path, gpu: bool, samples: &[f32]) -> Result<Option<f32>, String> {
+    let Some(owner) = owner_print(models_root) else {
+        return Ok(None);
+    };
+    let print = with_embedder(models_root, gpu, |e| e.embed(samples))?;
+    Ok(Some(cosine(&owner, &print)))
+}
+
+/// Whether this speech is the owner, at or above the configured threshold.
+pub fn is_owner(models_root: &Path, gpu: bool, cfg: &Config, samples: &[f32]) -> Result<bool, String> {
+    Ok(score(models_root, gpu, samples)?.is_some_and(|s| s >= cfg.threshold))
 }
 
 #[cfg(test)]

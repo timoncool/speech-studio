@@ -22,7 +22,7 @@ use crate::{mcp, AppState};
 use crate::speech::{http as speech_api, stream as live, talk as say_api};
 use crate::speech::http::director as director_api;
 use crate::voices::http as voice_api;
-use axum::routing::{get, post};
+use axum::routing::{delete, get, post};
 use axum::Router;
 
 #[cfg(test)]
@@ -86,6 +86,9 @@ pub fn build_router(state: AppState) -> Router {
         .route("/voices", get(voice_api::list))
         .route("/voices/download-pack", post(voices_download_pack))
         .route("/voices/catalog", get(voices_catalog))
+        .route("/voice-gate", get(voice_gate_get).post(voice_gate_set))
+        .route("/voice-gate/enroll", post(voice_gate_enroll))
+        .route("/voice-gate/owner", delete(voice_gate_forget))
         .route("/voices/sample", get(voice_api::sample))
         .route("/voices/photo", get(voice_api::photo).post(voice_api::set_photo))
         .route("/voices/card", post(voice_api::set_card))

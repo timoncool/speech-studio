@@ -301,6 +301,77 @@ pub(super) async fn voices_catalog(State(st): State<AppState>, Query(q): Query<s
     }
 }
 
+
+/// GET /voice-gate — the gate's settings, whether the owner has enrolled, and the wake words on offer.
+pub(super) async fn voice_gate_get(State(st): State<AppState>) -> Response {
+    let cfg = crate::voice_gate::config(&st.models_root);
+    Json(json!({
+        "enabled": cfg.enabled,
+        "threshold": cfg.threshold,
+        "wake_word": cfg.wake_word,
+        "autostart": cfg.autostart,
+        "enrolled": crate::voice_gate::enrolled(&st.models_root),
+        "wake_words": crate::voice_gate::wake_words(),
+    }))
+    .into_response()
+}
+
+/// POST /voice-gate {enabled?, threshold?, wake_word?, autostart?} — save the gate's settings.
+pub(super) async fn voice_gate_set(State(st): State<AppState>, Json(body): Json<Value>) -> Response {
+    let mut cfg = crate::voice_gate::config(&st.models_root);
+    if let Some(v) = body.get("enabled").and_then(Value::as_bool) {
+        cfg.enabled = v;
+    }
+    if let Some(v) = body.get("threshold").and_then(Value::as_f64) {
+        cfg.threshold = (v as f32).clamp(0.0, 1.0);
+    }
+    if body.get("wake_word").is_some() {
+        cfg.wake_word = body.get("wake_word").and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_string);
+    }
+    if let Some(v) = body.get("autostart").and_then(Value::as_bool) {
+        cfg.autostart = v;
+    }
+    if let Err(e) = crate::voice_gate::save_config(&st.models_root, &cfg) {
+        return internal_error(e);
+    }
+    Json(json!({ "enabled": cfg.enabled, "threshold": cfg.threshold, "wake_word": cfg.wake_word, "autostart": cfg.autostart })).into_response()
+}
+
+/// POST /voice-gate/enroll — learn the owner's voice from the last microphone recording (`.mic-test.wav`). The model is
+/// pulled on first use. CPU: a short clip is light and keeps off the GPU the agent uses.
+pub(super) async fn voice_gate_enroll(State(st): State<AppState>) -> Response {
+    let (repo, models, workspace) = (st.repo_root.clone(), st.models_root.clone(), st.workspace.clone());
+    let done = tokio::task::spawn_blocking(move || {
+        app::ensure_components(&repo, &["voice-gate"], &|_| {})?;
+        let wav = mic_test_path(&workspace);
+        if !wav.is_file() {
+            return Err(t!("record-test-none"));
+        }
+        let tmp = tempfile::Builder::new().prefix("enroll-").tempdir().map_err(|e| e.to_string())?;
+        let k = tmp.path().join("16k.wav");
+        crate::audio::media::to_16k_mono(&wav, &k)?;
+        let (samples, _) = crate::audio::wavio::read_mono_f32(&k)?;
+        if (samples.len() as f64 / crate::voice_gate::SR as f64) < 1.0 {
+            return Err(t!("voice-gate-too-short"));
+        }
+        crate::voice_gate::enroll(&models, false, &samples)
+    })
+    .await;
+    match done {
+        Ok(Ok(seconds)) => Json(json!({ "enrolled": true, "seconds": (seconds * 100.0).round() / 100.0 })).into_response(),
+        Ok(Err(e)) => (StatusCode::BAD_REQUEST, Json(json!({ "error": "enroll_failed", "detail": e }))).into_response(),
+        Err(e) => join_failure(e),
+    }
+}
+
+/// DELETE /voice-gate/owner — forget the enrolled voice (the privacy delete).
+pub(super) async fn voice_gate_forget(State(st): State<AppState>) -> Response {
+    match crate::voice_gate::forget_owner(&st.models_root) {
+        Ok(()) => Json(json!({ "enrolled": false })).into_response(),
+        Err(e) => internal_error(e),
+    }
+}
+
 /// POST /voices/get {name} — скачать один голос (mp3+txt) из датасета в каталог голосов.
 pub(super) async fn voices_get(State(st): State<AppState>, Json(body): Json<Value>) -> Json<Value> {
     let name = body.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();

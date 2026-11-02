@@ -1193,6 +1193,7 @@ listen-live-engine = El reconocedor «{ $engine }» no sirve para reconocer en v
 say-no-text = El texto está vacío: escribe qué decirle al agente.
 record-test-other = Hay otra grabación en curso, no una prueba de micrófono.
 record-test-none = Todavía no se ha probado el micrófono.
+voice-gate-too-short = La grabación es demasiado corta para aprender tu voz: repite la frase.
 setup-comp-crisperwhisper-purpose = Reconocimiento de voz en 99 idiomas con marcas de tiempo, más allá de los 25 europeos de Parakeet. Licencia: nyra health Non-Commercial (LICENSE.md junto a los pesos)
 acpp-no-server = El motor audio.cpp no está instalado ({ $path }): descárgalo en Ajustes → Modelos
 acpp-no-libraries = El motor audio.cpp no puede arrancar: faltan sus bibliotecas CUDA ({ $files }). Descárgalas en Ajustes → Modelos

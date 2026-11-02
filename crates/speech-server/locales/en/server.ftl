@@ -1199,6 +1199,7 @@ listen-live-engine = The recogniser "{ $engine }" cannot recognise live: take pa
 say-no-text = The text is empty: write what to tell the agent.
 record-test-other = Another recording is running, not a microphone test.
 record-test-none = There has been no microphone test yet.
+voice-gate-too-short = The recording is too short to learn your voice — say the phrase again.
 setup-comp-crisperwhisper-purpose = Speech recognition in 99 languages with timestamps, beyond Parakeet's 25 European ones. Licence: nyra health Non-Commercial (LICENSE.md beside the weights)
 acpp-no-server = The audio.cpp engine is not installed ({ $path }): download it in Settings → Models
 acpp-no-libraries = The audio.cpp engine cannot start: its CUDA libraries are missing ({ $files }). Download them in Settings → Models

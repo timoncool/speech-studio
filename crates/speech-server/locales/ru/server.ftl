@@ -1220,6 +1220,7 @@ listen-live-engine = Распознаватель «{ $engine }» не годи�
 say-no-text = Пустой текст: напишите, что сказать агенту.
 record-test-other = Сейчас идёт другая запись, а не проверка микрофона.
 record-test-none = Проверки микрофона ещё не было.
+voice-gate-too-short = Запись слишком короткая, чтобы узнать голос, — повторите фразу.
 setup-comp-crisperwhisper-purpose = Распознавание речи на 99 языках с метками слов, сверх 25 европейских у Parakeet. Лицензия: nyra health Non-Commercial (LICENSE.md рядом с весами)
 acpp-no-server = Движок audio.cpp не установлен ({ $path }): скачайте его в «Настройки → Модели»
 acpp-no-libraries = Движок audio.cpp не запустится: нет его библиотек CUDA ({ $files }). Скачайте их в «Настройки → Модели»
