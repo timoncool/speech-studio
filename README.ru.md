@@ -321,7 +321,6 @@ cd desktop && npm install && npx tauri build            # 3) оболочка (T
 | Проект | Что это |
 |--------|----------|
 | [Dub Studio](https://github.com/timoncool/dub-studio) | ИИ-дубляж видео с клонированием голоса, переводом субтитров и текста в кадре |
-| [Higgs Ultimate](https://github.com/timoncool/Higgs-Ultimate) | Нативный синтез речи и клонирование голоса (Higgs Audio v3) |
 | [ACE-Step Studio](https://github.com/timoncool/ACE-Step-Studio) | ИИ-студия музыки — песни, вокал, каверы, клипы |
 | [YuE2 Studio](https://github.com/timoncool/YuE2-Studio) | Генератор песен с редактируемой партитурой |
 | [MiniMax Music3 Studio](https://github.com/timoncool/MiniMax-Music3-Studio) | Нативная локальная и облачная студия музыки на MiniMax Music 3 |

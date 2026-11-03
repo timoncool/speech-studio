@@ -326,7 +326,6 @@ The app asks the author's server for news at start and then every hour; the requ
 | Project | What it is |
 |--------|----------|
 | [Dub Studio](https://github.com/timoncool/dub-studio) | AI video dubbing with cloned voices, translated captions and on-screen text |
-| [Higgs Ultimate](https://github.com/timoncool/Higgs-Ultimate) | Native speech synthesis & voice cloning (Higgs Audio v3) |
 | [ACE-Step Studio](https://github.com/timoncool/ACE-Step-Studio) | AI music studio — songs, vocals, covers, clips |
 | [YuE2 Studio](https://github.com/timoncool/YuE2-Studio) | AI song generator with an editable score |
 | [MiniMax Music3 Studio](https://github.com/timoncool/MiniMax-Music3-Studio) | Native local/cloud AI music studio powered by MiniMax Music 3 |
