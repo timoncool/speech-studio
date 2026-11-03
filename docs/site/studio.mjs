@@ -6,7 +6,7 @@ export const STUDIO = {
   repo: 'https://github.com/timoncool/speech-studio',
   site: 'https://timoncool.github.io/speech-studio/',
   installerMB: 15.85,
-  updated: '2026-10-27',
+  updated: '2026-11-03',
   hero: '01-speech',
   bento: [
     { feature: 0, shot: '02-voices' },

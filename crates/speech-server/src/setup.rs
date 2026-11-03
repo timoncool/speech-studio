@@ -239,10 +239,12 @@ pub fn llama_dir(repo_root: &Path, build: acpp_server::asset::Build) -> PathBuf 
     repo_root.join("tools").join(folder)
 }
 
-/// The download of a transcribe.cpp build as dub_tcpp pins it, to `dest_rel`.
+/// The download of a transcribe.cpp build as dub_tcpp pins it, to `dest_rel`: an archive unpacked flat where the build
+/// is a library with its ggml modules, the library itself where it is one file.
 const fn tcpp_file(build: dub_asr::tcpp::Build, dest_rel: &'static str) -> FileSpec {
     let d = build.download();
-    FileSpec { url: d.url, dest_rel, size: d.size, sha256: d.sha256, extract: Extract::None }
+    let extract = if dub_asr::tcpp::ARCHIVE.is_some() { Extract::Flat } else { Extract::None };
+    FileSpec { url: d.url, dest_rel, size: d.size, sha256: d.sha256, extract }
 }
 
 /// Windows x64: zip-релизы, PyPI-колёса win_amd64, redist NVIDIA windows-x86_64.
@@ -250,10 +252,6 @@ const fn tcpp_file(build: dub_asr::tcpp::Build, dest_rel: &'static str) -> FileS
 mod platform {
     use super::{Extract, FileSpec, Marker, Parts};
 
-    // GitHub: BSRoformer.cpp CPU-сборка (win-x64-msvc, без CUDA) — сепарация на процессоре: медленнее,
-    // но полная функция. Статический exe 671КБ; MSVC-рантайм уже вшит компонентом vcruntime.
-    const GH_BSROFORMER_ENGINE_CPU: &str =
-        "https://github.com/chenmozhijin/BSRoformer.cpp/releases/download/v0.1.0/BSRoformer-windows-x64-msvc.zip";
     // GitHub: llama.cpp win-cuda-13.4 (ggml-org/llama.cpp, билд b11900).
     // ggml-cuda.dll импортирует cublas64_13.dll (ставит cuda-runtime), cudart слинкован статически.
     const GH_LLAMA: &str =
@@ -347,24 +345,25 @@ mod platform {
     // импортирует cublas64_13.dll (ставит cuda-runtime), cudart слинкован статически.
     pub const DRAMA_ENGINE: FileSpec = FileSpec { url: "https://github.com/timoncool/drama-rs/releases/download/engine-0.1.3/drama_engine.dll", dest_rel: "models/drama-engine/drama_engine.dll", size: 32_075_264, sha256: "677133f63605d72e3eceb148eb1fd3eee72f0aae02b65750da59bf60d041793f", extract: Extract::None };
 
-    // transcribe.cpp (fork timoncool/transcribe.cpp, branch studio, scripts/build-engine-windows.cmd): libtranscribe and
-    // ggml whole in one library. CUDA 13, sm 75/80/86/89/90/100/120 without PTX, cudart and cuBLAS from cuda-runtime;
-    // the CPU build for a computer without a card CUDA 13 runs on. The pins are dub_tcpp's.
+    // transcribe.cpp (fork timoncool/transcribe.cpp, branch studio, scripts/build-engine-windows.cmd): transcribe.dll,
+    // ggml, a ggml-cpu per instruction level and the device's backend module, unpacked flat. CUDA 13, sm
+    // 75/80/86/89/90/100/120 without PTX, cudart and cuBLAS from cuda-runtime; the CPU build for a computer without a card
+    // CUDA 13 runs on. The pins are dub_tcpp's.
     pub const TRANSCRIBE_ENGINE: Parts = Parts {
         size: dub_asr::tcpp::Build::Cuda.download().size,
-        files: &[super::tcpp_file(dub_asr::tcpp::Build::Cuda, "models/transcribe-engine/transcribe_engine.dll")],
-        markers: &[Marker { rel: "models/transcribe-engine/transcribe_engine.dll", expect: dub_asr::tcpp::Build::Cuda.download().size }],
+        files: &[super::tcpp_file(dub_asr::tcpp::Build::Cuda, "models/transcribe-engine/_engine.zip")],
+        markers: &[Marker { rel: "models/transcribe-engine/transcribe.dll", expect: dub_asr::tcpp::Build::Cuda.library_size() }],
     };
     pub const TRANSCRIBE_ENGINE_CPU: Parts = Parts {
         size: dub_asr::tcpp::Build::Cpu.download().size,
-        files: &[super::tcpp_file(dub_asr::tcpp::Build::Cpu, "models/transcribe-engine-cpu/transcribe_engine.dll")],
-        markers: &[Marker { rel: "models/transcribe-engine-cpu/transcribe_engine.dll", expect: dub_asr::tcpp::Build::Cpu.download().size }],
+        files: &[super::tcpp_file(dub_asr::tcpp::Build::Cpu, "models/transcribe-engine-cpu/_engine.zip")],
+        markers: &[Marker { rel: "models/transcribe-engine-cpu/transcribe.dll", expect: dub_asr::tcpp::Build::Cpu.library_size() }],
     };
     // the Vulkan build for a card CUDA 13 does not run on (AMD, Intel, older NVIDIA)
     pub const TRANSCRIBE_ENGINE_VULKAN: Parts = Parts {
         size: dub_asr::tcpp::Build::Vulkan.download().size,
-        files: &[super::tcpp_file(dub_asr::tcpp::Build::Vulkan, "models/transcribe-engine-vulkan/transcribe_engine.dll")],
-        markers: &[Marker { rel: "models/transcribe-engine-vulkan/transcribe_engine.dll", expect: dub_asr::tcpp::Build::Vulkan.download().size }],
+        files: &[super::tcpp_file(dub_asr::tcpp::Build::Vulkan, "models/transcribe-engine-vulkan/_engine.zip")],
+        markers: &[Marker { rel: "models/transcribe-engine-vulkan/transcribe.dll", expect: dub_asr::tcpp::Build::Vulkan.library_size() }],
     };
 
     // Qwen3-TTS (timoncool/qwentts.cpp, branch studio, ABI 7, scripts/build-engine-windows.cmd): qwen.dll with ggml and
@@ -372,55 +371,55 @@ mod platform {
     // when a model first runs on that device. CUDA 13: sm 75/80/86/89/90/100/120; CUDA 12.9: sm 52-90 and 120; no PTX;
     // cuBLAS comes from cuda-runtime or cuda12-runtime.
     pub const QWEN_ENGINE: Parts = Parts {
-        size: super::QWEN_CODEC.size + 848_126,
-        files: &[super::QWEN_CODEC, FileSpec { url: "https://github.com/timoncool/qwentts.cpp/releases/download/engine-0.2.0/qwen-windows-x64.zip", dest_rel: "models/qwen3-tts/_engine.zip", size: 848_126, sha256: "adbc02c0a1e3e4bcb800287ecdf0f706515b9a1bcbdf28c8d14b1e23b56a749d", extract: Extract::Flat }],
-        markers: &[Marker { rel: super::QWEN_CODEC.dest_rel, expect: super::QWEN_CODEC.size }, Marker { rel: "models/qwen3-tts/qwen.dll", expect: 433_152 }, Marker { rel: "models/qwen3-tts/ggml-cpu.dll", expect: 983_040 }],
+        size: super::QWEN_CODEC.size + 3_565_914,
+        files: &[super::QWEN_CODEC, FileSpec { url: "https://github.com/timoncool/qwentts.cpp/releases/download/engine-0.2.2/qwen-windows-x64.zip", dest_rel: "models/qwen3-tts/_engine.zip", size: 3_565_914, sha256: "2ed5d533f3a55ddefd694c28bcb9ffb752ce69986eaa97b0ed78a4735ff9f719", extract: Extract::Flat }],
+        markers: &[Marker { rel: super::QWEN_CODEC.dest_rel, expect: super::QWEN_CODEC.size }, Marker { rel: "models/qwen3-tts/qwen.dll", expect: 451_072 }, Marker { rel: "models/qwen3-tts/ggml-cpu-x64.dll", expect: 869_888 }],
     };
     pub const QWEN_VULKAN: Parts = Parts {
         size: 41_529_856,
-        files: &[FileSpec { url: "https://github.com/timoncool/qwentts.cpp/releases/download/engine-0.2.0/ggml-vulkan-windows-x64.dll", dest_rel: "models/qwen3-tts/ggml-vulkan.dll", size: 41_529_856, sha256: "a0d2ee540061584bdf57448de57a87257719307a29501e95c30d33fd0327535d", extract: Extract::None }],
+        files: &[FileSpec { url: "https://github.com/timoncool/qwentts.cpp/releases/download/engine-0.2.2/ggml-vulkan-windows-x64.dll", dest_rel: "models/qwen3-tts/ggml-vulkan.dll", size: 41_529_856, sha256: "a9440ef91097312a1a87826bad0fd7f5f1fa8efefc2bca5f68c9274cd629f611", extract: Extract::None }],
         markers: &[Marker { rel: "models/qwen3-tts/ggml-vulkan.dll", expect: 41_529_856 }],
     };
     pub const QWEN_CUDA13: Parts = Parts {
         size: 142_189_568,
-        files: &[FileSpec { url: "https://github.com/timoncool/qwentts.cpp/releases/download/engine-0.2.0/ggml-cuda13-windows-x64.dll", dest_rel: "models/qwen3-tts/ggml-cuda.dll", size: 142_189_568, sha256: "bedda4c6bf25d2375d44ec63fe83d0088bd62f28be166784d657038457474d70", extract: Extract::None }],
+        files: &[FileSpec { url: "https://github.com/timoncool/qwentts.cpp/releases/download/engine-0.2.2/ggml-cuda13-windows-x64.dll", dest_rel: "models/qwen3-tts/ggml-cuda.dll", size: 142_189_568, sha256: "cacab903a89fce91fb3189be458126d81e14bac547c8d39a4bc0099b45ba5251", extract: Extract::None }],
         markers: &[Marker { rel: "models/qwen3-tts/ggml-cuda.dll", expect: 142_189_568 }],
     };
     pub const QWEN_CUDA12: Parts = Parts {
         size: 170_425_344,
-        files: &[FileSpec { url: "https://github.com/timoncool/qwentts.cpp/releases/download/engine-0.2.0/ggml-cuda12-windows-x64.dll", dest_rel: "models/qwen3-tts/ggml-cuda.dll", size: 170_425_344, sha256: "c59460d1c50f7295fb56fb70d5847ea9de8697b58b6934afa7aeb69087967ed8", extract: Extract::None }],
+        files: &[FileSpec { url: "https://github.com/timoncool/qwentts.cpp/releases/download/engine-0.2.2/ggml-cuda12-windows-x64.dll", dest_rel: "models/qwen3-tts/ggml-cuda.dll", size: 170_425_344, sha256: "c3f90817bdf1ae6ec5c8b83a0721981acec2a9c7332d92cee92fc8200c6de0bc", extract: Extract::None }],
         markers: &[Marker { rel: "models/qwen3-tts/ggml-cuda.dll", expect: 170_425_344 }],
     };
 
-    // BSRoformer.cpp v0.1.0 (timoncool/BSRoformer.cpp studio-0.1.0, scripts/release-windows-cuda.cmd): CUDA 13 sm
-    // 75-90 and 120a, CUDA 12.9 sm 52-90 and 120a, no PTX, cuBLAS from cuda-runtime / cuda12-runtime; Vulkan is the
-    // author's build.
+    // BSRoformer.cpp v0.1.0 (timoncool/BSRoformer.cpp studio-0.1.1, scripts/release-windows-cuda.cmd): the program, ggml,
+    // a ggml-cpu per instruction level and the device's backend module. CUDA 13 sm 75-90 and 120a, CUDA 12.9 sm 52-90
+    // and 120a, no PTX, cuBLAS from cuda-runtime / cuda12-runtime; Vulkan; the processor alone.
     pub const BSROFORMER: Parts = Parts {
-        size: 117_036_131,
+        size: 119_367_905,
         files: &[
-            FileSpec { url: "https://github.com/timoncool/BSRoformer.cpp/releases/download/studio-0.1.0/BSRoformer-windows-cuda13-x64.zip", dest_rel: "tools/bsroformer/_engine.zip", size: 117_036_131, sha256: "a6cb96ec5435fc44855f45c8e4fb2223f7aa1390e4d21c2f0fe9f7d55eafbb41", extract: Extract::Flat },
+            FileSpec { url: "https://github.com/timoncool/BSRoformer.cpp/releases/download/studio-0.1.1/BSRoformer-windows-cuda13-x64.zip", dest_rel: "tools/bsroformer/_engine.zip", size: 119_367_905, sha256: "c89128404d29c52ac0efed1a1072a76b277ccf13a33247611032746932e8d032", extract: Extract::Flat },
         ],
         markers: &[Marker { rel: "tools/bsroformer/bs_roformer-cli.exe", expect: 0 }],
     };
     pub const BSROFORMER_CUDA12: Parts = Parts {
-        size: 170_818_717,
+        size: 173_177_321,
         files: &[
-            FileSpec { url: "https://github.com/timoncool/BSRoformer.cpp/releases/download/studio-0.1.0/BSRoformer-windows-cuda12-x64.zip", dest_rel: "tools/bsroformer-cuda12/_engine.zip", size: 170_818_717, sha256: "774dc9be48fd75a919ba1569991d3b6bb13e9fa18a98d7efe75cc53501f80837", extract: Extract::Flat },
+            FileSpec { url: "https://github.com/timoncool/BSRoformer.cpp/releases/download/studio-0.1.1/BSRoformer-windows-cuda12-x64.zip", dest_rel: "tools/bsroformer-cuda12/_engine.zip", size: 173_177_321, sha256: "72211af3451d9d4266406da8039a3ecdd9eabde1373cd235ff408711af8f7400", extract: Extract::Flat },
         ],
         markers: &[Marker { rel: "tools/bsroformer-cuda12/bs_roformer-cli.exe", expect: 0 }],
     };
     pub const BSROFORMER_VULKAN: Parts = Parts {
-        size: 22_779_026,
+        size: 25_661_617,
         files: &[
-            FileSpec { url: "https://github.com/chenmozhijin/BSRoformer.cpp/releases/download/v0.1.0/BSRoformer-windows-vulkan.zip", dest_rel: "tools/bsroformer-vulkan/_engine.zip", size: 22_779_026, sha256: "a47653911eb17f68e65bce15aed6c4f1bd277a5fbd48293c4e54f0b005b869a7", extract: Extract::Flat },
+            FileSpec { url: "https://github.com/timoncool/BSRoformer.cpp/releases/download/studio-0.1.1/BSRoformer-windows-vulkan-x64.zip", dest_rel: "tools/bsroformer-vulkan/_engine.zip", size: 25_661_617, sha256: "fc82682b4071d065e2e3e84998817877a4d936da7fbb3e580799904c54a6a4ab", extract: Extract::Flat },
         ],
         markers: &[Marker { rel: "tools/bsroformer-vulkan/bs_roformer-cli.exe", expect: 0 }],
     };
 
     pub const BSROFORMER_CPU: Parts = Parts {
-        size: 671_031,
+        size: 3_006_666,
         files: &[
-            FileSpec { url: GH_BSROFORMER_ENGINE_CPU, dest_rel: "tools/bsroformer-cpu/_engine.zip", size: 671_031, sha256: "e002811d56605bce6a51c275cf8f9ba447a3707771289ea6fbcca7f4d3e9ba1f", extract: Extract::Flat },
+            FileSpec { url: "https://github.com/timoncool/BSRoformer.cpp/releases/download/studio-0.1.1/BSRoformer-windows-cpu-x64.zip", dest_rel: "tools/bsroformer-cpu/_engine.zip", size: 3_006_666, sha256: "0b212654ea598503992119328daec051bbce5f14b73808c5cc588f278817f908", extract: Extract::Flat },
         ],
         markers: &[Marker { rel: "tools/bsroformer-cpu/bs_roformer-cli.exe", expect: 0 }],
     };
@@ -577,78 +576,79 @@ mod platform {
     // 100/120): RUNPATH $ORIGIN и ../higgs-engine, где libcudart и libcublas ставит cuda-runtime.
     pub const DRAMA_ENGINE: FileSpec = FileSpec { url: "https://github.com/timoncool/drama-rs/releases/download/engine-0.1.3/libdrama_engine.so", dest_rel: "models/drama-engine/libdrama_engine.so", size: 32_642_032, sha256: "b9beb23321fd63025facb2fa1d90087d3dd03069475aa60ad60c3fb3c97892b4", extract: Extract::None };
 
-    // transcribe.cpp (fork timoncool/transcribe.cpp, scripts/build-engine-linux-docker.sh: Ubuntu 22.04). CUDA 13.3,
+    // transcribe.cpp (fork timoncool/transcribe.cpp, scripts/build-engine-linux-docker.sh: Ubuntu 22.04):
+    // libtranscribe.so, ggml, a ggml-cpu per instruction level and the device's backend module, unpacked flat. CUDA 13.3,
     // sm 75/80/86/89/90/100/120, RUNPATH $ORIGIN and ../higgs-engine, where libcudart and libcublas come from
     // cuda-runtime; the CPU build for a computer without a card CUDA 13 runs on. The pins are dub_tcpp's.
     pub const TRANSCRIBE_ENGINE: Parts = Parts {
         size: dub_asr::tcpp::Build::Cuda.download().size,
-        files: &[super::tcpp_file(dub_asr::tcpp::Build::Cuda, "models/transcribe-engine/libtranscribe_engine.so")],
-        markers: &[Marker { rel: "models/transcribe-engine/libtranscribe_engine.so", expect: dub_asr::tcpp::Build::Cuda.download().size }],
+        files: &[super::tcpp_file(dub_asr::tcpp::Build::Cuda, "models/transcribe-engine/_engine.tar.gz")],
+        markers: &[Marker { rel: "models/transcribe-engine/libtranscribe.so", expect: dub_asr::tcpp::Build::Cuda.library_size() }],
     };
     pub const TRANSCRIBE_ENGINE_CPU: Parts = Parts {
         size: dub_asr::tcpp::Build::Cpu.download().size,
-        files: &[super::tcpp_file(dub_asr::tcpp::Build::Cpu, "models/transcribe-engine-cpu/libtranscribe_engine.so")],
-        markers: &[Marker { rel: "models/transcribe-engine-cpu/libtranscribe_engine.so", expect: dub_asr::tcpp::Build::Cpu.download().size }],
+        files: &[super::tcpp_file(dub_asr::tcpp::Build::Cpu, "models/transcribe-engine-cpu/_engine.tar.gz")],
+        markers: &[Marker { rel: "models/transcribe-engine-cpu/libtranscribe.so", expect: dub_asr::tcpp::Build::Cpu.library_size() }],
     };
     pub const TRANSCRIBE_ENGINE_VULKAN: Parts = Parts {
         size: dub_asr::tcpp::Build::Vulkan.download().size,
-        files: &[super::tcpp_file(dub_asr::tcpp::Build::Vulkan, "models/transcribe-engine-vulkan/libtranscribe_engine.so")],
-        markers: &[Marker { rel: "models/transcribe-engine-vulkan/libtranscribe_engine.so", expect: dub_asr::tcpp::Build::Vulkan.download().size }],
+        files: &[super::tcpp_file(dub_asr::tcpp::Build::Vulkan, "models/transcribe-engine-vulkan/_engine.tar.gz")],
+        markers: &[Marker { rel: "models/transcribe-engine-vulkan/libtranscribe.so", expect: dub_asr::tcpp::Build::Vulkan.library_size() }],
     };
 
     // Qwen3-TTS (timoncool/qwentts.cpp, branch studio, ABI 7, scripts/build-engine-linux-docker.sh, Ubuntu 22.04):
     // libqwen.so with ggml, its CPU backend and libgomp, and the backend module of each other device beside it
     // (GGML_BACKEND_DL); RUNPATH $ORIGIN, ../higgs-engine (CUDA 13 runtime) and ../cuda12-runtime.
     pub const QWEN_ENGINE: Parts = Parts {
-        size: super::QWEN_CODEC.size + 1_235_196,
-        files: &[super::QWEN_CODEC, FileSpec { url: "https://github.com/timoncool/qwentts.cpp/releases/download/engine-0.2.0/qwen-linux-x64.tar.gz", dest_rel: "models/qwen3-tts/_engine.tar.gz", size: 1_235_196, sha256: "a2a5a4d355f8e4e58e87130f075c035aa0c62d0e43cec31da7c0c87c22880e8a", extract: Extract::Flat }],
-        markers: &[Marker { rel: super::QWEN_CODEC.dest_rel, expect: super::QWEN_CODEC.size }, Marker { rel: "models/qwen3-tts/libqwen.so", expect: 675_808 }, Marker { rel: "models/qwen3-tts/libggml-cpu.so", expect: 1_272_208 }],
+        size: super::QWEN_CODEC.size + 6_934_040,
+        files: &[super::QWEN_CODEC, FileSpec { url: "https://github.com/timoncool/qwentts.cpp/releases/download/engine-0.2.2/qwen-linux-x64.tar.gz", dest_rel: "models/qwen3-tts/_engine.tar.gz", size: 6_934_040, sha256: "8565d19cfc5076e36f1a2de4e64f663c05ac60d1272a60a53d75b0a91766e6d6", extract: Extract::Flat }],
+        markers: &[Marker { rel: super::QWEN_CODEC.dest_rel, expect: super::QWEN_CODEC.size }, Marker { rel: "models/qwen3-tts/libqwen.so", expect: 685_368 }, Marker { rel: "models/qwen3-tts/libggml-cpu-x64.so", expect: 946_456 }],
     };
     pub const QWEN_VULKAN: Parts = Parts {
         size: 42_242_640,
-        files: &[FileSpec { url: "https://github.com/timoncool/qwentts.cpp/releases/download/engine-0.2.0/libggml-vulkan-linux-x64.so", dest_rel: "models/qwen3-tts/libggml-vulkan.so", size: 42_242_640, sha256: "efce535b0ba4a3d7803ab2ec75f0a1a06693fb44699baebbdd61dbc032c2177d", extract: Extract::None }],
+        files: &[FileSpec { url: "https://github.com/timoncool/qwentts.cpp/releases/download/engine-0.2.2/libggml-vulkan-linux-x64.so", dest_rel: "models/qwen3-tts/libggml-vulkan.so", size: 42_242_640, sha256: "efce535b0ba4a3d7803ab2ec75f0a1a06693fb44699baebbdd61dbc032c2177d", extract: Extract::None }],
         markers: &[Marker { rel: "models/qwen3-tts/libggml-vulkan.so", expect: 42_242_640 }],
     };
     pub const QWEN_CUDA13: Parts = Parts {
         size: 157_457_144,
-        files: &[FileSpec { url: "https://github.com/timoncool/qwentts.cpp/releases/download/engine-0.2.0/libggml-cuda13-linux-x64.so", dest_rel: "models/qwen3-tts/libggml-cuda.so", size: 157_457_144, sha256: "ded156c13202ed4a27647eccde8ec7e30b139e5e948f8d98a9f67f0d8494d6eb", extract: Extract::None }],
+        files: &[FileSpec { url: "https://github.com/timoncool/qwentts.cpp/releases/download/engine-0.2.2/libggml-cuda13-linux-x64.so", dest_rel: "models/qwen3-tts/libggml-cuda.so", size: 157_457_144, sha256: "fbb56ca5d92d84228bf64888c82bc056f332ffc1c316007247e74e00fda3fb5c", extract: Extract::None }],
         markers: &[Marker { rel: "models/qwen3-tts/libggml-cuda.so", expect: 157_457_144 }],
     };
     pub const QWEN_CUDA12: Parts = Parts {
-        size: 181_025_560,
-        files: &[FileSpec { url: "https://github.com/timoncool/qwentts.cpp/releases/download/engine-0.2.0/libggml-cuda12-linux-x64.so", dest_rel: "models/qwen3-tts/libggml-cuda.so", size: 181_025_560, sha256: "bb4123ff8521c38ecf7704e71d2ee2814ae21704d44240b9489033ce56474837", extract: Extract::None }],
-        markers: &[Marker { rel: "models/qwen3-tts/libggml-cuda.so", expect: 181_025_560 }],
+        size: 181_033_752,
+        files: &[FileSpec { url: "https://github.com/timoncool/qwentts.cpp/releases/download/engine-0.2.2/libggml-cuda12-linux-x64.so", dest_rel: "models/qwen3-tts/libggml-cuda.so", size: 181_033_752, sha256: "465d69496b499be2d7926eb05a50832e943fde8fe9824bfbdb2eecf166716eaf", extract: Extract::None }],
+        markers: &[Marker { rel: "models/qwen3-tts/libggml-cuda.so", expect: 181_033_752 }],
     };
 
-    // BSRoformer.cpp v0.1.0 (timoncool/BSRoformer.cpp studio-0.1.0, scripts/release-linux-cuda-docker.sh): Ubuntu
-    // 22.04, libgomp beside the program, RUNPATH $ORIGIN, ../../models/higgs-engine and ../../models/cuda12-runtime;
-    // Vulkan is the author's build.
+    // BSRoformer.cpp v0.1.0 (timoncool/BSRoformer.cpp studio-0.1.1, scripts/release-linux-cuda-docker.sh): Ubuntu
+    // 22.04, the program with ggml, a ggml-cpu per instruction level, the device's backend module and libgomp beside
+    // it, RUNPATH $ORIGIN, ../../models/higgs-engine and ../../models/cuda12-runtime.
     pub const BSROFORMER: Parts = Parts {
-        size: 118_589_684,
+        size: 123_464_218,
         files: &[
-            FileSpec { url: "https://github.com/timoncool/BSRoformer.cpp/releases/download/studio-0.1.0/BSRoformer-linux-cuda13-x64.tar.gz", dest_rel: "tools/bsroformer/_engine.tar.gz", size: 118_589_684, sha256: "d363cd9c2249417f4d93851e4958c1c6808fa18e5f8b564312ed124c5881bf63", extract: Extract::Flat },
+            FileSpec { url: "https://github.com/timoncool/BSRoformer.cpp/releases/download/studio-0.1.1/BSRoformer-linux-cuda13-x64.tar.gz", dest_rel: "tools/bsroformer/_engine.tar.gz", size: 123_464_218, sha256: "807f59113f17eb706bc7289155bdf507d05ae01650a5c2ccd9685f5574e9cd04", extract: Extract::Flat },
         ],
         markers: &[Marker { rel: "tools/bsroformer/bs_roformer-cli", expect: 0 }],
     };
     pub const BSROFORMER_CUDA12: Parts = Parts {
-        size: 172_267_870,
+        size: 177_134_761,
         files: &[
-            FileSpec { url: "https://github.com/timoncool/BSRoformer.cpp/releases/download/studio-0.1.0/BSRoformer-linux-cuda12-x64.tar.gz", dest_rel: "tools/bsroformer-cuda12/_engine.tar.gz", size: 172_267_870, sha256: "d6bc6ee2e0af9f7a430ab6f0b3ded880e764ea77ee68e97a1c689cee92083520", extract: Extract::Flat },
+            FileSpec { url: "https://github.com/timoncool/BSRoformer.cpp/releases/download/studio-0.1.1/BSRoformer-linux-cuda12-x64.tar.gz", dest_rel: "tools/bsroformer-cuda12/_engine.tar.gz", size: 177_134_761, sha256: "82540c02b5a9730137b0059ffda8c0c79b589a649af554dff1f88867a6c7444d", extract: Extract::Flat },
         ],
         markers: &[Marker { rel: "tools/bsroformer-cuda12/bs_roformer-cli", expect: 0 }],
     };
     pub const BSROFORMER_VULKAN: Parts = Parts {
-        size: 5_900_692,
+        size: 28_805_838,
         files: &[
-            FileSpec { url: "https://github.com/chenmozhijin/BSRoformer.cpp/releases/download/v0.1.0/BSRoformer-linux-vulkan.tar.xz", dest_rel: "tools/bsroformer-vulkan/_engine.tar.xz", size: 5_900_692, sha256: "bee2e9b5dd322b8d4fe1081583ce41709c2c1341550bbb557073c1216fef3e85", extract: Extract::Flat },
+            FileSpec { url: "https://github.com/timoncool/BSRoformer.cpp/releases/download/studio-0.1.1/BSRoformer-linux-vulkan-x64.tar.gz", dest_rel: "tools/bsroformer-vulkan/_engine.tar.gz", size: 28_805_838, sha256: "d0b6acc7b4b05c453bbfe99ea8154251fde4d96b2edd957fdab6e596f7a64927", extract: Extract::Flat },
         ],
         markers: &[Marker { rel: "tools/bsroformer-vulkan/bs_roformer-cli", expect: 0 }],
     };
 
     pub const BSROFORMER_CPU: Parts = Parts {
-        size: 640_204,
+        size: 5_849_988,
         files: &[
-            FileSpec { url: "https://github.com/chenmozhijin/BSRoformer.cpp/releases/download/v0.1.0/BSRoformer-linux-x64-cpu.tar.xz", dest_rel: "tools/bsroformer-cpu/_engine.tar.xz", size: 640_204, sha256: "bc0f20237b9ed263582ebd0844dfc7dbb61309a67c31f4a8d7ba156e21292c77", extract: Extract::Flat },
+            FileSpec { url: "https://github.com/timoncool/BSRoformer.cpp/releases/download/studio-0.1.1/BSRoformer-linux-cpu-x64.tar.gz", dest_rel: "tools/bsroformer-cpu/_engine.tar.gz", size: 5_849_988, sha256: "65eb3cf26dfed0a23f01906a9f179ae7ab503f2bdac4f411e49ec902a5addafd", extract: Extract::Flat },
         ],
         markers: &[Marker { rel: "tools/bsroformer-cpu/bs_roformer-cli", expect: 0 }],
     };
@@ -1366,6 +1366,36 @@ pub fn manifest() -> Vec<Component> {
                 FileSpec { url: "https://huggingface.co/Wespeaker/wespeaker-voxceleb-resnet34-LM/resolve/f0c48c298fd835726c27956a5d617bad7115627e/voxceleb_resnet34_LM.onnx", dest_rel: "models/faces/wespeaker/voxceleb_resnet34_LM.onnx", size: 26_530_309, sha256: "7bb2f06e9df17cdf1ef14ee8a15ab08ed28e8d0ef5054ee135741560df2ec068", extract: Extract::None },
             ],
             markers: &[Marker { rel: "models/faces/wespeaker/voxceleb_resnet34_LM.onnx", expect: 26_530_309 }],
+            external_url: None,
+        },
+        // Voice gate for Live: ReDimNet2-B3 speaker verification (PalabraAI, MIT; SOTA 0.42% EER on VoxCeleb1-O), the
+        // waveform-input ONNX (mel frontend in the graph) so the studio recognises the owner's own voice. Pulled on use.
+        Component {
+            id: "voice-gate",
+            name: t!("setup-comp-voice-gate-name"),
+            purpose: t!("setup-comp-voice-gate-purpose"),
+            requirement: Requirement::Optional,
+            delivery: Delivery::Download,
+            size: 19_369_751,
+            files: &[FileSpec { url: "https://huggingface.co/diarizeapp/redimnet2-b3-onnx/resolve/96144a5d37ba2900e5ba61e726d7cdd7f0c087a8/redimnet2_b3_lm.onnx", dest_rel: "models/voice-gate/redimnet2_b3_lm.onnx", size: 19_369_751, sha256: "23db044710b8a30b1208ac4f6ed9a909398232a99c53e66313720b295051d014", extract: Extract::None }],
+            markers: &[Marker { rel: "models/voice-gate/redimnet2_b3_lm.onnx", expect: 19_369_751 }],
+            external_url: None,
+        },
+        // Wake word for Live: PhoneticXeus universal phone recogniser ("An Empirical Recipe for Universal Phone
+        // Recognition", int8 ONNX, raw 16 kHz waveform -> IPA CTC) so a phrase the owner sets, in any language, wakes
+        // the gate; the phrase is turned to IPA by the bundled eSpeak-ng G2P. Pulled only when a wake word is set.
+        Component {
+            id: "wake-word",
+            name: t!("setup-comp-wake-word-name"),
+            purpose: t!("setup-comp-wake-word-purpose"),
+            requirement: Requirement::Optional,
+            delivery: Delivery::Download,
+            size: 356_550_491,
+            files: &[
+                FileSpec { url: "https://huggingface.co/allan-valin/wav2vec2phoneme-onnx/resolve/73370fc1a1a47d64886f83e949f96c9ef1619bd4/model.int8.onnx", dest_rel: "models/wake-word/model.int8.onnx", size: 356_545_831, sha256: "91503f9430e1a1123e7cb98bbe665ef2ae741143986083937545e7c0f9132cf5", extract: Extract::None },
+                FileSpec { url: "https://huggingface.co/allan-valin/wav2vec2phoneme-onnx/resolve/73370fc1a1a47d64886f83e949f96c9ef1619bd4/vocab.json", dest_rel: "models/wake-word/vocab.json", size: 4_660, sha256: "bd312de06296e7e3fae4aa2f473b76a14def34d955f419ea4a2441b7bfebc117", extract: Extract::None },
+            ],
+            markers: &[Marker { rel: "models/wake-word/model.int8.onnx", expect: 356_545_831 }],
             external_url: None,
         },
         // Ударения, «ё» и омографы русского текста: RUAccent (MIT) — словарь, символьная сеть и сеть омографов
@@ -4052,7 +4082,10 @@ mod tests {
             let d = b.download();
             let [f] = comp(b.dir()).files else { panic!("{b:?}: one file") };
             assert_eq!((f.url, f.size, f.sha256), (d.url, d.size, d.sha256), "{b:?}");
-            assert_eq!(std::path::Path::new(f.dest_rel), std::path::Path::new("models").join(b.dir()).join(dub_asr::tcpp::LIBRARY), "{b:?}");
+            let file = dub_asr::tcpp::ARCHIVE.unwrap_or(dub_asr::tcpp::LIBRARY);
+            assert_eq!(std::path::Path::new(f.dest_rel), std::path::Path::new("models").join(b.dir()).join(file), "{b:?}");
+            let library = std::path::Path::new("models").join(b.dir()).join(dub_asr::tcpp::LIBRARY);
+            assert!(comp(b.dir()).markers.iter().any(|m| std::path::Path::new(m.rel) == library && m.expect == b.library_size()), "{b:?}");
         }
     }
 

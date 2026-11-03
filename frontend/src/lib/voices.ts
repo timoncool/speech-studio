@@ -1,9 +1,22 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, type VoiceEntry, type VoiceListing } from "./api";
 import { VOICES_CHANGED, useChanged } from "./mcpBridge";
+import { DUB_LANGS } from "./i18n";
 
 /** A voice name as people read it: the pack's `RU_Female_` prefix and the underscores go. */
 export const prettyVoice = (name: string) => name.replace(/^[a-z]{2}_(female|famale|male)_/i, "").replace(/_/g, " ");
+
+/** A language code's name as the studio lists languages, else the code. */
+export const langName = (code: string) => DUB_LANGS.find((l) => l.code === code)?.name ?? code.toUpperCase();
+
+/** A library voice's name as shown: the one its source gives it, else the file's. */
+export const voiceLabel = (v: { name: string; card: { display?: string } }) => v.card.display || prettyVoice(v.name);
+
+// the names the library's last listing gives, for the places that know a voice by its file name alone
+const shownNames = new Map<string, string>();
+
+/** A voice known by its file name, shown as the library shows it. */
+export const libraryVoiceName = (name: string) => shownNames.get(name) ?? prettyVoice(name);
 
 const RECENT = "speech.recentVoices";
 
@@ -31,7 +44,11 @@ export function useVoices(): { listing: VoiceListing | null; error: string | nul
   const [listing, setListing] = useState<VoiceListing | null>(null);
   const [error, setError] = useState<string | null>(null);
   const reload = useCallback(() => {
-    api.voices().then((l) => { setListing(l); setError(null); }, (e: unknown) => setError(errorText(e)));
+    api.voices().then((l) => {
+      for (const v of l.voices) shownNames.set(v.name, voiceLabel(v));
+      setListing(l);
+      setError(null);
+    }, (e: unknown) => setError(errorText(e)));
   }, []);
   useEffect(() => { reload(); }, [reload]);
   useChanged(VOICES_CHANGED, reload);

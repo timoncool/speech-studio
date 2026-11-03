@@ -212,6 +212,46 @@ pub fn second_opinion(repo_root: &Path, models_root: &Path, audio: &Path, lang: 
     run(&second, models_root, audio, lang).map(Some)
 }
 
+/// Below this share of the probability in a model's own languages the recording is taken to be in another language.
+/// VoxLingua107 mixes close languages (Russian FLEURS clips came out Belarusian 0.60 / Russian 0.40), so a share this
+/// size still means the model's language; Chinese gives its share near zero.
+const OWN_LANGUAGES_MIN: f32 = 0.1;
+
+/// The language of 16 kHz mono speech by VoxLingua107 (its first 30 s), for a model that knows `known` (its own
+/// languages): its likeliest own language while those hold a noticeable share, else the likeliest language a recogniser
+/// here can read, so «auto» never routes a recording to a model that cannot read it (a Chinese reference recognised by
+/// Parakeet, which does not know it, came back empty and was refused as silent). None for a clip too short to hear.
+/// Needs the langid helper and the tcpp build on disk.
+pub(crate) fn spoken_language(models_root: &Path, wav: &Path, known: &[&str]) -> Result<Option<String>, String> {
+    let (pcm, _) = crate::audio::wavio::read_mono_f32_head(wav, 30 * 16_000)?;
+    if pcm.len() < dub_asr::tcpp::LANGID_MIN_SAMPLES {
+        return Ok(None);
+    }
+    let pcm = pcm.as_slice();
+    let engine = dub_asr::tcpp::engine_dir(models_root, crate::engines::models::tcpp_build(models_root));
+    let model = dub_asr::tcpp::helper_path(models_root, &dub_asr::tcpp::LANGID);
+    let own = dub_asr::tcpp::detect_language(&engine, &model, pcm, known)?;
+    if own.allowed_mass >= OWN_LANGUAGES_MIN {
+        return Ok(own.ranked.into_iter().next().map(|(code, _)| code));
+    }
+    // Outside the model's own languages the recording goes to CrisperWhisper, so the language must be one it knows:
+    // VoxLingua107 also names languages Whisper has no token for (Esperanto, Guarani, Interlingua, …), which the
+    // recogniser would then refuse by name. The likeliest language a recogniser here can read is taken instead.
+    let all = dub_asr::tcpp::detect_language(&engine, &model, pcm, &[])?;
+    Ok(recognisable_language(&all.ranked))
+}
+
+/// From language candidates ranked by likelihood, the likeliest one a recogniser here can read (CrisperWhisper's
+/// languages); the likeliest overall when none of them can, so a recording in a language no recogniser knows is still
+/// named and refused by name rather than mis-sent.
+fn recognisable_language(ranked: &[(String, f32)]) -> Option<String> {
+    ranked
+        .iter()
+        .find(|(code, _)| acpp_server::language::whisper_code(code).is_ok())
+        .or_else(|| ranked.first())
+        .map(|(code, _)| code.clone())
+}
+
 fn run(choice: &crate::engines::models::AsrChoice, models_root: &Path, audio: &Path, lang: &str) -> Result<Heard, String> {
     let work = tempfile::Builder::new().prefix("asr-").tempdir().map_err(|e| e.to_string())?;
     let wav = work.path().join("in-16k.wav");

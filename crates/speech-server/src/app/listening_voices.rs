@@ -47,12 +47,15 @@ pub(crate) fn extract(ws: &Path, voices_dir: &Path, models_root: &Path, pid: &st
             skipped.push(name.clone());
             continue;
         };
+        // into_temp_path keeps the path but closes the handle: ffmpeg writes a sibling and renames it onto this
+        // path, and Windows refuses that rename while the NamedTempFile still holds the target open (#20).
         let tmp = tempfile::Builder::new()
             .prefix("spk-")
             .suffix(".flac")
             .tempfile()
-            .map_err(|e| e.to_string())?;
-        crate::audio::media::keep_audio_ranges(&cut_from, tmp.path(), &[(best.start, best.end)])?;
+            .map_err(|e| e.to_string())?
+            .into_temp_path();
+        crate::audio::media::keep_audio_ranges(&cut_from, &tmp, &[(best.start, best.end)])?;
         let mut card = crate::voices::guess_card(name);
         card.source = "listening".into();
         card.transcript_auto = true;
@@ -61,7 +64,7 @@ pub(crate) fn extract(ws: &Path, voices_dir: &Path, models_root: &Path, pid: &st
         } else if crate::engines::stress::is_russian(&best.text, "auto") {
             card.lang = "ru".into();
         }
-        let voice = crate::voices::import_audio(voices_dir, &crate::voices::sanitize(name), tmp.path(), card)?;
+        let voice = crate::voices::import_audio(voices_dir, &crate::voices::sanitize(name), &tmp, card)?;
         crate::voices::write_transcript(voices_dir, &voice, best.text.trim())?;
         let local: Vec<crate::voices::ref_pick::Word> = words
             .iter()

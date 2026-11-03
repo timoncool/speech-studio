@@ -21,7 +21,7 @@ checksum = "366ffbaa4442f4684d91e2cd7c5ea7c4ed8add41959a31447066e279e432b618"
 [[package]]
 name = "acpp-server"
 version = "2.0.0"
-source = "git+https://github.com/timoncool/dub-studio?rev=da880573b39115eb57aceab267b34cce593c28c5#da880573b39115eb57aceab267b34cce593c28c5"
+source = "git+https://github.com/timoncool/dub-studio?rev=33a39d1cef8f7d386fb8eb5ae29a3f27da583b25#33a39d1cef8f7d386fb8eb5ae29a3f27da583b25"
 dependencies = [
  "base64 0.23.1",
  "dub-core",
@@ -410,6 +410,20 @@ checksum = "5258faecf4edbe35ec483bda9b1f7438e6b391891819269c6b5461aeaa0e8d7d"
 dependencies = [
  "audio-codec-algorithms",
  "num-traits",
+]
+
+[[package]]
+name = "auto-launch"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "17918dba7ecf78b9a14507ec9f984e7977d13fad87dc86d61038980a45d128cf"
+dependencies = [
+ "dirs 6.0.0",
+ "os_info",
+ "smappservice-rs",
+ "thiserror 2.0.21",
+ "windows-registry",
+ "windows-result",
 ]
 
 [[package]]
@@ -1505,6 +1519,15 @@ dependencies = [
 
 [[package]]
 name = "dirs"
+version = "6.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3e8aa94d75141228480295a7d0e7feb620b1a5ad9f12bc40be62411e38cce4e"
+dependencies = [
+ "dirs-sys",
+]
+
+[[package]]
+name = "dirs"
 version = "7.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d57d423b3c82e89b9a24ca3091fee61f456a26edbd28d26c65906f4bc1dcd8f"
@@ -1629,7 +1652,7 @@ dependencies = [
 [[package]]
 name = "drama"
 version = "2.0.0"
-source = "git+https://github.com/timoncool/dub-studio?rev=da880573b39115eb57aceab267b34cce593c28c5#da880573b39115eb57aceab267b34cce593c28c5"
+source = "git+https://github.com/timoncool/dub-studio?rev=33a39d1cef8f7d386fb8eb5ae29a3f27da583b25#33a39d1cef8f7d386fb8eb5ae29a3f27da583b25"
 dependencies = [
  "libloading 0.9.0",
  "thiserror 2.0.21",
@@ -1653,7 +1676,7 @@ dependencies = [
 [[package]]
 name = "dub-asr"
 version = "2.0.0"
-source = "git+https://github.com/timoncool/dub-studio?rev=da880573b39115eb57aceab267b34cce593c28c5#da880573b39115eb57aceab267b34cce593c28c5"
+source = "git+https://github.com/timoncool/dub-studio?rev=33a39d1cef8f7d386fb8eb5ae29a3f27da583b25#33a39d1cef8f7d386fb8eb5ae29a3f27da583b25"
 dependencies = [
  "acpp-server",
  "audioadapter",
@@ -1673,7 +1696,7 @@ dependencies = [
 [[package]]
 name = "dub-captions"
 version = "2.0.0"
-source = "git+https://github.com/timoncool/dub-studio?rev=da880573b39115eb57aceab267b34cce593c28c5#da880573b39115eb57aceab267b34cce593c28c5"
+source = "git+https://github.com/timoncool/dub-studio?rev=33a39d1cef8f7d386fb8eb5ae29a3f27da583b25#33a39d1cef8f7d386fb8eb5ae29a3f27da583b25"
 dependencies = [
  "ab_glyph",
  "dub-core",
@@ -1685,7 +1708,7 @@ dependencies = [
 [[package]]
 name = "dub-core"
 version = "2.0.0"
-source = "git+https://github.com/timoncool/dub-studio?rev=da880573b39115eb57aceab267b34cce593c28c5#da880573b39115eb57aceab267b34cce593c28c5"
+source = "git+https://github.com/timoncool/dub-studio?rev=33a39d1cef8f7d386fb8eb5ae29a3f27da583b25#33a39d1cef8f7d386fb8eb5ae29a3f27da583b25"
 dependencies = [
  "iced-x86",
  "libc",
@@ -1697,7 +1720,7 @@ dependencies = [
 [[package]]
 name = "dub-faces"
 version = "2.0.0"
-source = "git+https://github.com/timoncool/dub-studio?rev=da880573b39115eb57aceab267b34cce593c28c5#da880573b39115eb57aceab267b34cce593c28c5"
+source = "git+https://github.com/timoncool/dub-studio?rev=33a39d1cef8f7d386fb8eb5ae29a3f27da583b25#33a39d1cef8f7d386fb8eb5ae29a3f27da583b25"
 dependencies = [
  "dub-asr",
  "dub-core",
@@ -1714,7 +1737,7 @@ dependencies = [
 [[package]]
 name = "dub-llm"
 version = "2.0.0"
-source = "git+https://github.com/timoncool/dub-studio?rev=da880573b39115eb57aceab267b34cce593c28c5#da880573b39115eb57aceab267b34cce593c28c5"
+source = "git+https://github.com/timoncool/dub-studio?rev=33a39d1cef8f7d386fb8eb5ae29a3f27da583b25#33a39d1cef8f7d386fb8eb5ae29a3f27da583b25"
 dependencies = [
  "anyhow",
  "base64 0.23.1",
@@ -1734,7 +1757,7 @@ dependencies = [
 [[package]]
 name = "dub-sep"
 version = "2.0.0"
-source = "git+https://github.com/timoncool/dub-studio?rev=da880573b39115eb57aceab267b34cce593c28c5#da880573b39115eb57aceab267b34cce593c28c5"
+source = "git+https://github.com/timoncool/dub-studio?rev=33a39d1cef8f7d386fb8eb5ae29a3f27da583b25#33a39d1cef8f7d386fb8eb5ae29a3f27da583b25"
 dependencies = [
  "dub-core",
  "thiserror 2.0.21",
@@ -1745,7 +1768,7 @@ dependencies = [
 [[package]]
 name = "dub-tcpp"
 version = "2.0.0"
-source = "git+https://github.com/timoncool/dub-studio?rev=da880573b39115eb57aceab267b34cce593c28c5#da880573b39115eb57aceab267b34cce593c28c5"
+source = "git+https://github.com/timoncool/dub-studio?rev=33a39d1cef8f7d386fb8eb5ae29a3f27da583b25#33a39d1cef8f7d386fb8eb5ae29a3f27da583b25"
 dependencies = [
  "libloading 0.9.0",
 ]
@@ -1753,7 +1776,7 @@ dependencies = [
 [[package]]
 name = "dub-translate"
 version = "2.0.0"
-source = "git+https://github.com/timoncool/dub-studio?rev=da880573b39115eb57aceab267b34cce593c28c5#da880573b39115eb57aceab267b34cce593c28c5"
+source = "git+https://github.com/timoncool/dub-studio?rev=33a39d1cef8f7d386fb8eb5ae29a3f27da583b25#33a39d1cef8f7d386fb8eb5ae29a3f27da583b25"
 dependencies = [
  "base64 0.23.1",
  "dub-core",
@@ -1909,6 +1932,128 @@ name = "esaxx-rs"
 version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d817e038c30374a4bcb22f94d0a8a0e216958d4c3dcde369b1439fec4bdda6e6"
+
+[[package]]
+name = "espeak-ng"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "213ed87669515192b61f34dc6d6c36adeb75ae424b63e32612a65a1e21e9bee3"
+dependencies = [
+ "bitflags 2.13.2",
+ "espeak-ng-data-dict-ar",
+ "espeak-ng-data-dict-cmn",
+ "espeak-ng-data-dict-de",
+ "espeak-ng-data-dict-en",
+ "espeak-ng-data-dict-es",
+ "espeak-ng-data-dict-fr",
+ "espeak-ng-data-dict-hi",
+ "espeak-ng-data-dict-it",
+ "espeak-ng-data-dict-ja",
+ "espeak-ng-data-dict-ko",
+ "espeak-ng-data-dict-pl",
+ "espeak-ng-data-dict-pt",
+ "espeak-ng-data-dict-ru",
+ "espeak-ng-data-dict-tr",
+ "espeak-ng-data-dict-uk",
+ "espeak-ng-data-phonemes",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "espeak-ng-data-dict-ar"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a0cc5a68c7b647a8985e0f30d46b7818fdfe9407183b802f3df4a2a426e0ba58"
+
+[[package]]
+name = "espeak-ng-data-dict-cmn"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eeedf7da774b411a2f7d891595471e087629792bc5bbe763c3359f8a2dc0bf06"
+
+[[package]]
+name = "espeak-ng-data-dict-de"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0f57e3d0c224fecad5bce06b846339d3107c24ee8b67aeb2a595856b2110f25a"
+
+[[package]]
+name = "espeak-ng-data-dict-en"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f231805f816e50caa02fc9266ba9e7ba842bc1439ed5dc4adc8aa09a745aa4a"
+
+[[package]]
+name = "espeak-ng-data-dict-es"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e125e5571d38d2e3ac752fd72d4bcf2119a4d9af95cb0cd97a4d8d2692567c5f"
+
+[[package]]
+name = "espeak-ng-data-dict-fr"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "22bfa135ac45c5c58e0f254144845add795bdab2d4aea094c70f9d5352e15684"
+
+[[package]]
+name = "espeak-ng-data-dict-hi"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "762416ba3206136f1833c02714e3263e8270c48d20a42b3d664aaf298502b722"
+
+[[package]]
+name = "espeak-ng-data-dict-it"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "28d10cde865ed26b37f96652dd8b9a42170facc3bea8a0272fd5f197fb693d50"
+
+[[package]]
+name = "espeak-ng-data-dict-ja"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "90c619c0b59c3c94206420e5f1cd49629cf5dfe19e89b317451764688fafd1d9"
+
+[[package]]
+name = "espeak-ng-data-dict-ko"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "257489d49ea6a828321d84daba2ff4a1a6b129ae637a652b39ba74b7721462c9"
+
+[[package]]
+name = "espeak-ng-data-dict-pl"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c350c7a8297e64649aba862eda10affcade5a0e1b7041db2898baf95d77ba18"
+
+[[package]]
+name = "espeak-ng-data-dict-pt"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ebda03d7c45f5536bb4d186a269eddf3d884162bea6f93f29ccc34c5a1623af"
+
+[[package]]
+name = "espeak-ng-data-dict-ru"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a3fdd2e2de742f9212265f96df0bff7ad4f8d866493d121b5c922ce65be88277"
+
+[[package]]
+name = "espeak-ng-data-dict-tr"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "82c35a4f92f5a0fff0ad51e7c3e46564a394443d73a4d3fcdb015d37e565432e"
+
+[[package]]
+name = "espeak-ng-data-dict-uk"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1254487cf3945687c214ca3e5688c45e5c6c97d6a74770d7d93916111eb1b68e"
+
+[[package]]
+name = "espeak-ng-data-phonemes"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73639acc81fa0d350dd6fef933d4a935b6f8b93ef74455c9eebf1f3873253e0d"
 
 [[package]]
 name = "euclid"
@@ -4486,6 +4631,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "objc2-security"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "709fe137109bd1e8b5a99390f77a7d8b2961dafc1a1c5db8f2e60329ad6d895a"
+dependencies = [
+ "bitflags 2.13.2",
+ "objc2",
+ "objc2-core-foundation",
+]
+
+[[package]]
+name = "objc2-service-management"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b213642d6959cc6023ceb1217aa595eaaf09b8094ce95127c103cab611fe65e8"
+dependencies = [
+ "block2",
+ "objc2",
+ "objc2-core-foundation",
+ "objc2-foundation",
+ "objc2-security",
+]
+
+[[package]]
 name = "objc2-ui-kit"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4627,6 +4796,21 @@ name = "ort-sys"
 version = "2.0.0-rc.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf211e3776eea6aec988552fa118dd746d70e1b1e5e244058d1c98015f3e5872"
+
+[[package]]
+name = "os_info"
+version = "3.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9cf20a545b305cf1da722b236b5155c9bb35f1d5ceb28c048bd96ca842f41b5b"
+dependencies = [
+ "android_system_properties",
+ "log",
+ "nix",
+ "objc2",
+ "objc2-foundation",
+ "objc2-ui-kit",
+ "windows-sys 0.61.2",
+]
 
 [[package]]
 name = "osakit"
@@ -6175,6 +6359,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9395f0f0eee849a9b707b2f06bb92a6a422090e2123bb2ef8e87a0e61892a8e"
 
 [[package]]
+name = "smappservice-rs"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "52703b97a53101cf5d4580e0737aaa634ce1fdcfc123c16b2a9658e358013488"
+dependencies = [
+ "objc2",
+ "objc2-foundation",
+ "objc2-service-management",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "socket2"
 version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6245,7 +6441,7 @@ dependencies = [
 
 [[package]]
 name = "speech-server"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "acpp-server",
  "anyhow",
@@ -6272,6 +6468,7 @@ dependencies = [
  "dub-translate",
  "ego-tree",
  "encoding_rs",
+ "espeak-ng",
  "fancy-regex",
  "flate2",
  "fluent-templates",
@@ -6328,7 +6525,7 @@ dependencies = [
 
 [[package]]
 name = "speech-studio-desktop"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "rfd 0.17.2",
  "serde",
@@ -6336,6 +6533,7 @@ dependencies = [
  "speech-server",
  "tauri",
  "tauri-build",
+ "tauri-plugin-autostart",
  "tauri-plugin-dialog",
  "tauri-plugin-global-shortcut",
  "tauri-plugin-opener",
@@ -6658,7 +6856,7 @@ dependencies = [
  "anyhow",
  "bytes",
  "cookie",
- "dirs",
+ "dirs 7.0.0",
  "dunce",
  "embed_plist",
  "getrandom 0.3.4",
@@ -6708,7 +6906,7 @@ checksum = "5b5ae674f48836f5dd2eeaf9e221c095bd3e78a8d0439c77ca93b48740a1b644"
 dependencies = [
  "anyhow",
  "cargo_toml",
- "dirs",
+ "dirs 7.0.0",
  "glob",
  "heck 0.5.0",
  "json-patch",
@@ -6776,6 +6974,20 @@ dependencies = [
  "serde_json",
  "tauri-utils",
  "walkdir",
+]
+
+[[package]]
+name = "tauri-plugin-autostart"
+version = "2.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bce56ceb0a99b8ab5eebc977ba9ffc62391b862648cb9ab76fc8bc7231b8f7e2"
+dependencies = [
+ "auto-launch",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-plugin",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -6880,7 +7092,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3cb0b2ea3e85ca287990d3859a29cc5cb18024240fd78f62e027fb7963670f18"
 dependencies = [
  "base64 0.22.1",
- "dirs",
+ "dirs 7.0.0",
  "flate2",
  "futures-util",
  "http",
@@ -7525,7 +7737,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b2b9c52859a94554803ccd4a24b98f74148ebc73b90676d783f3490b1bff9d72"
 dependencies = [
  "crossbeam-channel",
- "dirs",
+ "dirs 7.0.0",
  "libappindicator",
  "muda",
  "objc2",
@@ -8712,7 +8924,7 @@ dependencies = [
  "block2",
  "cookie",
  "crossbeam-channel",
- "dirs",
+ "dirs 7.0.0",
  "dom_query",
  "dpi",
  "dunce",

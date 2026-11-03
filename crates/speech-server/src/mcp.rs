@@ -164,9 +164,8 @@ fn tool_title(name: &str) -> String {
 }
 
 pub async fn handle(headers: HeaderMap, body: axum::body::Bytes) -> Response {
-    if !crate::app::local_origin(&headers) {
-        return crate::app::foreign_origin();
-    }
+    // origin_guard (на всём роутере) уже сверил Host и источник; второй проверки здесь нет, чтобы локальный
+    // агент со своим Origin и телом application/json доходил до MCP.
     let Ok(message) = serde_json::from_slice::<Value>(&body) else {
         return rpc_failure(StatusCode::BAD_REQUEST, Value::Null, -32700, "Parse error".into(), None);
     };

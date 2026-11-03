@@ -3,7 +3,7 @@
 export const OPEN_SETTINGS_EVENT = "speech:open-settings";
 export const OPEN_HELP_EVENT = "speech:open-help";
 
-export const SETTINGS_SECTIONS = ["models", "cloud", "quality", "network", "interface", "agent", "api", "privacy", "about"] as const;
+export const SETTINGS_SECTIONS = ["models", "cloud", "quality", "network", "interface", "voicegate", "agent", "api", "privacy", "about"] as const;
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
 
 export type SettingsTarget = { section: SettingsSection; part: string | null };

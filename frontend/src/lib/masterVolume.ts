@@ -18,6 +18,10 @@ function readLevel(): number {
   }
 }
 
+/** Fired on the window whenever the studio's level changes, so every control (Settings, the player) stays in step;
+ * detail is the new level in 0..1. */
+export const MASTER_VOLUME_EVENT = "speech-studio:volume-changed";
+
 export function masterVolume(): number {
   return level;
 }
@@ -34,6 +38,9 @@ export function setMasterVolume(v: number): void {
     const g = ref.deref();
     if (!g) { gains.delete(ref); continue; }
     g.gain.value = level;
+  }
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(MASTER_VOLUME_EVENT, { detail: level }));
   }
 }
 

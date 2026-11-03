@@ -49,6 +49,21 @@ async fn speech_passes_the_same_tool_arguments_and_reads_the_returned_file_and_p
         assert_eq!(response.headers()[header::CONTENT_TYPE], mime);
         assert_eq!(to_bytes(response.into_body(), usize::MAX).await.unwrap().as_ref(), expected);
     }
+    let file = path.clone();
+    speak_with(
+        &HeaderMap::new(),
+        &json!({"input":"Hello","model":"tts-1","seed":7,"temperature":0.7,"top_k":40,"top_p":0.9,"max_tokens":800,"loudness":"podcast","response_format":"wav"}),
+        |args| async move {
+            assert_eq!(
+                args,
+                json!({"text":"Hello","engine":"higgs","format":"wav","seed":7,"temperature":0.7,"top_k":40,"top_p":0.9,"max_tokens":800,"loudness":"podcast"})
+            );
+            Ok(json!({"done":true,"file":file}))
+        },
+    )
+    .await
+    .ok()
+    .unwrap();
     let error = speak_with(&HeaderMap::new(), &json!({"input":"Hello"}), |_| async {
         Ok(json!({"done":false}))
     })

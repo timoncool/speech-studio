@@ -51,7 +51,7 @@ mod setup_api;
 mod state;
 mod ui_api;
 pub use bootstrap::{serve, serve_blocking};
-pub(crate) use files::{reveal_in_explorer, serve_file_range};
+pub(crate) use files::{open_folder, reveal_in_explorer, serve_file_range};
 pub(crate) use jobs_api::enqueue_error;
 pub use router::build_router;
 pub use runtime::{apply_gpu_choice, augment_path_for_tools, ensure_library_path, init_proxy_route, set_ort_dylib_env};
@@ -62,8 +62,6 @@ pub(crate) use downloads::Downloads;
 pub use hub::flush_on_exit as flush_hub_on_exit;
 pub(crate) use hub::worked as hub_worked;
 pub(crate) use url_import::Fetches;
-
-pub(crate) use guard::{foreign_origin, local_origin};
 
 mod http;
 pub(crate) use http::{joined, refuse};
@@ -96,7 +94,7 @@ pub(crate) use voice_rename::rename_voice;
 pub(crate) mod recognition {
     #[cfg(test)]
     pub(crate) use super::asr::choice;
-    pub(crate) use super::asr::{choice_of, ensure, missing_parts, second_opinion, transcribe, transcribe_many};
+    pub(crate) use super::asr::{choice_of, ensure, missing_parts, second_opinion, spoken_language, transcribe, transcribe_many, Heard};
 }
 
 pub(crate) mod profiles {

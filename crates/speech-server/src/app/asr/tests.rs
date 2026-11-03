@@ -51,11 +51,11 @@ fn each_request_resolves_current_selection_without_changing_previous_specificati
     let root = tempfile::tempdir().unwrap();
     let models = selection(root.path(), json!({"local_backend":"cpu", "asr":"int8"}));
     for id in ["transcribe-engine-cpu", "parakeet", "parakeet-ultra"] {
-        // installed means the pinned size: the content is not read here
-        for f in crate::setup::manifest().iter().find(|c| c.id == id).unwrap().files {
-            let path = root.path().join(f.dest_rel);
+        // installed means the markers at their pinned size: the content is not read here
+        for m in crate::setup::manifest().iter().find(|c| c.id == id).unwrap().markers {
+            let path = root.path().join(m.rel);
             std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-            std::fs::File::create(path).unwrap().set_len(f.size).unwrap();
+            std::fs::File::create(path).unwrap().set_len(m.expect).unwrap();
         }
     }
     let first = choice(root.path(), &models, "en", "voice").unwrap();
@@ -96,4 +96,16 @@ fn missing_parts_name_the_chosen_recogniser() {
     let nemotron = super::missing_parts(root.path(), &models, "nemotron");
     assert!(nemotron.iter().any(|id| id == "asr-gguf-nemotron"), "{nemotron:?}");
     assert!(!nemotron.iter().any(|id| id.starts_with("crisperwhisper")), "{nemotron:?}");
+}
+
+/// Outside the model's own languages the recording goes to CrisperWhisper, so «auto» picks the likeliest language it
+/// can read: VoxLingua107 also names languages Whisper has no token for (Esperanto, Guarani, Interlingua).
+#[test]
+fn a_language_no_recogniser_knows_gives_way_to_the_likeliest_one_it_does() {
+    let ranked = |cs: &[(&str, f32)]| cs.iter().map(|(c, p)| ((*c).to_string(), *p)).collect::<Vec<_>>();
+    assert_eq!(recognisable_language(&ranked(&[("eo", 0.5), ("zh", 0.3), ("ru", 0.2)])).as_deref(), Some("zh"));
+    assert_eq!(recognisable_language(&ranked(&[("ru", 0.6), ("be", 0.4)])).as_deref(), Some("ru"));
+    // all candidates outside any recogniser: the top is named, to be refused by name
+    assert_eq!(recognisable_language(&ranked(&[("gn", 0.7), ("ia", 0.3)])).as_deref(), Some("gn"));
+    assert_eq!(recognisable_language(&[]), None);
 }

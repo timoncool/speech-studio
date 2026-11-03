@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { api, slot } from "../../lib/api";
 import VoiceRecorder from "../voices/VoiceRecorder";
-import { prettyVoice, recentVoices, rememberVoice, useVoices } from "../../lib/voices";
+import { prettyVoice, recentVoices, rememberVoice, useVoices, voiceLabel } from "../../lib/voices";
 import { useEngines } from "../../lib/engines";
 import Combobox, { type ComboOption } from "../Combobox";
 
@@ -28,7 +28,7 @@ export default function VoicePicker({ value, onChange, inherit, label, className
   const style = className ?? "bg-[var(--color-surface-2)] border border-[var(--color-border)] rounded-lg px-2 py-1.5 text-[12px] max-w-full";
   const outer = style.split(/\s+/).filter((c) => /^(m[trblxy]?-|w-|max-w-|min-w-)/.test(c));
   const inner = style.split(/\s+/).filter((c) => !outer.includes(c));
-  const voices = clones ? [...(listing?.voices ?? [])].sort((a, b) => Number(b.card.favorite) - Number(a.card.favorite) || prettyVoice(a.name).localeCompare(prettyVoice(b.name))) : [];
+  const voices = clones ? [...(listing?.voices ?? [])].sort((a, b) => Number(b.card.favorite) - Number(a.card.favorite) || voiceLabel(a).localeCompare(voiceLabel(b))) : [];
   const known = presets.some((p) => p.id === value) || (clones && listing?.voices.some((v) => v.name === value));
   const missing = value && (presets.length || listing) && !known;
   const own = presets.length > 0 ? t("speech.engineVoices") : undefined;
@@ -36,8 +36,8 @@ export default function VoicePicker({ value, onChange, inherit, label, className
   const lib = (presets.length > 0 || recent.length > 0) && voices.length > 0 ? t("speech.libraryClone") : undefined;
   const voiceOption = (v: (typeof voices)[number], group: string | undefined): ComboOption => ({
     value: v.name,
-    label: `${v.card.favorite ? "★ " : ""}${prettyVoice(v.name)}${v.card.lang ? ` · ${v.card.lang.toUpperCase()}` : ""}${caps?.ref_text_required && !v.transcript?.trim() ? ` · ${t("speech.noRefText")}` : ""}`,
-    search: `${v.card.gender} ${(v.card.tags ?? []).join(" ")}`,
+    label: `${v.card.favorite ? "★ " : ""}${voiceLabel(v)}${v.card.lang ? ` · ${v.card.lang.toUpperCase()}` : ""}`,
+    search: `${prettyVoice(v.name)} ${v.card.gender} ${v.card.age} ${v.card.description ?? ""} ${(v.card.tags ?? []).join(" ")}`,
     group,
   });
   const options: ComboOption[] = [
@@ -60,13 +60,9 @@ export default function VoicePicker({ value, onChange, inherit, label, className
     <Combobox value={value ?? ""} options={options} onChange={(v) => { if (v === RECORD) { record(); return; } if (v && voices.some((x) => x.name === v)) rememberVoice(v); onChange(v || null); }} label={label} noResults={t("speech.noVoiceFound")}
       className={outer.join(" ")} inputClassName={`w-full text-[var(--color-text)] ${inner.join(" ")} focus:border-[var(--color-accent)] focus:outline-none`} />
   );
-  const chosen = voices.find((v) => v.name === value);
-  const warn = caps?.ref_text_required && chosen && !chosen.transcript?.trim()
-    ? <span role="alert" className="block mt-0.5 text-[11px] leading-snug text-[var(--color-warn)]">{t("speech.refTextNeeded", { engine: caps.name, button: t("voices.transcribe") })}</span>
-    : null;
-  return recording === null ? <>{picker}{warn}</> : (
+  return recording === null ? picker : (
     <>
-      {picker}{warn}
+      {picker}
       {createPortal(<VoiceRecorder clean={recording} onClose={() => setRecording(null)} onRecorded={(name) => { setRecording(null); reload(); rememberVoice(name); onChange(name); }} />, document.body)}
     </>
   );

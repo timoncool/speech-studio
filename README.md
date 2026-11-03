@@ -113,6 +113,7 @@ Examples of every engine and voice, with Russian stress before and after, are on
 **Live**
 
 - **A conversation by voice** — the agent connected over MCP says each phrase as soon as it writes it; you answer into the microphone and are recognised phrase by phrase; a phrase of two words or more said over the agent stops it, while a cough, a laugh or an «uh-huh» does not; a typed line reaches the agent like a spoken one.
+- **Hands-free start — the voice gate** — Live can arm itself and start a conversation on its own: on your own voice (a voice print enrolled on the device; no one else's voice starts it) and a wake phrase you set in any language, used alone or together, each with its own strictness and a live check that shows how surely it fires. The voice print and the wake-word model stay on the device, everything is off by default, and autostart on login opens Live ready to listen.
 - **Changes on the fly** — the agent's voice, the recogniser, the language and the microphone can be changed in the middle of a conversation, by you or by the agent at your request: the recogniser switches in place, a new microphone or language restarts the microphone, and the window says «Loading the voice…» while a new voice's engine loads.
 - **A natural pace** — an agent's sentence is said whole up to 300 characters, a pause an engine leaves inside a phrase is heard at most 0.6 s long, and each phrase is heard once.
 - **Only you turn the microphone on** — Live, a Listening recording, a voice recording and the microphone test start only on your own click or key; an agent has no tool that turns the microphone on, and the window does not take its clicks on those buttons. The top bar shows «Microphone on», what it is on for and for how long, with a cross that turns it off; with no studio window open for five seconds the microphone turns off by itself.
@@ -172,6 +173,10 @@ Listening — a transcript with speakers and word times, a karaoke player, cut-b
 Live — a voice conversation with an AI agent: what you said and what it answers, five looks, pause and end the conversation:
 
 ![Live in Speech Studio](docs/screenshots/en-11-live.webp)
+
+The voice gate — Live starts hands-free on your own voice and a wake phrase you set, each checked live:
+
+![The voice gate in Speech Studio](docs/screenshots/en-12-voicegate.webp)
 
 ## Requirements
 

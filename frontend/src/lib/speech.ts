@@ -215,7 +215,7 @@ export const speechApi = {
   /** Recognition checks the ready takes now: `ids`, or every one whose words were not checked. */
   check: (pid: string, ids?: string[]) => postCoded<{ job_id: string }>(`/projects/${pid}/check`, ids ? { ids } : {}),
   timeline: (pid: string) => getCoded<{ blocks: TimelineBlock[] }>(`/projects/${pid}/timeline`),
-  export: (pid: string, format: ExportFormat, chapter?: string, perBlock = false, partMinutes = 0, allowDuration = false, quality: ExportQuality = {}, perChapter = false, stems = false) => postCoded<{ job_id: string }>(`/projects/${pid}/export`, { format, chapter, per_block: perBlock, part_minutes: partMinutes || undefined, per_chapter: perChapter || undefined, stems: stems || undefined, allow_duration: allowDuration || undefined, ...quality }),
+  export: (pid: string, format: ExportFormat, chapter?: string, perBlock = false, partMinutes = 0, allowDuration = false, quality: ExportQuality = {}, perChapter = false, stems = false, allowUnvoiced = false) => postCoded<{ job_id: string }>(`/projects/${pid}/export`, { format, chapter, per_block: perBlock, part_minutes: partMinutes || undefined, per_chapter: perChapter || undefined, stems: stems || undefined, allow_duration: allowDuration || undefined, allow_unvoiced: allowUnvoiced || undefined, ...quality }),
   exportsToFolder: (pid: string, files: string[], folder?: string) => postCoded<{ folder: string | null; copied?: number }>(`/projects/${pid}/exports-to-folder`, folder ? { files, folder } : { files }),
   fromSubtitles: (file: File, name?: string) => {
     const form = new FormData();

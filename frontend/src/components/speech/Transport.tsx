@@ -1,7 +1,8 @@
-import { useEffect, useState, type RefObject } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
-import { Pause, PencilLine, Play, RotateCcw, RotateCw, SkipBack, SkipForward, Square } from "lucide-react";
+import { Pause, PencilLine, Play, RotateCcw, RotateCw, SkipBack, SkipForward, Square, Volume2, VolumeX } from "lucide-react";
 import { named } from "../../lib/a11y";
+import { masterVolume, setMasterVolume, MASTER_VOLUME_EVENT } from "../../lib/masterVolume";
 
 export const RATES = [0.75, 1, 1.25, 1.5, 2];
 
@@ -47,6 +48,18 @@ export default function Transport({ blocks, audio, playing, paused, rate, start,
     return () => cancelAnimationFrame(frame);
   }, [playing, paused, audio]);
 
+  const [vol, setVol] = useState(masterVolume());
+  const beforeMute = useRef(masterVolume() || 1);
+  useEffect(() => {
+    const onVolume = (e: Event) => setVol((e as CustomEvent<number>).detail);
+    window.addEventListener(MASTER_VOLUME_EVENT, onVolume);
+    return () => window.removeEventListener(MASTER_VOLUME_EVENT, onVolume);
+  }, []);
+  const toggleMute = () => {
+    if (vol > 0) { beforeMute.current = vol; setMasterVolume(0); }
+    else { setMasterVolume(beforeMute.current || 1); }
+  };
+
   const index = playing ? blocks.findIndex((b) => b.id === playing) : -1;
   const current = index >= 0 ? blocks[index] : null;
   const total = blocks.reduce((s, b) => s + (b.duration ?? 0), 0);
@@ -80,6 +93,11 @@ export default function Transport({ blocks, audio, playing, paused, rate, start,
       ) : (
         <span className="min-w-0 flex-1 text-[12px] text-[var(--color-muted)] truncate tabnum">{t("transport.idle", { voiced, total: blocks.length, length: clock(total) })}</span>
       )}
+      <button onClick={toggleMute} className={`${round} shrink-0`} {...named(vol > 0 ? t("transport.mute") : t("transport.unmute"))}>
+        {vol > 0 ? <Volume2 size={15} /> : <VolumeX size={15} />}
+      </button>
+      <input type="range" min={0} max={1} step={0.01} value={vol} onChange={(e) => setMasterVolume(Number(e.target.value))}
+        aria-label={t("transport.volume")} className="shrink-0 w-20 accent-[var(--color-accent)] max-md:hidden" />
       <select value={rate} onChange={(e) => onRate(Number(e.target.value))} aria-label={t("transport.rate")}
         className="shrink-0 bg-[var(--color-surface-2)] border border-[var(--color-border)] rounded-md px-1.5 py-1 text-[12px] tabnum">
         {RATES.map((r) => <option key={r} value={r}>{r}×</option>)}

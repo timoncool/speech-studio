@@ -74,8 +74,8 @@ fn open_talk_widget(app: tauri::AppHandle, url: tauri::Url) {
         let for_close = app.clone();
         let built = WebviewWindowBuilder::new(&app, "widget", WebviewUrl::External(url))
             .title(speech_server::i18n::text("talk-widget-title", &[]))
-            .inner_size(420.0, 84.0)
-            .min_inner_size(300.0, 72.0)
+            .inner_size(468.0, 120.0)
+            .min_inner_size(360.0, 108.0)
             .transparent(true)
             .decorations(false)
             .shadow(false)
@@ -391,6 +391,37 @@ fn confirm_close(app: &tauri::AppHandle) {
     }
 }
 
+/// The voice gate's launch-on-login setting and whether it is ready to open Live on an autostart launch (on, with a
+/// voice enrolled). Read straight from the config file and the owner print beside it, so it needs no running server;
+/// their folder is the models root (its env, else `<repo>/models`).
+fn gate_config(repo_root: &std::path::Path) -> (bool, bool) {
+    let models = std::env::var_os("SPEECH_STUDIO_MODELS_ROOT").map(PathBuf::from).unwrap_or_else(|| repo_root.join("models"));
+    let dir = models.join("voice-gate");
+    let cfg: serde_json::Value = std::fs::read(dir.join("config.json")).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or(serde_json::Value::Null);
+    let autostart = cfg.get("autostart").and_then(|v| v.as_bool()).unwrap_or(false);
+    let ready = cfg.get("enabled").and_then(|v| v.as_bool()).unwrap_or(false) && dir.join("owner.json").is_file();
+    (autostart, ready)
+}
+
+/// Register or drop launch-on-login to match the voice gate's setting (off by default). Driven from Rust because the
+/// server-served frontend has no Tauri IPC; run at startup and at exit, so a change made during a session is in force
+/// by the next login.
+fn sync_autostart(app: &tauri::AppHandle, repo_root: &std::path::Path) {
+    use tauri_plugin_autostart::ManagerExt;
+    let want = gate_config(repo_root).0;
+    let mgr = app.autolaunch();
+    let is = mgr.is_enabled().unwrap_or(false);
+    if want && !is {
+        if let Err(e) = mgr.enable() {
+            eprintln!("[ERROR] автозапуск не включился: {e}");
+        }
+    } else if !want && is {
+        if let Err(e) = mgr.disable() {
+            eprintln!("[ERROR] автозапуск не выключился: {e}");
+        }
+    }
+}
+
 pub fn run() {
     // Что бы ни завершило процесс — окно, диспетчер задач, taskkill, падение, — llama-server,
     // bs_roformer-cli, whisper и ffmpeg уходят вместе с ним.
@@ -410,6 +441,8 @@ pub fn run() {
     setup_server_env(&repo_root);
     // Маршрут прокси до проверки обновлений: сервер ставит его в своём потоке, без гарантии, что раньше.
     speech_server::init_proxy_route(&repo_root);
+    // the exit handler re-syncs launch-on-login, so a setting changed during a session is in force by the next login
+    let repo_for_exit = repo_root.clone();
 
     let context = tauri::generate_context!();
     service::set_app_version(context.package_info().version.to_string());
@@ -444,6 +477,12 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_updater::Builder::new().build())
+        // launch-on-login for the voice gate; `--autostarted` lets the app tell it was started that way. Off until the
+        // gate's setting turns it on (synced from Rust in setup and at exit).
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec!["--autostarted"]),
+        ))
         .setup(move |app| {
             // axum-бэкенд поднимается В ЭТОМ ЖЕ процессе на фоновом потоке — ОДИН exe, без speech-server.exe-сайдкара.
             // Окно открывается только после ответа /health, чтобы не встать на пустую страницу.
@@ -473,6 +512,14 @@ pub fn run() {
                 }
             }
             app.state::<Shell>().port.store(port, std::sync::atomic::Ordering::SeqCst);
+            // launch-on-login in force per the voice gate's setting; on an autostart launch with the gate on and a
+            // voice enrolled, open Live now so the owner can just start talking
+            sync_autostart(&app.handle(), &repo_root);
+            if std::env::args().any(|a| a == "--autostarted") && gate_config(&repo_root).1 {
+                if let Err(e) = local_call(port, "POST", "/speech/listen", "{}") {
+                    eprintln!("[ERROR] автозапуск: Live не открылся: {e}");
+                }
+            }
             let url = format!("http://127.0.0.1:{port}/");
             // Иконка бандла для GUI-окна: без явной установки окно оставалось пустым в ALT+TAB/панели задач
             // (иконка висела на консольном окне). Ставим её на само GUI-окно.
@@ -519,13 +566,14 @@ pub fn run() {
         })
         .build(context)
         .expect("ошибка запуска Tauri")
-        .run(|app, event| match &event {
+        .run(move |app, event| match &event {
             tauri::RunEvent::WindowEvent { label, event: tauri::WindowEvent::CloseRequested { api, .. }, .. } if label == "main" => {
                 api.prevent_close();
                 let app = app.clone();
                 std::thread::spawn(move || confirm_close(&app));
             }
             tauri::RunEvent::Exit => {
+                sync_autostart(app, &repo_for_exit);
                 speech_server::flush_hub_on_exit();
                 // the servers and engines the studio started end with it, also where no job object ends them (macOS)
                 speech_server::process_group::terminate_group_members();

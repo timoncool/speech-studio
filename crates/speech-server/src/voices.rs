@@ -10,7 +10,7 @@ mod reference;
 pub(crate) use library::{audio_path, rename};
 pub(crate) use reference::prepare_reference;
 
-pub(crate) use jobs::{ensure_words, VoicePaths};
+pub(crate) use jobs::{ensure_words, transcribe, VoicePaths};
 
 pub(crate) use library::{
     free_name, guess_card, import_audio, list, read_transcript, sanitize, write_card, write_transcript, write_words, Voice, VoiceCard,

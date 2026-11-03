@@ -233,8 +233,8 @@ pub(super) fn tools() -> Vec<Tool> {
         },
         Tool {
             name: "openai_api_speech",
-            description: "Call /v1/audio/speech as a program would (to check what it gets): model (an engine alias from openai_api_status), input text, voice (a library voice name), response_format (mp3 by default, wav, flac, aac, pcm), speed (0.25 to 4), instructions (the direction). Answers the sound as a file on this computer.",
-            schema: || object(json!({ "model": { "type": "string" }, "input": { "type": "string" }, "voice": { "type": "string" }, "response_format": { "type": "string", "enum": ["mp3", "wav", "flac", "aac", "pcm"] }, "speed": { "type": "number" }, "instructions": { "type": "string" } }), &["model", "input", "voice"]),
+            description: "Call /v1/audio/speech as a program would (to check what it gets): model (an engine alias from openai_api_status), input text, voice (a library voice name), response_format (mp3 by default, wav, flac, aac, pcm), speed (0.25 to 4), instructions (the direction), and the studio's own engine settings over the engine's defaults: seed, temperature, top_k, top_p, max_tokens, steps (Supertonic), loudness (off, video, podcast, acx). Answers the sound as a file on this computer.",
+            schema: || object(json!({ "model": { "type": "string" }, "input": { "type": "string" }, "voice": { "type": "string" }, "response_format": { "type": "string", "enum": ["mp3", "wav", "flac", "aac", "pcm"] }, "speed": { "type": "number" }, "instructions": { "type": "string" }, "seed": { "type": "integer", "minimum": 0 }, "temperature": { "type": "number" }, "top_k": { "type": "integer", "minimum": 0 }, "top_p": { "type": "number" }, "max_tokens": { "type": "integer", "minimum": 0 }, "steps": { "type": "integer", "minimum": 1 }, "loudness": { "type": "string", "enum": ["off", "video", "podcast", "acx"] } }), &["model", "input", "voice"]),
             call: |args| post("/v1/audio/speech".into(), args.clone()),
         },
         Tool {
@@ -636,6 +636,49 @@ pub(super) fn tools() -> Vec<Tool> {
             description: "Give up a ui_* command a window has not answered (its id from windows_watch): the call waiting for it ends now with reason as its error.",
             schema: || object(json!({ "id": { "type": "string" }, "reason": { "type": "string" } }), &["id"]),
             call: |_| composite("window_drop"),
+        },
+        // ---------------------------------------------------------------- the voice gate (Live keys on the owner's voice)
+        Tool {
+            name: "voice_gate",
+            description: "The voice gate's settings and state: whether it is on, the cosine threshold, the wake word (or none), whether to start on login, whether the owner has enrolled a voice, and the wake words on offer.",
+            schema: nothing,
+            call: |_| get("/voice-gate".into()),
+        },
+        Tool {
+            name: "voice_gate_set",
+            description: "Change the voice gate's settings: enabled, threshold (0..1, the voice strictness), wake_word (a word, or null for any speech from the owner), wake_lang (eSpeak-ng voice code for the phrase, e.g. ru/en/cmn), wake_threshold (0..1, the wake-phrase strictness), autostart. Only the fields given are changed.",
+            schema: || object(json!({ "enabled": { "type": "boolean" }, "threshold": { "type": "number", "minimum": 0, "maximum": 1 }, "wake_word": { "type": ["string", "null"] }, "wake_lang": { "type": ["string", "null"] }, "wake_threshold": { "type": "number", "minimum": 0, "maximum": 1 }, "autostart": { "type": "boolean" } }), &[]),
+            call: |args| post("/voice-gate".into(), args.clone()),
+        },
+        Tool {
+            name: "voice_gate_enroll",
+            description: "Learn the owner's voice from the last microphone recording (record one first with record_test), so the gate recognises it; the model is downloaded on first use.",
+            schema: nothing,
+            call: |_| post("/voice-gate/enroll".into(), json!({})),
+        },
+        Tool {
+            name: "voice_gate_forget",
+            description: "Forget the owner's enrolled voice.",
+            schema: nothing,
+            call: |_| send(Method::DELETE, "/voice-gate/owner".into(), json!({})),
+        },
+        Tool {
+            name: "voice_gate_test",
+            description: "Start ({on:true}) or stop ({on:false}) the live voice check: while on, the microphone records and recent speech is matched against the enrolled voice (read the match with voice_gate_score), so the owner sees how the model hears them and tunes the sensitivity. The microphone is the person's — an agent only reads.",
+            schema: || object(json!({ "on": { "type": "boolean" } }), &[]),
+            call: |args| post("/voice-gate/test".into(), args.clone()),
+        },
+        Tool {
+            name: "voice_gate_score",
+            description: "The live match of the voice check (voice_gate_test) against the enrolled voice, 0..1, with the configured threshold; ready is false until there is enough speech.",
+            schema: nothing,
+            call: |_| get("/voice-gate/score".into()),
+        },
+        Tool {
+            name: "voice_gate_wake_score",
+            description: "The live phone overlap of the voice check (voice_gate_test) with the configured wake phrase, 0..1, with the wake threshold; ready is false until there is enough speech or no phrase is set. The owner says the phrase and sees whether, and how strongly, it is recognised.",
+            schema: nothing,
+            call: |_| get("/voice-gate/wake-score".into()),
         },
         Tool {
             name: "studio_batch",

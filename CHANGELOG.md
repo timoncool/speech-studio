@@ -4,11 +4,43 @@ What changed, newest first. Dates are release dates; the app is versioned by its
 build. Every change a user can see is written here in the commit that makes it, and the
 release notes on GitHub are taken from the release's section.
 
-## Unreleased
+## 0.4.0 — 2026-11-03
+
+### Added
+
+- **A voice gate for Live — start a conversation hands-free** (Settings → Voice gate): the studio listens in the background and begins talking to the agent by itself, by **your own voice** (record it once; a speaker-recognition model, ReDimNet2-B3, recognises you and starts only when you speak) and/or by a **wake phrase you set, in any language** («Эй Клод», «Привет Анифса», «Hey Claude»): a universal phone recogniser (PhoneticXeus) and eSpeak-ng spot the phrase, so there is no training and no fixed word list. Recording your voice finishes by itself once enough is heard. Everything is off by default; the voiceprint and the wake model stay on the device.
+- **Start Speech Studio on login** (Settings → Appearance): the studio launches with the computer, so Live is ready at once. Off by default.
+- **Talk to the agent from Claude Code by voice**: a companion mod, [studio-voice](https://github.com/timoncool/speech-studio-voice), shows the studio's status above the prompt, speaks the agent's replies aloud as they finish (optionally shortened by Haiku to a spoken line) and feeds your speech back as the next prompt.
+- **A volume control on the player** ([#22](https://github.com/timoncool/speech-studio/issues/22)): mute and set the level of what is voiced, kept in sync with Settings.
+- **Export can skip the blocks that are not voiced** ([#24](https://github.com/timoncool/speech-studio/issues/24)): a project with empty blocks still exports the rest.
+- **Make library voices from a recording's speakers, and a Logs folder** ([#20](https://github.com/timoncool/speech-studio/issues/20)).
 
 ### Fixed
 
-- **Drama 3 starts again on a processor without AVX2, FMA or BMI2**, as it did before 0.3.0: its engine is built for any x86-64 processor, and 0.3.0 refused it with «Drama 3 needs a processor with AVX2…». Qwen3-TTS, the voice separator and the audio.cpp engine are built for AVX2, FMA, F16C and BMI2 and still say so on a processor without them.
+- **A cough, a laugh or a short noise no longer interrupts the agent in Live**: only real, continuing speech takes the floor (semantic barge-in, as voice agents do it), and the agent's speech is stopped at once when it does.
+- **A block that comes back empty is voiced again on the engine's own recommended settings** ([#18](https://github.com/timoncool/speech-studio/issues/18)), instead of staying unvoiced.
+- **A transient «LoadLibraryExW failed» on the third re-voicing or recognition is retried** ([#21](https://github.com/timoncool/speech-studio/issues/21)) instead of failing the take.
+- **The agent connects to MCP again** ([#23](https://github.com/timoncool/speech-studio/issues/23)).
+- **No more double dot in an export's file name** ([#19](https://github.com/timoncool/speech-studio/issues/19)).
+- **The voice catalogue and library search every field** — name, description, language, gender, age and year — not just the name and description.
+- **The changelog tab shows the changelog again**: its heading format had drifted from what the window parsed, so it had gone blank.
+
+## 0.3.5 — 2026-10-28
+
+### Added
+
+- **The interface can be scaled** ([#16](https://github.com/timoncool/speech-studio/issues/16)): Settings → Appearance → Interface scale draws the whole studio from 90 to 150 % and keeps it for the next start; Ctrl + plus and Ctrl + minus, or Ctrl with the mouse wheel, change it too, and Ctrl + 0 returns to 100 %.
+- **The voice catalogue filters, searches and plays before you download**: the extra voices come with their name, gender, age (adult or child), language, description, length and year of birth, so the library's "Open cloud voices" filters by gender, age, language and minimum length, searches the name and description, sorts by name, length or age, plays a sample, and downloads the ones picked or everything the filters show, with the sample's transcript where the collection has one. A downloaded voice keeps all of it: the library shows it under its own name with its description, length and year of birth. The catalogue holds 1,636 voices: 1,394 Russian and 242 in 31 other languages (English 75, French 28, Italian 16, German 14, Portuguese 13, Spanish 13, Polish, Arabic and Turkish 9 each, Japanese 7 and more); 1,068 male, 568 female, 60 children. If you know a good collection of popular voices in another language, [open an issue](https://github.com/timoncool/speech-studio/issues/new/choose) and we will add it.
+- **The library finds voices as the catalogue does**: the same search over names, descriptions and tags, filters by gender, age, language, source, length and favourites, sorting by name, length or age, a count of what is shown and «Reset filters»; a project's voice field finds a voice by its name or description.
+- **A voice without its reference text is heard when it is voiced**: the reference's text is recognised once, before voicing, for every engine that clones, so a catalogue voice without a transcript (about half of them) or an imported one needs no «Recognise» first; Drama 3 no longer refuses such a voice.
+- **The API takes the engine's settings** ([#17](https://github.com/timoncool/speech-studio/issues/17)): `POST /v1/audio/speech` and the MCP tool `speak_text` accept, beyond OpenAI's fields, the project settings of the local engines — `seed`, `temperature`, `top_k`, `top_p`, `max_tokens`, `steps` (Supertonic) and `loudness` (off, video, podcast, acx) — each over the engine's default, as Project settings set them in the window.
+
+### Fixed
+
+- **Every engine runs on any x86-64 processor, with or without AVX2, FMA or BMI2**: Drama 3 starts again as it did before 0.3.0, which refused it with «Drama 3 needs a processor with AVX2…», and the audio.cpp engine (Higgs, Supertonic, CrisperWhisper, Parakeet), Qwen3-TTS, the voice separator and recognition (transcribe.cpp) now come with a processor build for every instruction level and load the one this processor runs best, instead of the AVX2 build alone. The new builds are downloaded once after the update.
+- **A voice reference in a language the recogniser does not know is heard anyway**: under Auto, a Chinese (or other) reference recognised by the default Parakeet, which does not know it, came back empty and was refused as «no speech was recognised»; now the reference's language is heard by VoxLingua107 and a recogniser that knows it (CrisperWhisper) is used, so its transcript, its cleaning and its voicing with Drama 3 go through.
+- **Auto only guesses a language a recogniser can read**: the language id (VoxLingua107) names a few languages CrisperWhisper has no token for (Esperanto, Guarani, Interlingua) and a recording guessed as one of them was refused; Auto now takes the likeliest language a recogniser here can read instead.
+- **The voice-similarity check runs on the processor when there is no usable graphics card**, instead of stopping a voicing with an ONNX Runtime CUDA error: its model asks for the card only when one can run a CUDA build, as under Auto with no card.
 
 ## 0.3.0 — 2026-10-27
 

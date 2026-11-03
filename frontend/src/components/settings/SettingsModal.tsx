@@ -1,10 +1,11 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Boxes, Cloud, Gauge, Globe, Info, Languages, Plug, Terminal, X, type LucideIcon, BarChart3 } from "lucide-react";
+import { Boxes, Cloud, Gauge, Globe, Info, Languages, Plug, Terminal, X, type LucideIcon, BarChart3, Fingerprint } from "lucide-react";
 import { parseSettingsTarget, type SettingsSection } from "../../lib/settingsNav";
 import { useEscapeLayer } from "../../lib/escape";
 import QualitySection from "./QualitySection";
 import InterfaceSection from "./InterfaceSection";
+import VoiceGateSection from "./VoiceGateSection";
 import AboutSection from "./AboutSection";
 import PrivacySection from "./PrivacySection";
 import ApiSection from "./ApiSection";
@@ -19,6 +20,7 @@ const SECTIONS: { id: SettingsSection; icon: LucideIcon }[] = [
   { id: "quality", icon: Gauge },
   { id: "network", icon: Globe },
   { id: "interface", icon: Languages },
+  { id: "voicegate", icon: Fingerprint },
   { id: "agent", icon: Plug },
   { id: "api", icon: Terminal },
   { id: "privacy", icon: BarChart3 },
@@ -31,6 +33,7 @@ const LABEL = {
   quality: ["prefs.sections.quality", "prefs.sections.qualityHint"],
   network: ["prefs.sections.network", "prefs.sections.networkHint"],
   interface: ["prefs.sections.interface", "prefs.sections.interfaceHint"],
+  voicegate: ["prefs.sections.voicegate", "prefs.sections.voicegateHint"],
   agent: ["prefs.sections.agent", "prefs.sections.agentHint"],
   api: ["prefs.sections.api", "prefs.sections.apiHint"],
   privacy: ["prefs.sections.privacy", "prefs.sections.privacyHint"],
@@ -119,6 +122,7 @@ export default function SettingsModal({ target, request, panes, onClose }: { tar
             {section === "quality" && <QualitySection />}
             {section === "network" && panes.network}
             {section === "interface" && <InterfaceSection />}
+            {section === "voicegate" && <VoiceGateSection />}
             {section === "agent" && panes.agent}
             {section === "api" && <ApiSection />}
             {section === "privacy" && <PrivacySection />}

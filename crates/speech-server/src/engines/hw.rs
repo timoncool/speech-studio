@@ -465,45 +465,6 @@ fn driver_api_probe(sym: impl Fn(&[u8]) -> *mut std::ffi::c_void) -> CudaProbe {
     }
 }
 
-/// The engines the studio starts on this computer's processor as well as on a card, by what their builds ask of it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum CpuEngine {
-    /// drama_engine (timoncool/drama-rs engine-0.1.3): Rust for the x86-64 baseline (no target-cpu); its few AVX2
-    /// kernels are chosen by cpuid as it runs, so it runs on a processor without AVX2.
-    Drama,
-    /// qwen.dll with ggml-cpu (timoncool/qwentts.cpp engine-0.2.0): built with AVX2, FMA, F16C and BMI2, no variants.
-    Qwen,
-    /// bs_roformer-cli with ggml-cpu (studio-0.1.0 of timoncool/BSRoformer.cpp: AVX2, FMA, F16C and BMI2; the author's
-    /// v0.1.0 CPU and Vulkan builds: the same ggml-cpu in AVX2 throughout).
-    Separator,
-    /// audiocpp_server (timoncool/audio.cpp server-6d6cb6a5): built with the floor AVX2, FMA, F16C and BMI2.
-    AudioCpp,
-}
-
-impl CpuEngine {
-    fn name(self) -> &'static str {
-        match self {
-            CpuEngine::Drama => "Drama 3",
-            CpuEngine::Qwen => "Qwen3-TTS",
-            CpuEngine::Separator => "BSRoformer",
-            CpuEngine::AudioCpp => "audio.cpp",
-        }
-    }
-
-    /// Whether the engine's build needs the x86-64 floor of the studios (AVX2, FMA, F16C, BMI2) to start at all.
-    fn needs_floor(self) -> bool {
-        !matches!(self, CpuEngine::Drama)
-    }
-}
-
-/// Whether this processor runs `engine`'s build: an error naming what it lacks, before the engine would crash on it.
-pub fn processor_runs(engine: CpuEngine) -> Result<(), String> {
-    if engine.needs_floor() {
-        dub_tcpp::cpu_floor(engine.name())?;
-    }
-    Ok(())
-}
-
 
 #[cfg(test)]
 mod tests {
@@ -548,14 +509,4 @@ mod tests {
         assert_eq!(format!("{:.0}", rtx4060 as f64 / GIB), "8");
     }
 
-    /// Drama 3 starts on a processor without AVX2, FMA and BMI2, as it did before the floor was checked; the engines
-    /// built for the floor are still refused on one.
-    #[test]
-    fn only_the_engines_built_for_the_floor_ask_the_processor_for_it() {
-        assert!(!CpuEngine::Drama.needs_floor());
-        assert!(processor_runs(CpuEngine::Drama).is_ok());
-        for engine in [CpuEngine::Qwen, CpuEngine::Separator, CpuEngine::AudioCpp] {
-            assert!(engine.needs_floor(), "{engine:?}");
-        }
-    }
 }

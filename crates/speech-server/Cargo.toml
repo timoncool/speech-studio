@@ -9,17 +9,17 @@ description = "axum-сервис Speech Studio: озвучка (Speech) и ра�
 tempfile = "3"
 trash = "5"
 fluent-templates = "0.15.1"
-dub-core = { git = "https://github.com/timoncool/dub-studio", rev = "da880573b39115eb57aceab267b34cce593c28c5" }
-dub-asr = { git = "https://github.com/timoncool/dub-studio", rev = "da880573b39115eb57aceab267b34cce593c28c5", features = ["cuda"] }
-dub-tcpp = { git = "https://github.com/timoncool/dub-studio", rev = "da880573b39115eb57aceab267b34cce593c28c5" }
-acpp-server = { git = "https://github.com/timoncool/dub-studio", rev = "da880573b39115eb57aceab267b34cce593c28c5", features = ["langid"] }
-dub-llm = { git = "https://github.com/timoncool/dub-studio", rev = "da880573b39115eb57aceab267b34cce593c28c5" }
-dub-translate = { git = "https://github.com/timoncool/dub-studio", rev = "da880573b39115eb57aceab267b34cce593c28c5" }
-dub-captions = { git = "https://github.com/timoncool/dub-studio", rev = "da880573b39115eb57aceab267b34cce593c28c5" }
-dub-sep = { git = "https://github.com/timoncool/dub-studio", rev = "da880573b39115eb57aceab267b34cce593c28c5" }
-dub-faces = { git = "https://github.com/timoncool/dub-studio", rev = "da880573b39115eb57aceab267b34cce593c28c5" }
+dub-core = { git = "https://github.com/timoncool/dub-studio", rev = "33a39d1cef8f7d386fb8eb5ae29a3f27da583b25" }
+dub-asr = { git = "https://github.com/timoncool/dub-studio", rev = "33a39d1cef8f7d386fb8eb5ae29a3f27da583b25", features = ["cuda"] }
+dub-tcpp = { git = "https://github.com/timoncool/dub-studio", rev = "33a39d1cef8f7d386fb8eb5ae29a3f27da583b25" }
+acpp-server = { git = "https://github.com/timoncool/dub-studio", rev = "33a39d1cef8f7d386fb8eb5ae29a3f27da583b25", features = ["langid"] }
+dub-llm = { git = "https://github.com/timoncool/dub-studio", rev = "33a39d1cef8f7d386fb8eb5ae29a3f27da583b25" }
+dub-translate = { git = "https://github.com/timoncool/dub-studio", rev = "33a39d1cef8f7d386fb8eb5ae29a3f27da583b25" }
+dub-captions = { git = "https://github.com/timoncool/dub-studio", rev = "33a39d1cef8f7d386fb8eb5ae29a3f27da583b25" }
+dub-sep = { git = "https://github.com/timoncool/dub-studio", rev = "33a39d1cef8f7d386fb8eb5ae29a3f27da583b25" }
+dub-faces = { git = "https://github.com/timoncool/dub-studio", rev = "33a39d1cef8f7d386fb8eb5ae29a3f27da583b25" }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
-drama = { git = "https://github.com/timoncool/dub-studio", rev = "da880573b39115eb57aceab267b34cce593c28c5" }
+drama = { git = "https://github.com/timoncool/dub-studio", rev = "33a39d1cef8f7d386fb8eb5ae29a3f27da583b25" }
 hound = "3"
 axum = { version = "0.8", features = ["multipart"] }
 tower = { version = "0.5", features = ["util"] }
@@ -80,6 +80,14 @@ regex = "1"
 ort = { version = "=2.0.0-rc.13", default-features = false, features = ["load-dynamic", "tracing", "api-28", "cuda"] }
 # the director's check of a rewritten text: NFKC of its letters.
 unicode-normalization = "0.1"
+# wake word (voice gate): grapheme-to-IPA of the set phrase in any language, for phoneme matching against the recogniser.
+# bundled-data-<lang> embeds that language's espeak-ng dictionary in the binary — without them G2P fails ("dict not
+# found") and no wake phrase is ever recognised. One per language offered in the settings' phrase-language dropdown.
+espeak-ng = { version = "0.2", features = [
+    "bundled-data-en", "bundled-data-ru", "bundled-data-cmn", "bundled-data-es", "bundled-data-pt",
+    "bundled-data-fr", "bundled-data-de", "bundled-data-it", "bundled-data-ja", "bundled-data-ko",
+    "bundled-data-ar", "bundled-data-hi", "bundled-data-tr", "bundled-data-pl", "bundled-data-uk",
+] }
 # Qwen3-TTS: qwentts.cpp's C ABI loaded at run time.
 libloading = "0.9"
 subtle = "2.6"
@@ -113,7 +121,7 @@ libc = "0.2"
 
 [dev-dependencies]
 # Поддельный HTTP-сервер для тестов провайдеров.
-dub-llm = { git = "https://github.com/timoncool/dub-studio", rev = "da880573b39115eb57aceab267b34cce593c28c5", features = ["test-support"] }
+dub-llm = { git = "https://github.com/timoncool/dub-studio", rev = "33a39d1cef8f7d386fb8eb5ae29a3f27da583b25", features = ["test-support"] }
 
 # The README download tables (scripts/readme-downloads.rs), checked or rewritten from what the app downloads.
 [[example]]

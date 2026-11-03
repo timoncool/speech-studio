@@ -439,11 +439,13 @@ fn hushed() -> bool {
     }
 }
 
-/// POST /speech/listen {lang?, device?, engine?} — the microphone heard live for a conversation: each phrase the person ends with
-/// a pause is recognised (`next`), and their speaking over the studio stops its speech.
 pub async fn listen_start(State(st): State<AppState>, headers: HeaderMap, body: Option<Json<Value>>) -> Response {
     let body = body.map(|Json(v)| v).unwrap_or(Value::Null);
     let lang = body.get("lang").and_then(Value::as_str).unwrap_or("auto");
+    // the voice gate is armed while a Live conversation runs, when the person turned on the owner's-voice gate or set
+    // a wake word; the live recogniser then keys each phrase on it
+    let gate_cfg = crate::voice_gate::config(&st.models_root);
+    let gate_on = gate_cfg.enabled || gate_cfg.wake_word.as_deref().map(str::trim).is_some_and(|w| !w.is_empty());
     // the microphone is on already (the person turned it on): this conversation listens to it too, and a recogniser
     // named here hears its next phrase while the microphone goes on recording
     if let Some(pid) = crate::listening::recording().filter(|_| crate::listening::recognition::state()["running"] == true) {
@@ -460,8 +462,9 @@ pub async fn listen_start(State(st): State<AppState>, headers: HeaderMap, body: 
             }
         }
         watch_interruptions(st.workspace, st.jobs);
+        crate::voice_gate::arm(gate_on);
         let (asr, lang) = crate::listening::recognition::engine().unwrap_or_default();
-        return Json(json!({ "pid": pid, "live": true, "joined": true, "asr": asr, "lang": lang })).into_response();
+        return Json(json!({ "pid": pid, "live": true, "joined": true, "asr": asr, "lang": lang, "gate": gate_on })).into_response();
     }
     // the microphone is the person's: an agent listens to a conversation the person started and never turns it on
     if crate::app::agent::by_agent(&headers) {
@@ -472,24 +475,49 @@ pub async fn listen_start(State(st): State<AppState>, headers: HeaderMap, body: 
         return started;
     }
     watch_interruptions(st.workspace, st.jobs);
+    crate::voice_gate::arm(gate_on);
     started
 }
 
-/// While the microphone is on, a phrase the person starts interrupts what the studio says; one watcher at a time.
+/// A one-shot partial this long is already clearly a turn, not a cough or a stray word, and cuts the studio off at once.
+const FLOOR_WORDS_STRONG: usize = 4;
+
+/// Whether a floor-taking phrase is confirmed ongoing speech rather than a brief cough or a one-off mis-recognition.
+/// `base` is the word count when the phrase was first seen this turn (None on the first sighting). A short 2–3 word
+/// phrase must GROW to count — a cough comes out as a short static partial that never grows and so is ignored — while a
+/// phrase of `FLOOR_WORDS_STRONG` words or more is clearly a turn straight away.
+fn floor_grew(base: Option<usize>, words: usize) -> bool {
+    words >= FLOOR_WORDS_STRONG || matches!(base, Some(b) if words > b)
+}
+
 fn watch_interruptions(workspace: std::path::PathBuf, queue: jobs::JobQueue) {
     if LISTENING.swap(true, std::sync::atomic::Ordering::Relaxed) {
         return;
     }
     tokio::spawn(async move {
-        let mut heard = String::new();
+        // the word count a floor-taking phrase was first seen at this turn, and whether the studio was already cut off
+        let mut base: Option<usize> = None;
+        let mut cut = false;
         while LISTENING.load(std::sync::atomic::Ordering::Relaxed) {
             let state = crate::listening::recognition::state();
             let partial = state["partial"]["text"].as_str().unwrap_or_default().to_string();
-            if partial != heard && takes_the_floor(&partial) && !is_echo(&partial) {
-                interrupt(&workspace, &queue);
-                heard = partial;
+            if takes_the_floor(&partial) && !is_echo(&partial) {
+                let words = crate::audio::qc::normalize(&partial).len();
+                // cut the studio off only once the person is really speaking over it: a cough is a short static partial
+                // that never grows, so it no longer stops the agent mid-answer
+                if !cut && floor_grew(base, words) {
+                    interrupt(&workspace, &queue);
+                    cut = true;
+                }
+                if base.is_none() {
+                    base = Some(words);
+                }
+            } else {
+                // silence, a backchannel or a brief noise: the turn is over, arm again for the next one
+                base = None;
+                cut = false;
             }
-            tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+            tokio::time::sleep(std::time::Duration::from_millis(120)).await;
         }
     });
 }
@@ -532,11 +560,14 @@ pub async fn listen_next(axum::extract::Query(q): axum::extract::Query<HashMap<S
     loop {
         let state = crate::listening::recognition::state();
         let all = state["lines"].as_array().cloned().unwrap_or_default();
+        // under the voice gate, only the owner's phrases reach the agent (what the person typed is always theirs)
+        let gate = crate::voice_gate::is_armed();
         let fresh: Vec<Value> = all
             .iter()
             .enumerate()
             .skip(after)
             .filter(|(_, l)| l["typed"] == true || !is_echo(l["text"].as_str().unwrap_or_default()))
+            .filter(|(_, l)| !gate || l["typed"] == true || l["owner"].as_bool() != Some(false))
             .map(|(n, l)| json!({ "n": n + 1, "text": l["text"], "start": l["start"], "end": l["end"] }))
             .collect();
         let running = state["running"].as_bool().unwrap_or(false);
@@ -553,6 +584,7 @@ pub async fn listen_next(axum::extract::Query(q): axum::extract::Query<HashMap<S
 /// An agent may turn it off too: only turning it on is the person's.
 pub async fn listen_stop(State(st): State<AppState>) -> Response {
     LISTENING.store(false, std::sync::atomic::Ordering::Relaxed);
+    crate::voice_gate::arm(false);
     let stopped = crate::listening::http::record_stop(State(st)).await;
     if !stopped.status().is_success() {
         return stopped;
@@ -648,6 +680,16 @@ mod tests {
         assert!(!takes_the_floor(""));
         assert!(takes_the_floor("подожди, стоп"));
         assert!(takes_the_floor("Что случилось?"));
+    }
+
+    #[test]
+    fn a_short_floor_taking_phrase_must_grow_to_cut_the_studio_off() {
+        // a cough recognised as two static words never grows, so it does not interrupt — the bug the person hit
+        assert!(!floor_grew(None, 2)); // first sighting of a short phrase: wait and see
+        assert!(!floor_grew(Some(2), 2)); // still two words a poll later: a cough, left alone
+        assert!(!floor_grew(Some(3), 3)); // three static words: still not confirmed
+        assert!(floor_grew(Some(2), 3)); // it grew: the person is speaking over the studio
+        assert!(floor_grew(None, FLOOR_WORDS_STRONG)); // a long phrase in one shot is clearly a turn at once
     }
 
     #[tokio::test]

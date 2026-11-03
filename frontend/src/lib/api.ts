@@ -243,6 +243,13 @@ export type VoiceCard = {
   license: string;
   /** A long reference gives each new take its next good piece. */
   rotate: boolean;
+  /** The name its source gives the voice (the cloud catalogue's), shown instead of the file's; empty — the file's. */
+  display?: string;
+  /** Who the voice is, as its source describes it. */
+  description?: string;
+  /** The speaker's year of birth and the recording's length in seconds, as its source gives them. */
+  birth_year?: number | null;
+  duration_s?: number | null;
 };
 export type VoiceEntry = { name: string; audio: string; size: number; transcript: string | null; photo: string | null; original: boolean; card: VoiceCard };
 export type RefIssue = "long_pause" | "noisy" | "clipped" | "short";

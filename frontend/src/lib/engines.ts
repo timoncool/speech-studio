@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { speechApi, type EngineCaps } from "./speech";
-import { prettyVoice } from "./voices";
+import { libraryVoiceName } from "./voices";
 
 /** Engines that voice through a provider's servers: languages and voices are the chosen model's. */
 export const CLOUD_ENGINES: readonly string[] = ["openrouter", "google", "fal", "runware"];
@@ -32,5 +32,5 @@ export function useEngines(): EngineCaps[] | null {
  * engine tag such as `qwen3-tts:Q4_K_M`), else the library voice's pretty name. */
 export function voiceName(voice: string, engines: EngineCaps[] | null, engine?: string): string {
   const id = engine?.split(":")[0];
-  return engines?.find((e) => e.id === id)?.presets.find((p) => p.id === voice)?.name ?? prettyVoice(voice);
+  return engines?.find((e) => e.id === id)?.presets.find((p) => p.id === voice)?.name ?? libraryVoiceName(voice);
 }

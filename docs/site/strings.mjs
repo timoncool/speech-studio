@@ -65,6 +65,7 @@ export const STRINGS = {
       ['09-export', 'Export: formats, loudness, chapters and subtitles.'],
       ['10-models', 'Models: what is on disk, what to download, what your card runs.'],
       ['11-live', 'Live: a conversation with an agent by voice, what each side said on the right.'],
+      ['12-voicegate', 'The voice gate: Live starts on your own voice and a wake phrase, each tested live.'],
     ],
     startTitle: 'How to start',
     steps: [
@@ -161,6 +162,7 @@ export const STRINGS = {
       ['09-export', 'Экспорт: форматы, громкость, главы и субтитры.'],
       ['10-models', 'Модели: что на диске, что скачать, что потянет карта.'],
       ['11-live', 'Live: разговор с агентом голосом, справа — что сказал каждый.'],
+      ['12-voicegate', 'Голосовой гейт: Live запускается на ваш голос и кодовую фразу — оба проверяются вживую.'],
     ],
     startTitle: 'Как начать',
     steps: [
@@ -257,6 +259,7 @@ export const STRINGS = {
       ['09-export', 'Exportar: formatos, sonoridad, capítulos y subtítulos.'],
       ['10-models', 'Modelos: qué hay en disco, qué descargar, qué puede ejecutar tu tarjeta.'],
       ['11-live', 'Live: una conversación por voz con un agente; a la derecha, lo que dijo cada uno.'],
+      ['12-voicegate', 'La puerta de voz: Live arranca con tu propia voz y una frase de activación, ambas probadas en vivo.'],
     ],
     startTitle: 'Cómo empezar',
     steps: [
@@ -353,6 +356,7 @@ export const STRINGS = {
       ['09-export', 'Export : formats, sonie, chapitres et sous-titres.'],
       ['10-models', 'Modèles : ce qui est sur le disque, ce qu’il faut télécharger, ce que votre carte peut faire tourner.'],
       ['11-live', 'Live : une conversation à voix haute avec un agent, à droite ce que chacun a dit.'],
+      ['12-voicegate', 'Le filtre vocal : Live démarre sur votre propre voix et une phrase d’activation, testées en direct.'],
     ],
     startTitle: 'Pour commencer',
     steps: [
@@ -449,6 +453,7 @@ export const STRINGS = {
       ['09-export', 'Exportar: formatos, loudness, capítulos e legendas.'],
       ['10-models', 'Modelos: o que está no disco, o que baixar, o que a sua placa roda.'],
       ['11-live', 'Live: uma conversa por voz com um agente; à direita, o que cada um disse.'],
+      ['12-voicegate', 'A porta de voz: o Live começa com a sua própria voz e uma frase de ativação, testadas ao vivo.'],
     ],
     startTitle: 'Como começar',
     steps: [
@@ -545,6 +550,7 @@ export const STRINGS = {
       ['09-export', '导出：格式、响度、章节和字幕。'],
       ['10-models', '模型：磁盘上有什么、要下载什么、你的显卡能运行什么。'],
       ['11-live', 'Live：与智能体语音对话，右侧是双方说过的话。'],
+      ['12-voicegate', '声音门控：Live 仅凭你本人的声音和唤醒短语启动，两者都可实时测试。'],
     ],
     startTitle: '如何开始',
     steps: [

@@ -60,9 +60,11 @@ function parseChangelog(raw: string): ChangelogRelease[] {
   let release: ChangelogRelease | null = null;
   let section: ChangelogSection | null = null;
   for (const line of raw.split(/\r?\n/)) {
-    const head = line.match(/^## (Unreleased|\d{4}-\d{2}-\d{2}) — (\S+)/);
+    // Release headings are "## <version> — <date>" ("## Unreleased — <version>" for the pending one).
+    const head = line.match(/^## (\S+) — (\S+)/);
     if (head) {
-      release = { heading: line.slice(3), unreleased: head[1] === "Unreleased", version: head[2], date: head[1], sections: [] };
+      const unreleased = head[1] === "Unreleased";
+      release = { heading: line.slice(3), unreleased, version: unreleased ? head[2] : head[1], date: unreleased ? "" : head[2], sections: [] };
       releases.push(release);
       section = null;
       continue;
