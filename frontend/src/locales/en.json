@@ -2155,7 +2155,7 @@
     "wakeWord": "Wake word",
     "wakeWordHint": "Stay quiet until you say this phrase (any language); leave empty to start on any speech",
     "wakeLang": "Phrase language",
-    "wakeDownloading": "Downloading the wake-word model (about 580 MB); it'll work once that finishes",
+    "wakeDownloading": "Downloading the wake-word model (about 360 MB); it'll work once that finishes",
     "anySpeech": "Any speech from me",
     "autostart": "Start on login",
     "autostartHint": "Launch Speech Studio when the computer starts, so you can talk to the agent right away",

@@ -15,8 +15,6 @@ use std::sync::{Mutex, OnceLock};
 
 /// The recogniser works on 16 kHz mono audio.
 pub const SR: u32 = 16_000;
-/// Ids 0..=3 of the vocab are `<blank>`, `<sos>`, `<eos>`, `<unk>`; real phones start at 4.
-const FIRST_PHONE_ID: usize = 4;
 
 /// PhoneticXeus universal phone recogniser: raw 16 kHz mono f32 waveform in, frame-level IPA CTC logits out. The
 /// onnxruntime dylib is set for the process at start (`app::runtime`), so loading needs no further setup.
@@ -30,7 +28,10 @@ impl PhoneRecognizer {
     /// Load the model and its IPA vocabulary (`{symbol: id}`); `gpu` runs it on CUDA.
     pub fn load(onnx: &Path, vocab_json: &Path, gpu: bool) -> Result<Self, String> {
         let text = std::fs::read_to_string(vocab_json).map_err(|e| format!("{}: {e}", vocab_json.display()))?;
-        let map: HashMap<String, usize> = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", vocab_json.display()))?;
+        let json: serde_json::Value = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", vocab_json.display()))?;
+        // the vocab is either a flat {symbol: id} map or a {"blank": 0, "vocab": {symbol: id}} object
+        let obj = json.get("vocab").unwrap_or(&json).as_object().ok_or_else(|| format!("{}: no vocab object", vocab_json.display()))?;
+        let map: HashMap<String, usize> = obj.iter().filter_map(|(k, v)| v.as_u64().map(|n| (k.clone(), n as usize))).collect();
         let mut vocab = vec![String::new(); map.values().copied().max().map_or(0, |m| m + 1)];
         for (sym, id) in map {
             if id < vocab.len() {
@@ -71,10 +72,9 @@ impl PhoneRecognizer {
                 .max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal))
                 .map_or(0, |(i, _)| i);
             if best != prev {
-                if best >= FIRST_PHONE_ID {
-                    if let Some(sym) = self.vocab.get(best).filter(|s| !s.is_empty()) {
-                        phones.push(sym.clone());
-                    }
+                // drop the CTC blank and the special `<…>` tokens; keep real phones
+                if let Some(sym) = self.vocab.get(best).filter(|s| !s.is_empty() && !s.starts_with('<')) {
+                    phones.push(sym.clone());
                 }
                 prev = best;
             }
@@ -88,24 +88,24 @@ pub fn model_path(models_root: &Path) -> PathBuf {
     models_root.join("wake-word").join("model.int8.onnx")
 }
 pub fn vocab_path(models_root: &Path) -> PathBuf {
-    models_root.join("wake-word").join("ipa_vocab.json")
+    models_root.join("wake-word").join("vocab.json")
 }
 
 /// A length-normalized phone match of the heard phones against the target phrase's phones, 0..=1: the longest run of
 /// the target found in sequence in what was heard, over the target's length. A simple, order-aware score to tune a
 /// threshold against; the recogniser is not perfect, so an exact match is not required.
-pub fn phone_overlap(heard: &[String], target: &[String]) -> f32 {
+pub fn phone_overlap<T: PartialEq>(heard: &[T], target: &[T]) -> f32 {
     if target.is_empty() {
         return 0.0;
     }
-    // longest common subsequence of phones, order preserved
-    let (n, m) = (heard.len(), target.len());
+    // longest common subsequence, order preserved
+    let m = target.len();
     let mut dp = vec![0u16; m + 1];
-    for h in heard.iter().take(n) {
+    for h in heard {
         let mut diag = 0u16;
         for j in 0..m {
             let up = dp[j + 1];
-            if h == &target[j] {
+            if *h == target[j] {
                 dp[j + 1] = diag + 1;
             } else if dp[j] > dp[j + 1] {
                 dp[j + 1] = dp[j];
@@ -114,6 +114,42 @@ pub fn phone_overlap(heard: &[String], target: &[String]) -> f32 {
         }
     }
     f32::from(dp[m]) / m as f32
+}
+
+/// Coarsen an IPA string to a plain phone-class char sequence for matching: drop combining diacritics, stress, length
+/// and modifier letters, and map near-equivalent symbols to one letter. A G2P phrase and an acoustic recogniser spell
+/// the same sounds with different IPA (eSpeak `kɭʌdʲ`, the model `klod`); coarse matching on classes bridges that —
+/// the standard phone-class / feature matching for open-vocabulary keyword spotting, not exact symbol equality.
+pub fn coarse(ipa: &str) -> Vec<char> {
+    ipa.chars()
+        .filter_map(|c| {
+            if ('\u{0300}'..='\u{036f}').contains(&c) {
+                return None; // combining diacritics, incl. the tie bar
+            }
+            let mapped = match c {
+                'ɭ' | 'ɫ' | 'ʎ' => 'l',
+                'ʌ' | 'ɒ' | 'ɔ' => 'o',
+                'ɐ' | 'ə' | 'æ' => 'a',
+                'ɪ' | 'ɨ' | 'ᵻ' => 'i',
+                'ɯ' | 'ʊ' | 'ʉ' => 'u',
+                'ɡ' | 'ɢ' => 'g',
+                'ħ' | 'x' | 'χ' => 'h',
+                'ɕ' | 'ʂ' | 'ʃ' | 'ɸ' | 'θ' => 's',
+                'ʑ' | 'ʐ' | 'ʒ' | 'ð' => 'z',
+                'ɴ' | 'ŋ' | 'ɲ' => 'n',
+                'ɱ' => 'm',
+                'ʁ' | 'ɾ' | 'ɹ' | 'ʀ' | 'ɻ' => 'r',
+                'β' | 'ɓ' => 'b',
+                'ɗ' | 'ɖ' => 'd',
+                'ʈ' => 't',
+                'ɟ' => 'j',
+                'c' | 'q' => 'k',
+                'ʔ' | 'ʲ' | 'ʰ' | 'ʷ' | 'ʼ' | 'ˠ' | 'ˤ' | 'ⁿ' | 'ˈ' | 'ˌ' | 'ː' | 'ˑ' | '▁' | ' ' | '\u{2009}' => return None,
+                other => other,
+            };
+            Some(mapped.to_ascii_lowercase())
+        })
+        .collect()
 }
 
 /// The recogniser is loaded once and kept for the process (it is large; a reload per phrase would be wasteful).
@@ -126,34 +162,7 @@ fn with_recognizer<T>(models_root: &Path, gpu: bool, f: impl FnOnce(&mut PhoneRe
     f(slot.as_mut().expect("just loaded"))
 }
 
-/// Greedy longest-match tokenization of an IPA string into a known phone inventory, so a G2P'd phrase and the
-/// recogniser's own output land in one token space (eSpeak writes `t͡ʃ` as three code points, the model's vocab holds
-/// `t͡ʃʰ` as one phone; a char split would never line them up). Whitespace and stress marks are skipped; a code point
-/// that starts no known phone is dropped so the rest keeps aligning. `symbols` must be ordered longest phone first.
-pub fn tokenize_ipa(symbols: &[Vec<char>], ipa: &str) -> Vec<String> {
-    let chars: Vec<char> = ipa.chars().filter(|c| !c.is_whitespace() && *c != '\u{02c8}' && *c != '\u{02cc}').collect();
-    let mut out = Vec::new();
-    let mut i = 0;
-    while i < chars.len() {
-        let hit = symbols.iter().find(|sym| !sym.is_empty() && i + sym.len() <= chars.len() && chars[i..i + sym.len()] == sym[..]);
-        match hit {
-            Some(sym) => {
-                out.push(sym.iter().collect());
-                i += sym.len();
-            }
-            None => i += 1,
-        }
-    }
-    out
-}
-
 impl PhoneRecognizer {
-    /// The phone inventory (ids `FIRST_PHONE_ID`..), each as its code points, ordered longest first for greedy matching.
-    fn phone_symbols(&self) -> Vec<Vec<char>> {
-        let mut syms: Vec<Vec<char>> = self.vocab.iter().skip(FIRST_PHONE_ID).filter(|s| !s.is_empty()).map(|s| s.chars().collect()).collect();
-        syms.sort_by(|a, b| b.len().cmp(&a.len()));
-        syms
-    }
 }
 
 /// The bundled eSpeak-ng dictionaries, extracted once to a cache directory the G2P reads from. Without this the
@@ -196,12 +205,12 @@ pub fn says_wake(models_root: &Path, gpu: bool, lang: &str, phrase: &str, thresh
         Ok(s) => s,
         Err(_) => return Ok(false),
     };
+    let target = coarse(&ipa);
+    if target.is_empty() {
+        return Ok(false);
+    }
     with_recognizer(models_root, gpu, |r| {
-        let target = tokenize_ipa(&r.phone_symbols(), &ipa);
-        if target.is_empty() {
-            return Ok(false);
-        }
-        let heard = r.phones(samples)?;
+        let heard = coarse(&r.phones(samples)?.concat());
         Ok(phone_overlap(&heard, &target) >= threshold)
     })
 }
@@ -219,12 +228,12 @@ pub fn overlap_score(models_root: &Path, gpu: bool, lang: &str, phrase: &str, sa
         Ok(s) => s,
         Err(_) => return Ok(None),
     };
+    let target = coarse(&ipa);
+    if target.is_empty() {
+        return Ok(None);
+    }
     with_recognizer(models_root, gpu, |r| {
-        let target = tokenize_ipa(&r.phone_symbols(), &ipa);
-        if target.is_empty() {
-            return Ok(None);
-        }
-        let heard = r.phones(samples)?;
+        let heard = coarse(&r.phones(samples)?.concat());
         Ok(Some(phone_overlap(&heard, &target)))
     })
 }
@@ -248,16 +257,14 @@ mod tests {
         assert_eq!(phone_overlap(&partial, &target), 0.5);
     }
 
+
     #[test]
-    fn tokenize_ipa_prefers_the_longest_known_phone() {
-        // inventory holds a multi-code-point affricate and its prefix; longest must win
-        let inv: Vec<Vec<char>> = ["t\u{361}\u{283}\u{2b0}", "t", "\u{283}", "a"].iter().map(|s| s.chars().collect()).collect();
-        let mut inv = inv;
-        inv.sort_by(|a, b| b.len().cmp(&a.len()));
-        // "t͡ʃʰa" is the affricate then "a", not t + separate pieces
-        assert_eq!(tokenize_ipa(&inv, "t\u{361}\u{283}\u{2b0}a"), vec!["t\u{361}\u{283}\u{2b0}".to_string(), "a".to_string()]);
-        // an unknown leading mark is dropped, the rest still aligns
-        assert_eq!(tokenize_ipa(&inv, "\u{2c8}ta"), vec!["t".to_string(), "a".to_string()]);
+    fn coarse_bridges_g2p_and_acoustic_spellings() {
+        // eSpeak writes клодик as kɭʌdʲˈik, the acoustic model as lodik/lodzik: both coarsen close enough to match
+        let target = coarse("k\u{26d}\u{28c}d\u{2b2}\u{2c8}ik");
+        assert_eq!(target.iter().collect::<String>(), "klodik");
+        assert!(phone_overlap(&coarse("lodzik"), &target) >= 0.8);
+        assert!(phone_overlap(&coarse("p\u{28c}\u{261}\u{2c8}oda"), &target) < 0.6); // погода ≠ клодик
     }
 
     #[test]

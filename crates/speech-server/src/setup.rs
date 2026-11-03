@@ -1390,12 +1390,12 @@ pub fn manifest() -> Vec<Component> {
             purpose: t!("setup-comp-wake-word-purpose"),
             requirement: Requirement::Optional,
             delivery: Delivery::Download,
-            size: 581_978_869,
+            size: 356_550_491,
             files: &[
-                FileSpec { url: "https://huggingface.co/allan-valin/phoneticxeus-onnx/resolve/acdf27a7043d48ea1f73151324939591d8ee53d0/model.int8.onnx", dest_rel: "models/wake-word/model.int8.onnx", size: 581_972_892, sha256: "395b6ce944e77999bcc92c1a8d322b65697fbf4b734246cd75a914cf48080adc", extract: Extract::None },
-                FileSpec { url: "https://huggingface.co/allan-valin/phoneticxeus-onnx/resolve/acdf27a7043d48ea1f73151324939591d8ee53d0/ipa_vocab.json", dest_rel: "models/wake-word/ipa_vocab.json", size: 5_977, sha256: "96c70e0f72c02aa882a6cf9083b2e1a007c37ff5890a94afc3bf0039748654c3", extract: Extract::None },
+                FileSpec { url: "https://huggingface.co/allan-valin/wav2vec2phoneme-onnx/resolve/73370fc1a1a47d64886f83e949f96c9ef1619bd4/model.int8.onnx", dest_rel: "models/wake-word/model.int8.onnx", size: 356_545_831, sha256: "91503f9430e1a1123e7cb98bbe665ef2ae741143986083937545e7c0f9132cf5", extract: Extract::None },
+                FileSpec { url: "https://huggingface.co/allan-valin/wav2vec2phoneme-onnx/resolve/73370fc1a1a47d64886f83e949f96c9ef1619bd4/vocab.json", dest_rel: "models/wake-word/vocab.json", size: 4_660, sha256: "bd312de06296e7e3fae4aa2f473b76a14def34d955f419ea4a2441b7bfebc117", extract: Extract::None },
             ],
-            markers: &[Marker { rel: "models/wake-word/model.int8.onnx", expect: 581_972_892 }],
+            markers: &[Marker { rel: "models/wake-word/model.int8.onnx", expect: 356_545_831 }],
             external_url: None,
         },
         // Ударения, «ё» и омографы русского текста: RUAccent (MIT) — словарь, символьная сеть и сеть омографов

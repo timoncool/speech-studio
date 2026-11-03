@@ -2155,7 +2155,7 @@
     "wakeWord": "Mot d'activation",
     "wakeWordHint": "Rester silencieux jusqu'à ce que vous disiez cette phrase (dans n'importe quelle langue) ; vide pour démarrer sur toute parole",
     "wakeLang": "Langue de la phrase",
-    "wakeDownloading": "Téléchargement du modèle de mot d'activation (environ 580 Mo) ; il fonctionnera une fois terminé",
+    "wakeDownloading": "Téléchargement du modèle de mot d'activation (environ 360 Mo) ; il fonctionnera une fois terminé",
     "anySpeech": "N'importe quelle parole de moi",
     "autostart": "Lancer à la connexion",
     "autostartHint": "Lancer Speech Studio au démarrage de l'ordinateur, pour parler à l'agent tout de suite",

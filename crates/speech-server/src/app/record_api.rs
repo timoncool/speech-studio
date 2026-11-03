@@ -453,7 +453,7 @@ pub(super) async fn voice_gate_score(State(st): State<AppState>) -> Response {
 pub(super) async fn voice_gate_wake_score(State(st): State<AppState>) -> Response {
     let models = st.models_root.clone();
     let done = tokio::task::spawn_blocking(move || -> Result<(Option<f32>, f32), String> {
-        let score = crate::voice_gate::wake_test_score(&models, false)?;
+        let score = crate::voice_gate::wake_test_score(&models)?;
         Ok((score, crate::voice_gate::config(&models).wake_threshold))
     })
     .await;

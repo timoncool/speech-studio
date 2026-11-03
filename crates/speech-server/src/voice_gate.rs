@@ -227,13 +227,13 @@ pub fn test_score(models_root: &Path) -> Result<Option<f32>, String> {
     if samples.len() < SR as usize {
         return Ok(None);
     }
-    score(models_root, false, &samples)
+    score(models_root, use_gpu(), &samples)
 }
 
 
 /// The live phone overlap of the test window with the configured wake phrase, 0..=1; None while there is under a second
 /// of audio, no phrase is set, or the recogniser is not installed. Reuses the voice check's microphone tap and window.
-pub fn wake_test_score(models_root: &Path, gpu: bool) -> Result<Option<f32>, String> {
+pub fn wake_test_score(models_root: &Path) -> Result<Option<f32>, String> {
     let cfg = config(models_root);
     let phrase = match cfg.wake_word {
         Some(p) if !p.trim().is_empty() => p,
@@ -242,11 +242,14 @@ pub fn wake_test_score(models_root: &Path, gpu: bool) -> Result<Option<f32>, Str
     // empty when unset, so overlap_score guesses the language from the phrase's script (a hard "en" would misread a
     // non-Latin phrase and never match)
     let lang = cfg.wake_lang.unwrap_or_default();
-    let samples = TEST_WINDOW.lock().unwrap_or_else(|p| p.into_inner()).clone();
-    if samples.len() < SR as usize {
+    let full = TEST_WINDOW.lock().unwrap_or_else(|p| p.into_inner()).clone();
+    if full.len() < SR as usize {
         return Ok(None);
     }
-    crate::wake_word::overlap_score(models_root, gpu, &lang, &phrase, &samples)
+    // only the most recent ~1.5 s: the phrase is short, and a shorter clip is a faster recogniser pass, so the live
+    // check tracks the voice without lag
+    let recent = &full[full.len().saturating_sub((SR as usize) * 3 / 2)..];
+    crate::wake_word::overlap_score(models_root, use_gpu(), &lang, &phrase, recent)
 }
 
 /// Whether this speech is the owner, at or above the configured threshold.
@@ -277,6 +280,12 @@ pub fn is_awake() -> bool {
     AWAKE.load(Ordering::Relaxed)
 }
 
+/// The device the voice gate runs its ONNX models on: the GPU when the card chosen in the settings can run the
+/// studio's CUDA build, otherwise the CPU — the same decision the rest of the studio makes, never a hard-coded device.
+fn use_gpu() -> bool {
+    crate::engines::hw::gpu_report().cuda13_ok
+}
+
 /// For the live recogniser: whether a phrase reaches the agent. `None` means the gate does not apply here (not armed,
 /// or nothing is configured) so the phrase is let through. `Some(false)` suppresses the phrase — it is not the owner,
 /// or a wake word is set and has not been heard yet. `Some(true)` lets it through. The checks run on CPU: they fire
@@ -293,9 +302,11 @@ pub fn gate_line(models_root: &Path, samples: &[f32]) -> Option<bool> {
     if !owner_gate && wake.is_none() {
         return None;
     }
+    // the ONNX checks run on the GPU when the chosen card supports it, like the rest of the studio, else on the CPU
+    let gpu = use_gpu();
     // speaker identity, when the owner gate is on; otherwise any voice counts as the owner for the wake step
     let is_owner_voice = if owner_gate {
-        match is_owner(models_root, false, &cfg, samples) {
+        match is_owner(models_root, gpu, &cfg, samples) {
             Ok(v) => v,
             Err(e) => {
                 tracing::warn!("voice gate check: {e}");
@@ -309,7 +320,7 @@ pub fn gate_line(models_root: &Path, samples: &[f32]) -> Option<bool> {
     if let Some(phrase) = wake {
         if !is_awake() {
             let lang = cfg.wake_lang.as_deref().unwrap_or("");
-            let woke = is_owner_voice && says_wake(models_root, false, lang, phrase, cfg.wake_threshold, samples).unwrap_or(false);
+            let woke = is_owner_voice && says_wake(models_root, gpu, lang, phrase, cfg.wake_threshold, samples).unwrap_or(false);
             if woke {
                 AWAKE.store(true, Ordering::Relaxed);
                 return Some(true);
