@@ -158,7 +158,8 @@ export default function VoiceGateSection() {
 
   // the voice check and the wake-phrase check share one microphone tap: start it when the first turns on, stop it when
   // the last turns off, so toggling one never cuts the other short. Refs hold the live state with no render lag, so a
-  // quick second toggle sees the first and the tap is started/stopped exactly once.
+  // quick second toggle sees the first and the tap is started/stopped exactly once. A check left running by a page
+  // reload is reclaimed by the server when the next check starts, so a fresh start never dead-ends on "busy".
   const testingRef = useRef(false);
   const wakeTestingRef = useRef(false);
   const toggleTest = async () => {

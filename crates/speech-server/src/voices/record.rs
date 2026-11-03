@@ -90,7 +90,10 @@ pub fn start_test(path: &std::path::Path, device: Option<String>) -> Result<(), 
 fn begin(path: &std::path::Path, device: Option<String>, test: bool) -> Result<(), String> {
     let mut guard = recorder().lock().map_err(|_| "recorder poisoned".to_string())?;
     if let Some(running) = guard.as_ref() {
-        if test || !running.test {
+        // A real recording (a voice recording, or Live listening) is never interrupted. A test recording only holds the
+        // microphone until a real recording starts, so any new recording — a real one, or another test — reclaims it:
+        // this lets a fresh check take over a check left running by a page reload instead of dead-ending on "busy".
+        if !running.test {
             return Err(t!("record-busy"));
         }
         let _ = running.stop_tx.send(());
