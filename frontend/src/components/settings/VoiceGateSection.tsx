@@ -158,15 +158,20 @@ export default function VoiceGateSection() {
   };
 
   // the voice check and the wake-phrase check share one microphone tap: start it when the first turns on, stop it when
-  // the last turns off, so toggling one never cuts the other short.
+  // the last turns off, so toggling one never cuts the other short. Refs hold the live state with no render lag, so a
+  // quick second toggle sees the first and the tap is started/stopped exactly once.
+  const testingRef = useRef(false);
+  const wakeTestingRef = useRef(false);
   const toggleTest = async () => {
     setProblem(null);
     const next = !testing;
     try {
-      if (!wakeTesting) await voiceGateApi.test(next);
+      if (!wakeTestingRef.current) await voiceGateApi.test(next);
+      testingRef.current = next;
       setTesting(next);
       setMatch(null);
     } catch (e) {
+      testingRef.current = false;
       setTesting(false);
       setProblem(errorText(e));
     }
@@ -176,17 +181,20 @@ export default function VoiceGateSection() {
     setProblem(null);
     const next = !wakeTesting;
     try {
-      if (!testing) await voiceGateApi.test(next);
+      if (!testingRef.current) await voiceGateApi.test(next);
+      wakeTestingRef.current = next;
       setWakeTesting(next);
       setWakeMatch(null);
     } catch (e) {
+      wakeTestingRef.current = false;
       setWakeTesting(false);
       setProblem(errorText(e));
     }
   };
 
-  // stop the live check (voice or wake) if the panel goes away
-  useEffect(() => () => { if (testing || wakeTesting) void voiceGateApi.test(false).catch(() => {}); }, [testing, wakeTesting]);
+  // stop the shared tap only when the panel actually unmounts — a cleanup keyed on the toggles would fire on every
+  // toggle and cut the tap out from under the other check
+  useEffect(() => () => { if (testingRef.current || wakeTestingRef.current) void voiceGateApi.test(false).catch(() => {}); }, []);
 
   if (!state) return <p className="text-[11px] text-[var(--color-muted)]">…</p>;
 

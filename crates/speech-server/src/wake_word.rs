@@ -179,7 +179,7 @@ pub fn says_wake(models_root: &Path, gpu: bool, lang: &str, phrase: &str, thresh
 /// thresholds, returned raw so the settings can show it live and the person can try different voices. None when no
 /// phrase is set, the recogniser is not installed, or the phrase has no phones.
 pub fn overlap_score(models_root: &Path, gpu: bool, lang: &str, phrase: &str, samples: &[f32]) -> Result<Option<f32>, String> {
-    if phrase.trim().is_empty() {
+    if phrase.trim().is_empty() || !model_path(models_root).exists() {
         return Ok(None);
     }
     let lang = if lang.trim().is_empty() { "en" } else { lang };
