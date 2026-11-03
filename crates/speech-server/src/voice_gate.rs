@@ -237,7 +237,9 @@ pub fn wake_test_score(models_root: &Path, gpu: bool) -> Result<Option<f32>, Str
         Some(p) if !p.trim().is_empty() => p,
         _ => return Ok(None),
     };
-    let lang = cfg.wake_lang.unwrap_or_else(|| "en".into());
+    // empty when unset, so overlap_score guesses the language from the phrase's script (a hard "en" would misread a
+    // non-Latin phrase and never match)
+    let lang = cfg.wake_lang.unwrap_or_default();
     let samples = TEST_WINDOW.lock().unwrap_or_else(|p| p.into_inner()).clone();
     if samples.len() < SR as usize {
         return Ok(None);
