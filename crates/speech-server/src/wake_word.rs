@@ -11,7 +11,7 @@ use ort::session::Session;
 use ort::value::TensorRef;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 
 /// The recogniser works on 16 kHz mono audio.
 pub const SR: u32 = 16_000;
@@ -156,11 +156,43 @@ impl PhoneRecognizer {
     }
 }
 
+/// The bundled eSpeak-ng dictionaries, extracted once to a cache directory the G2P reads from. Without this the
+/// convenience `espeak_ng::text_to_ipa` looks for data files that are not on disk and every phrase fails with
+/// "dict not found" — so no wake phrase is ever recognised.
+fn espeak_data() -> Result<&'static Path, String> {
+    static DIR: OnceLock<Result<PathBuf, String>> = OnceLock::new();
+    DIR.get_or_init(|| {
+        let dir = std::env::temp_dir().join("speech-studio-espeak-data");
+        std::fs::create_dir_all(&dir).map_err(|e| format!("espeak data dir: {e}"))?;
+        espeak_ng::install_bundled_languages(&dir, espeak_ng::bundled_languages()).map_err(|e| format!("espeak install: {e}"))?;
+        Ok(dir)
+    })
+    .as_ref()
+    .map(PathBuf::as_path)
+    .map_err(|e| e.clone())
+}
+
+/// Grapheme-to-IPA for a phrase in the given eSpeak-ng voice, from the bundled dictionaries. The last result is cached:
+/// a phrase does not change during a live check, so the recogniser-side work repeats but this does not.
+fn to_ipa(lang: &str, phrase: &str) -> Result<String, String> {
+    static CACHE: Mutex<Option<(String, String, String)>> = Mutex::new(None);
+    if let Some((l, p, ipa)) = CACHE.lock().unwrap_or_else(|p| p.into_inner()).as_ref() {
+        if l == lang && p == phrase {
+            return Ok(ipa.clone());
+        }
+    }
+    let dir = espeak_data()?;
+    let engine = espeak_ng::EspeakNg::with_data_dir(lang, dir).map_err(|e| format!("espeak {lang}: {e}"))?;
+    let ipa = engine.text_to_phonemes(phrase).unwrap_or_default();
+    *CACHE.lock().unwrap_or_else(|p| p.into_inner()) = Some((lang.to_string(), phrase.to_string(), ipa.clone()));
+    Ok(ipa)
+}
+
 /// Whether the owner's set wake phrase is heard in these 16 kHz mono samples: the phone overlap of what was heard with
 /// the phrase's phones is at or above `threshold`. False when no phrase is set or the recogniser is not installed.
 pub fn says_wake(models_root: &Path, gpu: bool, lang: &str, phrase: &str, threshold: f32, samples: &[f32]) -> Result<bool, String> {
     let lang = if lang.trim().is_empty() { "en" } else { lang };
-    let ipa = match espeak_ng::text_to_ipa(lang, phrase) {
+    let ipa = match to_ipa(lang, phrase) {
         Ok(s) => s,
         Err(_) => return Ok(false),
     };
@@ -183,7 +215,7 @@ pub fn overlap_score(models_root: &Path, gpu: bool, lang: &str, phrase: &str, sa
         return Ok(None);
     }
     let lang = if lang.trim().is_empty() { "en" } else { lang };
-    let ipa = match espeak_ng::text_to_ipa(lang, phrase) {
+    let ipa = match to_ipa(lang, phrase) {
         Ok(s) => s,
         Err(_) => return Ok(None),
     };
@@ -226,5 +258,12 @@ mod tests {
         assert_eq!(tokenize_ipa(&inv, "t\u{361}\u{283}\u{2b0}a"), vec!["t\u{361}\u{283}\u{2b0}".to_string(), "a".to_string()]);
         // an unknown leading mark is dropped, the rest still aligns
         assert_eq!(tokenize_ipa(&inv, "\u{2c8}ta"), vec!["t".to_string(), "a".to_string()]);
+    }
+
+    #[test]
+    fn bundled_g2p_produces_ipa() {
+        // the wake feature is dead without the bundled dictionaries: guard that they load and a phrase renders to IPA
+        assert!(to_ipa("ru", "Клодик").map(|s| !s.is_empty()).unwrap_or(false));
+        assert!(to_ipa("en", "hey claude").map(|s| !s.is_empty()).unwrap_or(false));
     }
 }

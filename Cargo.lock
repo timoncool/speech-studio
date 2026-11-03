@@ -1406,8 +1406,120 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "213ed87669515192b61f34dc6d6c36adeb75ae424b63e32612a65a1e21e9bee3"
 dependencies = [
  "bitflags 2.13.2",
+ "espeak-ng-data-dict-ar",
+ "espeak-ng-data-dict-cmn",
+ "espeak-ng-data-dict-de",
+ "espeak-ng-data-dict-en",
+ "espeak-ng-data-dict-es",
+ "espeak-ng-data-dict-fr",
+ "espeak-ng-data-dict-hi",
+ "espeak-ng-data-dict-it",
+ "espeak-ng-data-dict-ja",
+ "espeak-ng-data-dict-ko",
+ "espeak-ng-data-dict-pl",
+ "espeak-ng-data-dict-pt",
+ "espeak-ng-data-dict-ru",
+ "espeak-ng-data-dict-tr",
+ "espeak-ng-data-dict-uk",
+ "espeak-ng-data-phonemes",
  "thiserror 1.0.69",
 ]
+
+[[package]]
+name = "espeak-ng-data-dict-ar"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a0cc5a68c7b647a8985e0f30d46b7818fdfe9407183b802f3df4a2a426e0ba58"
+
+[[package]]
+name = "espeak-ng-data-dict-cmn"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eeedf7da774b411a2f7d891595471e087629792bc5bbe763c3359f8a2dc0bf06"
+
+[[package]]
+name = "espeak-ng-data-dict-de"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0f57e3d0c224fecad5bce06b846339d3107c24ee8b67aeb2a595856b2110f25a"
+
+[[package]]
+name = "espeak-ng-data-dict-en"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f231805f816e50caa02fc9266ba9e7ba842bc1439ed5dc4adc8aa09a745aa4a"
+
+[[package]]
+name = "espeak-ng-data-dict-es"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e125e5571d38d2e3ac752fd72d4bcf2119a4d9af95cb0cd97a4d8d2692567c5f"
+
+[[package]]
+name = "espeak-ng-data-dict-fr"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "22bfa135ac45c5c58e0f254144845add795bdab2d4aea094c70f9d5352e15684"
+
+[[package]]
+name = "espeak-ng-data-dict-hi"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "762416ba3206136f1833c02714e3263e8270c48d20a42b3d664aaf298502b722"
+
+[[package]]
+name = "espeak-ng-data-dict-it"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "28d10cde865ed26b37f96652dd8b9a42170facc3bea8a0272fd5f197fb693d50"
+
+[[package]]
+name = "espeak-ng-data-dict-ja"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "90c619c0b59c3c94206420e5f1cd49629cf5dfe19e89b317451764688fafd1d9"
+
+[[package]]
+name = "espeak-ng-data-dict-ko"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "257489d49ea6a828321d84daba2ff4a1a6b129ae637a652b39ba74b7721462c9"
+
+[[package]]
+name = "espeak-ng-data-dict-pl"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c350c7a8297e64649aba862eda10affcade5a0e1b7041db2898baf95d77ba18"
+
+[[package]]
+name = "espeak-ng-data-dict-pt"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ebda03d7c45f5536bb4d186a269eddf3d884162bea6f93f29ccc34c5a1623af"
+
+[[package]]
+name = "espeak-ng-data-dict-ru"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a3fdd2e2de742f9212265f96df0bff7ad4f8d866493d121b5c922ce65be88277"
+
+[[package]]
+name = "espeak-ng-data-dict-tr"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "82c35a4f92f5a0fff0ad51e7c3e46564a394443d73a4d3fcdb015d37e565432e"
+
+[[package]]
+name = "espeak-ng-data-dict-uk"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1254487cf3945687c214ca3e5688c45e5c6c97d6a74770d7d93916111eb1b68e"
+
+[[package]]
+name = "espeak-ng-data-phonemes"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73639acc81fa0d350dd6fef933d4a935b6f8b93ef74455c9eebf1f3873253e0d"
 
 [[package]]
 name = "euclid"

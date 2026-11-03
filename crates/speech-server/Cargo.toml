@@ -81,7 +81,13 @@ ort = { version = "=2.0.0-rc.13", default-features = false, features = ["load-dy
 # the director's check of a rewritten text: NFKC of its letters.
 unicode-normalization = "0.1"
 # wake word (voice gate): grapheme-to-IPA of the set phrase in any language, for phoneme matching against the recogniser.
-espeak-ng = "0.2"
+# bundled-data-<lang> embeds that language's espeak-ng dictionary in the binary — without them G2P fails ("dict not
+# found") and no wake phrase is ever recognised. One per language offered in the settings' phrase-language dropdown.
+espeak-ng = { version = "0.2", features = [
+    "bundled-data-en", "bundled-data-ru", "bundled-data-cmn", "bundled-data-es", "bundled-data-pt",
+    "bundled-data-fr", "bundled-data-de", "bundled-data-it", "bundled-data-ja", "bundled-data-ko",
+    "bundled-data-ar", "bundled-data-hi", "bundled-data-tr", "bundled-data-pl", "bundled-data-uk",
+] }
 # Qwen3-TTS: qwentts.cpp's C ABI loaded at run time.
 libloading = "0.9"
 subtle = "2.6"
