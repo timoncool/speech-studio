@@ -18,6 +18,7 @@ tauri-plugin-dialog = "2"    # нативный диалог «Обновить?
 tauri-plugin-opener = "2"    # opener:default окна; страницу релиза оболочка открывает сама, вне job (spawn_update_check)
 tauri-plugin-single-instance = "2"  # второй запуск отдаёт фокус уже открытому окну
 tauri-plugin-global-shortcut = "2"  # клавиша Live «держать и говорить» из любого окна
+tauri-plugin-autostart = "2"  # запуск при входе в систему (голосовой гейт: студия слушает сразу), выкл по умолчанию
 rfd = "0.17"                 # диалог ошибки старта, когда окна Tauri ещё нет
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
