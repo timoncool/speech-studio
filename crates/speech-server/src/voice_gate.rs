@@ -104,13 +104,20 @@ pub struct Config {
     /// None defaults to English. The settings pre-fill it with the interface language.
     #[serde(default)]
     pub wake_lang: Option<String>,
+    /// Phone overlap at or above which the wake phrase counts as heard — its strictness, set by the UI slider.
+    #[serde(default = "default_wake_threshold")]
+    pub wake_threshold: f32,
     /// Start Speech Studio on login (per-OS). Off by default.
     pub autostart: bool,
 }
 
+fn default_wake_threshold() -> f32 {
+    WAKE_THRESHOLD
+}
+
 impl Default for Config {
     fn default() -> Self {
-        Self { enabled: false, threshold: DEFAULT_THRESHOLD, wake_word: None, wake_lang: None, autostart: false }
+        Self { enabled: false, threshold: DEFAULT_THRESHOLD, wake_word: None, wake_lang: None, wake_threshold: WAKE_THRESHOLD, autostart: false }
     }
 }
 
@@ -224,11 +231,6 @@ pub fn test_score(models_root: &Path) -> Result<Option<f32>, String> {
 }
 
 
-/// The wake threshold the live phrase check is judged against — the same value `gate_line` fires on.
-pub fn wake_threshold() -> f32 {
-    WAKE_THRESHOLD
-}
-
 /// The live phone overlap of the test window with the configured wake phrase, 0..=1; None while there is under a second
 /// of audio, no phrase is set, or the recogniser is not installed. Reuses the voice check's microphone tap and window.
 pub fn wake_test_score(models_root: &Path, gpu: bool) -> Result<Option<f32>, String> {
@@ -307,7 +309,7 @@ pub fn gate_line(models_root: &Path, samples: &[f32]) -> Option<bool> {
     if let Some(phrase) = wake {
         if !is_awake() {
             let lang = cfg.wake_lang.as_deref().unwrap_or("");
-            let woke = is_owner_voice && says_wake(models_root, false, lang, phrase, WAKE_THRESHOLD, samples).unwrap_or(false);
+            let woke = is_owner_voice && says_wake(models_root, false, lang, phrase, cfg.wake_threshold, samples).unwrap_or(false);
             if woke {
                 AWAKE.store(true, Ordering::Relaxed);
                 return Some(true);

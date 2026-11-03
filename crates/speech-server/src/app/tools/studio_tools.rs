@@ -646,8 +646,8 @@ pub(super) fn tools() -> Vec<Tool> {
         },
         Tool {
             name: "voice_gate_set",
-            description: "Change the voice gate's settings: enabled, threshold (0..1), wake_word (a word, or null for any speech from the owner), autostart. Only the fields given are changed.",
-            schema: || object(json!({ "enabled": { "type": "boolean" }, "threshold": { "type": "number", "minimum": 0, "maximum": 1 }, "wake_word": { "type": ["string", "null"] }, "autostart": { "type": "boolean" } }), &[]),
+            description: "Change the voice gate's settings: enabled, threshold (0..1, the voice strictness), wake_word (a word, or null for any speech from the owner), wake_lang (eSpeak-ng voice code for the phrase, e.g. ru/en/cmn), wake_threshold (0..1, the wake-phrase strictness), autostart. Only the fields given are changed.",
+            schema: || object(json!({ "enabled": { "type": "boolean" }, "threshold": { "type": "number", "minimum": 0, "maximum": 1 }, "wake_word": { "type": ["string", "null"] }, "wake_lang": { "type": ["string", "null"] }, "wake_threshold": { "type": "number", "minimum": 0, "maximum": 1 }, "autostart": { "type": "boolean" } }), &[]),
             call: |args| post("/voice-gate".into(), args.clone()),
         },
         Tool {

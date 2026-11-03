@@ -40,7 +40,6 @@ export default function VoiceGateSection() {
   const [wakeOn, setWakeOn] = useState<boolean | null>(null);
   const [wakeTesting, setWakeTesting] = useState(false);
   const [wakeMatch, setWakeMatch] = useState<number | null>(null);
-  const [wakeThresh, setWakeThresh] = useState(0.6);
   const level = useRef(0);
   const speechSecs = useRef(0);
   const elapsedSecs = useRef(0);
@@ -101,7 +100,7 @@ export default function VoiceGateSection() {
       talkApi.level().then((l) => { level.current = l.level; }, () => { level.current = 0; });
       if (!scoring) {
         scoring = true;
-        voiceGateApi.wakeScore().then((s) => { setWakeMatch(s.ready ? s.score : null); setWakeThresh(s.threshold); }).catch(() => {}).finally(() => { scoring = false; });
+        voiceGateApi.wakeScore().then((s) => setWakeMatch(s.ready ? s.score : null)).catch(() => {}).finally(() => { scoring = false; });
       }
     }, POLL_MS);
     return () => window.clearInterval(id);
@@ -109,7 +108,7 @@ export default function VoiceGateSection() {
 
   // Merge the save's reply into the current state: the POST reply carries the saved fields but not `wake_words` /
   // `enrolled`, so replacing state outright would drop them and crash the render.
-  const patch = (p: Partial<Pick<VoiceGate, "enabled" | "threshold" | "wake_word" | "wake_lang">>) => {
+  const patch = (p: Partial<Pick<VoiceGate, "enabled" | "threshold" | "wake_word" | "wake_lang" | "wake_threshold">>) => {
     setProblem(null);
     voiceGateApi.set(p).then((r) => setState((s) => (s ? { ...s, ...r } : s)), (e: unknown) => setProblem(errorText(e)));
   };
@@ -196,6 +195,17 @@ export default function VoiceGateSection() {
   // toggle and cut the tap out from under the other check
   useEffect(() => () => { if (testingRef.current || wakeTestingRef.current) void voiceGateApi.test(false).catch(() => {}); }, []);
 
+  // the phrase's language is chosen in the dropdown, pre-filled from the interface language; persist that choice when a
+  // phrase exists but no language was saved, so the backend always reads the phrase in the right language instead of
+  // falling back — a wrong language yields the wrong phones and the phrase never matches.
+  useEffect(() => {
+    if (state?.wake_word?.trim() && (state.wake_lang == null || state.wake_lang === "")) {
+      const ui = i18n.language.slice(0, 2);
+      patch({ wake_lang: ui === "zh" ? "cmn" : ui });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state?.wake_word, state?.wake_lang]);
+
   if (!state) return <p className="text-[11px] text-[var(--color-muted)]">…</p>;
 
   // the phrase's language for grapheme-to-phoneme: [eSpeak-ng voice code, BCP-47 code for the display name]; the name
@@ -224,7 +234,7 @@ export default function VoiceGateSection() {
   const verdictColor = verdict === "yes" ? "var(--color-good)" : verdict === "close" ? "var(--color-cue-rate)" : "var(--color-muted)";
   // the wake-phrase check: phone overlap runs 0..1, so the bar fills the whole slider and the marker sits at the threshold
   const pctWake = (v: number) => Math.max(0, Math.min(100, v * 100));
-  const wakeHit = wakeMatch !== null && wakeMatch >= wakeThresh;
+  const wakeHit = wakeMatch !== null && wakeMatch >= state.wake_threshold;
 
   const field = "shrink-0 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md px-2 py-1 text-[12px]";
   const small = "shrink-0 rounded-md border border-[var(--color-border)] px-2.5 py-1 text-[11px] text-[var(--color-text)] hover:border-[var(--color-accent)] disabled:opacity-40";
@@ -380,12 +390,25 @@ export default function VoiceGateSection() {
                     {wakeTesting ? <X size={13} /> : <AudioLines size={13} />}{wakeTesting ? t("voiceGate.testStop") : t("voiceGate.testStart")}
                   </button>
                 </div>
+                <div className="flex items-center gap-3">
+                  <div className="min-w-0 flex-1">
+                    <span className="block text-[13px] font-medium">{t("voiceGate.sensitivity")}</span>
+                    <span className="block text-[11px] leading-snug text-[var(--color-muted)]">{t("voiceGate.sensitivityHint")}</span>
+                  </div>
+                  <input
+                    type="range" min={0.2} max={0.9} step={0.01} value={state.wake_threshold}
+                    onChange={(e) => setState((s) => (s ? { ...s, wake_threshold: Number(e.target.value) } : s))}
+                    onPointerUp={(e) => patch({ wake_threshold: Number((e.target as HTMLInputElement).value) })}
+                    className="shrink-0 w-32 accent-[var(--color-accent)]" aria-label={t("voiceGate.sensitivity")}
+                  />
+                  <span className="w-9 text-right mono text-[11px] tabular-nums text-[var(--color-muted)]">{state.wake_threshold.toFixed(2)}</span>
+                </div>
                 {wakeTesting && (
                   <div className="space-y-2">
                     <LevelMeter peak={() => level.current} label={t("talk.inputLevel")} />
                     <div className="relative h-2.5 rounded-full bg-[var(--color-surface-2)] overflow-hidden">
                       <div className="h-full transition-[width] duration-200" style={{ width: `${wakeMatch === null ? 0 : pctWake(wakeMatch)}%`, background: wakeHit ? "var(--color-good)" : "var(--color-cue-rate)" }} />
-                      <div className="absolute top-0 bottom-0 w-0.5 bg-[var(--color-text)]/70" style={{ left: `${pctWake(wakeThresh)}%` }} title={t("voiceGate.thresholdMark")} />
+                      <div className="absolute top-0 bottom-0 w-0.5 bg-[var(--color-text)]/70" style={{ left: `${pctWake(state.wake_threshold)}%` }} title={t("voiceGate.thresholdMark")} />
                     </div>
                     <div className="flex items-center justify-between text-[11px]">
                       <span style={{ color: wakeHit ? "var(--color-good)" : "var(--color-muted)" }} className="font-medium">

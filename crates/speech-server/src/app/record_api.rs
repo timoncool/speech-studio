@@ -310,6 +310,7 @@ pub(super) async fn voice_gate_get(State(st): State<AppState>) -> Response {
         "threshold": cfg.threshold,
         "wake_word": cfg.wake_word,
         "wake_lang": cfg.wake_lang,
+        "wake_threshold": cfg.wake_threshold,
         "autostart": cfg.autostart,
         "enrolled": crate::voice_gate::enrolled(&st.models_root),
         "wake_words": crate::voice_gate::wake_words(),
@@ -325,6 +326,9 @@ pub(super) async fn voice_gate_set(State(st): State<AppState>, Json(body): Json<
     }
     if let Some(v) = body.get("threshold").and_then(Value::as_f64) {
         cfg.threshold = (v as f32).clamp(0.0, 1.0);
+    }
+    if let Some(v) = body.get("wake_threshold").and_then(Value::as_f64) {
+        cfg.wake_threshold = (v as f32).clamp(0.0, 1.0);
     }
     if body.get("wake_word").is_some() {
         cfg.wake_word = body.get("wake_word").and_then(Value::as_str).filter(|s| !s.trim().is_empty()).map(|s| s.trim().to_string());
@@ -345,7 +349,7 @@ pub(super) async fn voice_gate_set(State(st): State<AppState>, Json(body): Json<
         let _ = st.downloads.start(vec!["wake-word".into()]); // "busy" just means a download is already under way
     }
     // the full state, as GET returns it, so a caller can replace its state with the reply and not lose a field
-    Json(json!({ "enabled": cfg.enabled, "threshold": cfg.threshold, "wake_word": cfg.wake_word, "wake_lang": cfg.wake_lang, "autostart": cfg.autostart, "enrolled": crate::voice_gate::enrolled(&st.models_root), "wake_words": crate::voice_gate::wake_words(), "wake_downloading": wake_downloading })).into_response()
+    Json(json!({ "enabled": cfg.enabled, "threshold": cfg.threshold, "wake_word": cfg.wake_word, "wake_lang": cfg.wake_lang, "wake_threshold": cfg.wake_threshold, "autostart": cfg.autostart, "enrolled": crate::voice_gate::enrolled(&st.models_root), "wake_words": crate::voice_gate::wake_words(), "wake_downloading": wake_downloading })).into_response()
 }
 
 /// POST /voice-gate/enroll — learn the owner's voice from the last microphone recording (`.mic-test.wav`). The model is
@@ -450,7 +454,7 @@ pub(super) async fn voice_gate_wake_score(State(st): State<AppState>) -> Respons
     let models = st.models_root.clone();
     let done = tokio::task::spawn_blocking(move || -> Result<(Option<f32>, f32), String> {
         let score = crate::voice_gate::wake_test_score(&models, false)?;
-        Ok((score, crate::voice_gate::wake_threshold()))
+        Ok((score, crate::voice_gate::config(&models).wake_threshold))
     })
     .await;
     match done {

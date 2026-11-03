@@ -156,27 +156,10 @@ impl PhoneRecognizer {
     }
 }
 
-/// The eSpeak-ng voice for a phrase when the settings leave the language unset: guessed from the phrase's script, so a
-/// non-Latin phrase is not read as English (which yields the wrong phones and never matches). Latin and anything not
-/// covered fall back to English.
-fn guess_lang(phrase: &str) -> &'static str {
-    for c in phrase.chars() {
-        match c {
-            '\u{0400}'..='\u{04FF}' => return "ru",  // Cyrillic
-            '\u{4E00}'..='\u{9FFF}' => return "cmn", // Han
-            '\u{3040}'..='\u{30FF}' => return "ja",  // Hiragana / Katakana
-            '\u{AC00}'..='\u{D7A3}' => return "ko",  // Hangul
-            '\u{0600}'..='\u{06FF}' => return "ar",  // Arabic
-            _ => {}
-        }
-    }
-    "en"
-}
-
 /// Whether the owner's set wake phrase is heard in these 16 kHz mono samples: the phone overlap of what was heard with
 /// the phrase's phones is at or above `threshold`. False when no phrase is set or the recogniser is not installed.
 pub fn says_wake(models_root: &Path, gpu: bool, lang: &str, phrase: &str, threshold: f32, samples: &[f32]) -> Result<bool, String> {
-    let lang = if lang.trim().is_empty() { guess_lang(phrase) } else { lang };
+    let lang = if lang.trim().is_empty() { "en" } else { lang };
     let ipa = match espeak_ng::text_to_ipa(lang, phrase) {
         Ok(s) => s,
         Err(_) => return Ok(false),
@@ -199,7 +182,7 @@ pub fn overlap_score(models_root: &Path, gpu: bool, lang: &str, phrase: &str, sa
     if phrase.trim().is_empty() || !model_path(models_root).exists() {
         return Ok(None);
     }
-    let lang = if lang.trim().is_empty() { guess_lang(phrase) } else { lang };
+    let lang = if lang.trim().is_empty() { "en" } else { lang };
     let ipa = match espeak_ng::text_to_ipa(lang, phrase) {
         Ok(s) => s,
         Err(_) => return Ok(None),

@@ -9,6 +9,8 @@ export type VoiceGate = {
   wake_word: string | null;
   /** The wake phrase's language for grapheme-to-phoneme (an eSpeak-ng voice code such as "ru", "en"); null = English. */
   wake_lang: string | null;
+  /** Phone overlap at or above which the wake phrase counts as heard — its strictness, set by the slider. */
+  wake_threshold: number;
   /** Start Speech Studio on login. */
   autostart: boolean;
   /** Whether the owner has enrolled a voice. */
@@ -21,7 +23,7 @@ export type VoiceGate = {
 
 export const voiceGateApi = {
   get: () => getCoded<VoiceGate>("/voice-gate"),
-  set: (patch: Partial<Pick<VoiceGate, "enabled" | "threshold" | "wake_word" | "wake_lang" | "autostart">>) =>
+  set: (patch: Partial<Pick<VoiceGate, "enabled" | "threshold" | "wake_word" | "wake_lang" | "wake_threshold" | "autostart">>) =>
     postCoded<VoiceGate>("/voice-gate", patch),
   /** Learn the owner's voice from the last microphone recording; `text` is what the recogniser heard, shown back so the
    * person sees their voice came through. */
