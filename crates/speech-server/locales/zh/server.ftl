@@ -995,6 +995,7 @@ say-no-text = 文本为空：请写下要告诉智能体的话。
 record-test-other = 正在进行的是另一段录音，不是麦克风测试。
 record-test-none = 还没有进行过麦克风测试。
 voice-gate-too-short = 录音太短，无法学习您的声音——请再说一遍短语。
+voice-gate-not-heard = 没有听清您的声音——请清晰地说出短语，再试一次。
 setup-comp-crisperwhisper-purpose = 支持 99 种语言的语音识别（含词时间戳），超出 Parakeet 的 25 种欧洲语言。许可：nyra health Non-Commercial（权重旁的 LICENSE.md）
 acpp-no-server = 未安装 audio.cpp 引擎（{ $path }）：请在 设置 → 模型 中下载
 acpp-no-libraries = audio.cpp 引擎无法启动：缺少其 CUDA 库（{ $files }）。请在 设置 → 模型 中下载

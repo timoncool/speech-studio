@@ -349,14 +349,21 @@ pub(super) async fn voice_gate_set(State(st): State<AppState>, Json(body): Json<
 }
 
 /// POST /voice-gate/enroll — learn the owner's voice from the last microphone recording (`.mic-test.wav`). The model is
-/// pulled on first use. CPU: a short clip is light and keeps off the GPU the agent uses.
+/// pulled on first use. One recording, in order: recognise it (ASR) so the person sees their voice was captured, then
+/// reuse the same recording for the voiceprint. CPU: a short clip is light and keeps off the GPU the agent uses.
 pub(super) async fn voice_gate_enroll(State(st): State<AppState>) -> Response {
     let (repo, models, workspace) = (st.repo_root.clone(), st.models_root.clone(), st.workspace.clone());
-    let done = tokio::task::spawn_blocking(move || {
+    let done = tokio::task::spawn_blocking(move || -> Result<(f64, String), String> {
         app::ensure_components(&repo, &["voice-gate"], &|_| {})?;
         let wav = mic_test_path(&workspace);
         if !wav.is_file() {
             return Err(t!("record-test-none"));
+        }
+        // recognise what was said first, with the studio's own recogniser, so the person sees their voice came through;
+        // nothing recognised means silence or noise, not a voice to enrol — reject so they can speak and retry.
+        let text = super::asr::transcribe(&repo, &models, &wav, "auto", "").map(|h| h.text.trim().to_string()).unwrap_or_default();
+        if text.is_empty() {
+            return Err(t!("voice-gate-not-heard"));
         }
         let tmp = tempfile::Builder::new().prefix("enroll-").tempdir().map_err(|e| e.to_string())?;
         let k = tmp.path().join("16k.wav");
@@ -365,12 +372,72 @@ pub(super) async fn voice_gate_enroll(State(st): State<AppState>) -> Response {
         if (samples.len() as f64 / crate::voice_gate::SR as f64) < 1.0 {
             return Err(t!("voice-gate-too-short"));
         }
-        crate::voice_gate::enroll(&models, false, &samples)
+        let seconds = crate::voice_gate::enroll(&models, false, &samples)?;
+        Ok((seconds, text))
     })
     .await;
     match done {
-        Ok(Ok(seconds)) => Json(json!({ "enrolled": true, "seconds": (seconds * 100.0).round() / 100.0 })).into_response(),
+        Ok(Ok((seconds, text))) => Json(json!({ "enrolled": true, "seconds": (seconds * 100.0).round() / 100.0, "text": text })).into_response(),
         Ok(Err(e)) => (StatusCode::BAD_REQUEST, Json(json!({ "error": "enroll_failed", "detail": e }))).into_response(),
+        Err(e) => join_failure(e),
+    }
+}
+
+
+/// POST /voice-gate/test {on} — start or stop the live voice check: while on, the microphone records and the most
+/// recent speech is matched against the enrolled voice (see GET /voice-gate/score), so the person speaks and watches
+/// how the model hears them and tunes the sensitivity by it. The microphone is the person's: an agent only reads.
+pub(super) async fn voice_gate_test(State(st): State<AppState>, headers: HeaderMap, body: Option<Json<Value>>) -> Response {
+    if tools::by_agent(&headers) {
+        return (StatusCode::FORBIDDEN, Json(json!({ "error": "mic_only_person", "detail": t!("mic-only-person") }))).into_response();
+    }
+    let on = body.as_ref().and_then(|Json(v)| v.get("on")).and_then(Value::as_bool).unwrap_or(false);
+    if !on {
+        record::tap(None);
+        let _ = record::stop();
+        crate::voice_gate::test_clear();
+        return Json(json!({ "testing": false })).into_response();
+    }
+    let path = mic_test_path(&st.workspace);
+    // tap set before the recording starts, so the window fills from its first sound; the recorder's device rate is
+    // resampled to the 16 kHz the voice model wants.
+    let (tx, rx) = std::sync::mpsc::channel::<Vec<f32>>();
+    record::tap(Some(tx));
+    crate::voice_gate::test_clear();
+    match tokio::task::spawn_blocking(move || record::start_test(&path, None)).await {
+        Ok(Ok(())) => {}
+        Ok(Err(e)) => {
+            record::tap(None);
+            return (StatusCode::CONFLICT, Json(json!({ "error": "record_busy", "detail": e }))).into_response();
+        }
+        Err(e) => {
+            record::tap(None);
+            return join_failure(e);
+        }
+    }
+    std::thread::spawn(move || {
+        while let Ok(chunk) = rx.recv() {
+            let rate = record::rate().max(1);
+            crate::voice_gate::test_push(&crate::audio::wavio::to_16k(&chunk, rate));
+        }
+    });
+    say_api::guard_mic(st.workspace.clone());
+    Json(json!({ "testing": true })).into_response()
+}
+
+/// GET /voice-gate/score — the live match of the voice check (POST /voice-gate/test) against the enrolled voice, 0..=1,
+/// and the configured threshold; `ready` is false until there is enough speech. The person compares the two to tune the
+/// sensitivity in real time.
+pub(super) async fn voice_gate_score(State(st): State<AppState>) -> Response {
+    let models = st.models_root.clone();
+    let done = tokio::task::spawn_blocking(move || -> Result<(Option<f32>, f32), String> {
+        let score = crate::voice_gate::test_score(&models)?;
+        Ok((score, crate::voice_gate::config(&models).threshold))
+    })
+    .await;
+    match done {
+        Ok(Ok((score, threshold))) => Json(json!({ "score": score.map(|s| (s * 100.0).round() / 100.0), "threshold": threshold, "ready": score.is_some() })).into_response(),
+        Ok(Err(e)) => internal_error(e),
         Err(e) => join_failure(e),
     }
 }

@@ -191,6 +191,38 @@ pub fn score(models_root: &Path, gpu: bool, samples: &[f32]) -> Result<Option<f3
     Ok(Some(cosine(&owner, &print)))
 }
 
+
+/// A rolling window of the most recent 16 kHz speech while the voice test is on, fed from the microphone tap, so the
+/// live match against the enrolled voice can be shown and the owner can tune the sensitivity by it.
+static TEST_WINDOW: Mutex<Vec<f32>> = Mutex::new(Vec::new());
+/// Keep at most the last three seconds — enough for a stable match, recent enough to follow what is being said.
+const TEST_WINDOW_SAMPLES: usize = 3 * SR as usize;
+
+/// Feed 16 kHz mono samples into the rolling test window.
+pub fn test_push(samples: &[f32]) {
+    let mut w = TEST_WINDOW.lock().unwrap_or_else(|p| p.into_inner());
+    w.extend_from_slice(samples);
+    if w.len() > TEST_WINDOW_SAMPLES {
+        let drop = w.len() - TEST_WINDOW_SAMPLES;
+        w.drain(..drop);
+    }
+}
+
+/// Empty the test window (the test stopped).
+pub fn test_clear() {
+    TEST_WINDOW.lock().unwrap_or_else(|p| p.into_inner()).clear();
+}
+
+/// The live match of the test window against the enrolled voice, 0..=1; None while there is under a second of audio or
+/// no one is enrolled. CPU: a short window is light and keeps off the agent's GPU.
+pub fn test_score(models_root: &Path) -> Result<Option<f32>, String> {
+    let samples = TEST_WINDOW.lock().unwrap_or_else(|p| p.into_inner()).clone();
+    if samples.len() < SR as usize {
+        return Ok(None);
+    }
+    score(models_root, false, &samples)
+}
+
 /// Whether this speech is the owner, at or above the configured threshold.
 pub fn is_owner(models_root: &Path, gpu: bool, cfg: &Config, samples: &[f32]) -> Result<bool, String> {
     Ok(score(models_root, gpu, samples)?.is_some_and(|s| s >= cfg.threshold))

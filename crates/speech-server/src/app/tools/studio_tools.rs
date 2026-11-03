@@ -663,6 +663,18 @@ pub(super) fn tools() -> Vec<Tool> {
             call: |_| send(Method::DELETE, "/voice-gate/owner".into(), json!({})),
         },
         Tool {
+            name: "voice_gate_test",
+            description: "Start ({on:true}) or stop ({on:false}) the live voice check: while on, the microphone records and recent speech is matched against the enrolled voice (read the match with voice_gate_score), so the owner sees how the model hears them and tunes the sensitivity. The microphone is the person's — an agent only reads.",
+            schema: || object(json!({ "on": { "type": "boolean" } }), &[]),
+            call: |args| post("/voice-gate/test".into(), args.clone()),
+        },
+        Tool {
+            name: "voice_gate_score",
+            description: "The live match of the voice check (voice_gate_test) against the enrolled voice, 0..1, with the configured threshold; ready is false until there is enough speech.",
+            schema: nothing,
+            call: |_| get("/voice-gate/score".into()),
+        },
+        Tool {
             name: "studio_batch",
             description: "Run several tools in one call, in order, through this MCP server: calls is a list of {name, arguments}. It stops at the first that fails unless keep_going is true; answers each one's result or error. One call's time limit still applies, so put long work in jobs and studio_wait for them.",
             schema: || object(json!({ "calls": { "type": "array", "items": { "type": "object", "properties": { "name": { "type": "string" }, "arguments": { "type": "object" } }, "required": ["name"] } }, "keep_going": { "type": "boolean" } }), &["calls"]),

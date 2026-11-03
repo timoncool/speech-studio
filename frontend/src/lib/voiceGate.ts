@@ -23,8 +23,13 @@ export const voiceGateApi = {
   get: () => getCoded<VoiceGate>("/voice-gate"),
   set: (patch: Partial<Pick<VoiceGate, "enabled" | "threshold" | "wake_word" | "wake_lang" | "autostart">>) =>
     postCoded<VoiceGate>("/voice-gate", patch),
-  /** Learn the owner's voice from the last microphone recording. */
-  enroll: () => postCoded<{ enrolled: boolean; seconds: number }>("/voice-gate/enroll", {}),
+  /** Learn the owner's voice from the last microphone recording; `text` is what the recogniser heard, shown back so the
+   * person sees their voice came through. */
+  enroll: () => postCoded<{ enrolled: boolean; seconds: number; text: string }>("/voice-gate/enroll", {}),
   /** Forget the enrolled voice. */
   forget: () => sendCoded<{ enrolled: boolean }>("DELETE", "/voice-gate/owner"),
+  /** Start or stop the live voice check: the microphone records and recent speech is matched against the enrolled voice. */
+  test: (on: boolean) => postCoded<{ testing: boolean }>("/voice-gate/test", { on }),
+  /** The live match of the voice check against the enrolled voice (0..1), with the configured threshold; `ready` false until enough speech. */
+  score: () => getCoded<{ score: number | null; threshold: number; ready: boolean }>("/voice-gate/score"),
 };

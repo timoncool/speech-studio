@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Fingerprint, KeyRound, Mic, Trash2, X } from "lucide-react";
+import { AudioLines, Fingerprint, KeyRound, Mic, Trash2, X } from "lucide-react";
 import SettingSwitch from "./SettingSwitch";
 import LevelMeter from "../talk/LevelMeter";
 import { voiceGateApi, type VoiceGate } from "../../lib/voiceGate";
 import { talkApi } from "../../lib/talk";
 import { errorText } from "../../lib/voices";
+import { api } from "../../lib/api";
+import { useSetupStatus } from "../../lib/useSetupStatus";
+import DownloadProgress from "../DownloadProgress";
 
 // Enough clean speech (seconds) for a solid speaker print: a text-dependent passphrase wants a couple of seconds at
 // least (Azure Speaker Recognition, Nuance VocalPassword, Neurotechnology); we take a little more, then auto-finish.
@@ -16,6 +19,11 @@ const ENROLL_MAX_SECONDS = 12;
 // RMS level above which the microphone is hearing speech rather than room noise.
 const SPEECH_FLOOR = 0.06;
 const POLL_MS = 120;
+// How close below the threshold still counts as "almost" in the live check — a borderline zone, not a flat no.
+const CLOSE_MARGIN = 0.08;
+// The live match meter spans this slice of the cosine range, where a speaker's own voice and an impostor's separate.
+const METER_LOW = 0.2;
+const METER_HIGH = 0.9;
 
 /// The voice gate: Live starts a conversation hands-free. Two independent ways to start it — on the owner's own voice
 /// and/or on a wake phrase — that can be used alone or together. Everything is off by default; the voice print and the
@@ -26,10 +34,16 @@ export default function VoiceGateSection() {
   const [problem, setProblem] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [heard, setHeard] = useState<string | null>(null);
+  const [testing, setTesting] = useState(false);
+  const [match, setMatch] = useState<number | null>(null);
+  const [wakeOn, setWakeOn] = useState<boolean | null>(null);
   const level = useRef(0);
   const speechSecs = useRef(0);
   const elapsedSecs = useRef(0);
   const finishing = useRef(false);
+  // the wake-word model downloads like any other component; its progress is shown here, not on another screen
+  const setup = useSetupStatus();
 
   useEffect(() => {
     voiceGateApi.get().then(setState, (e: unknown) => setProblem(errorText(e)));
@@ -59,6 +73,19 @@ export default function VoiceGateSection() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recording]);
 
+  // While testing: poll the live match and the level, so the person speaks and watches how the model hears them.
+  useEffect(() => {
+    if (!testing) {
+      level.current = 0;
+      return;
+    }
+    const id = window.setInterval(() => {
+      voiceGateApi.score().then((s) => setMatch(s.ready ? s.score : null), () => undefined);
+      talkApi.level().then((l) => { level.current = l.level; }, () => { level.current = 0; });
+    }, 500);
+    return () => window.clearInterval(id);
+  }, [testing]);
+
   // Merge the save's reply into the current state: the POST reply carries the saved fields but not `wake_words` /
   // `enrolled`, so replacing state outright would drop them and crash the render.
   const patch = (p: Partial<Pick<VoiceGate, "enabled" | "threshold" | "wake_word" | "wake_lang">>) => {
@@ -83,6 +110,7 @@ export default function VoiceGateSection() {
       await talkApi.micTestStop();
       const r = await voiceGateApi.enroll();
       setState((s) => (s ? { ...s, enrolled: r.enrolled } : s));
+      setHeard(r.text || null);
     } catch (e) {
       setProblem(errorText(e));
     } finally {
@@ -104,8 +132,25 @@ export default function VoiceGateSection() {
 
   const forget = () => {
     setProblem(null);
+    setHeard(null);
     voiceGateApi.forget().then((r) => setState((s) => (s ? { ...s, enrolled: r.enrolled } : s)), (e: unknown) => setProblem(errorText(e)));
   };
+
+  const toggleTest = async () => {
+    setProblem(null);
+    const next = !testing;
+    setTesting(next);
+    setMatch(null);
+    try {
+      await voiceGateApi.test(next);
+    } catch (e) {
+      setTesting(false);
+      setProblem(errorText(e));
+    }
+  };
+
+  // stop the live check if the panel goes away
+  useEffect(() => () => { if (testing) void voiceGateApi.test(false).catch(() => {}); }, [testing]);
 
   if (!state) return <p className="text-[11px] text-[var(--color-muted)]">…</p>;
 
@@ -119,6 +164,19 @@ export default function VoiceGateSection() {
     ["en", "en"], ["ru", "ru"], ["cmn", "zh"], ["es", "es"], ["pt", "pt"], ["fr", "fr"], ["de", "de"], ["it", "it"],
     ["ja", "ja"], ["ko", "ko"], ["ar", "ar"], ["hi", "hi"], ["tr", "tr"], ["pl", "pl"], ["uk", "uk"],
   ];
+
+  const wakeJob = setup.status?.active && setup.status.active.ids.includes("wake-word") ? setup.status.active : null;
+  const wakeActive = wakeOn === null ? state.wake_word != null : wakeOn;
+  const toggleWake = () => {
+    const next = !wakeActive;
+    setWakeOn(next);
+    if (!next && state.wake_word != null) patch({ wake_word: null });
+  };
+
+  // the live match, mapped into the meter's slice and judged against the sensitivity the slider sets
+  const pct = (v: number) => Math.max(0, Math.min(100, ((v - METER_LOW) / (METER_HIGH - METER_LOW)) * 100));
+  const verdict = match === null ? null : match >= state.threshold ? "yes" : match >= state.threshold - CLOSE_MARGIN ? "close" : "no";
+  const verdictColor = verdict === "yes" ? "var(--color-good)" : verdict === "close" ? "var(--color-cue-rate)" : "var(--color-muted)";
 
   const field = "shrink-0 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md px-2 py-1 text-[12px]";
   const small = "shrink-0 rounded-md border border-[var(--color-border)] px-2.5 py-1 text-[11px] text-[var(--color-text)] hover:border-[var(--color-accent)] disabled:opacity-40";
@@ -147,6 +205,9 @@ export default function VoiceGateSection() {
                   <span className="block text-[11px] leading-snug text-[var(--color-muted)]">
                     {state.enrolled ? t("voiceGate.enrolled") : t("voiceGate.notEnrolled")}
                   </span>
+                  {heard && !recording && (
+                    <span className="block text-[11px] leading-snug text-[var(--color-good)]">{t("voiceGate.heard", { text: heard })}</span>
+                  )}
                 </div>
                 {recording ? (
                   <div className="space-y-2">
@@ -161,11 +222,11 @@ export default function VoiceGateSection() {
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
-                    <button onClick={() => void startEnroll()} disabled={busy} className={`${small} inline-flex items-center gap-1.5`}>
+                    <button onClick={() => void startEnroll()} disabled={busy || testing} className={`${small} inline-flex items-center gap-1.5`}>
                       <Mic size={13} /> {state.enrolled ? t("voiceGate.reEnroll") : t("voiceGate.enroll")}
                     </button>
                     {state.enrolled && (
-                      <button onClick={forget} className={`${small} inline-flex items-center gap-1.5 text-[var(--color-warn)]`}>
+                      <button onClick={forget} disabled={testing} className={`${small} inline-flex items-center gap-1.5 text-[var(--color-warn)]`}>
                         <Trash2 size={13} /> {t("voiceGate.forget")}
                       </button>
                     )}
@@ -187,43 +248,78 @@ export default function VoiceGateSection() {
               />
               <span className="w-9 text-right mono text-[11px] tabular-nums text-[var(--color-muted)]">{state.threshold.toFixed(2)}</span>
             </div>
+
+            {/* live voice check: speak and watch how the model hears you, tune the sensitivity by it */}
+            {state.enrolled && (
+              <div className="px-3 py-2.5 space-y-2">
+                <div className="flex items-center gap-3">
+                  <div className="min-w-0 flex-1">
+                    <span className="block text-[13px] font-medium">{t("voiceGate.testVoice")}</span>
+                    <span className="block text-[11px] leading-snug text-[var(--color-muted)]">{t("voiceGate.testHint")}</span>
+                  </div>
+                  <button onClick={() => void toggleTest()} disabled={recording}
+                    className={`${small} inline-flex items-center gap-1.5 ${testing ? "border-[var(--color-accent)] text-[var(--color-accent)]" : ""}`}>
+                    {testing ? <X size={13} /> : <AudioLines size={13} />}{testing ? t("voiceGate.testStop") : t("voiceGate.testStart")}
+                  </button>
+                </div>
+                {testing && (
+                  <div className="space-y-2">
+                    <LevelMeter peak={() => level.current} label={t("talk.inputLevel")} />
+                    {/* the match meter: the live score as a bar, a marker where the sensitivity cuts off */}
+                    <div className="relative h-2.5 rounded-full bg-[var(--color-surface-2)] overflow-hidden">
+                      <div className="h-full transition-[width] duration-200" style={{ width: `${match === null ? 0 : pct(match)}%`, background: verdictColor }} />
+                      <div className="absolute top-0 bottom-0 w-0.5 bg-[var(--color-text)]/70" style={{ left: `${pct(state.threshold)}%` }} title={t("voiceGate.thresholdMark")} />
+                    </div>
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span style={{ color: verdictColor }} className="font-medium">
+                        {verdict === null ? t("voiceGate.speakNow") : verdict === "yes" ? t("voiceGate.matchYes") : verdict === "close" ? t("voiceGate.matchClose") : t("voiceGate.matchNo")}
+                      </span>
+                      {match !== null && <span className="mono tabular-nums text-[var(--color-muted)]">{t("voiceGate.matchPct", { pct: Math.round(match * 100) })}</span>}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
 
       {/* 2 — start on a wake phrase, in any language */}
-      <div className={`${card} px-3 py-3 space-y-2`}>
-        <div className="flex items-start gap-3">
-          <KeyRound size={15} className="mt-0.5 shrink-0 text-[var(--color-accent-2)]" />
-          <div className="min-w-0 flex-1">
-            <span className="block text-[13px] font-medium">{t("voiceGate.byWord")}</span>
-            <span className="block text-[11px] leading-snug text-[var(--color-muted)]">
-              {state.enabled ? t("voiceGate.byWordHintVoice") : t("voiceGate.byWordHint")}
-            </span>
+      <div className={card}>
+        <SettingSwitch
+          icon={KeyRound}
+          label={t("voiceGate.byWord")}
+          hint={state.enabled ? t("voiceGate.byWordHintVoice") : t("voiceGate.byWordHint")}
+          on={wakeActive}
+          onToggle={toggleWake}
+        />
+        {wakeActive && (
+          <div className="border-t border-[var(--color-border)] px-3 py-3 space-y-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[11px] text-[var(--color-muted)] shrink-0">{t("voiceGate.wakePhrase")}</span>
+              <input
+                type="text" list="voice-gate-wake-words" placeholder={t("voiceGate.wakePlaceholder")}
+                defaultValue={state.wake_word ?? ""}
+                onBlur={(e) => { const v = e.target.value.trim(); if (v !== (state.wake_word ?? "")) patch({ wake_word: v || null }); }}
+                onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                className={`${field} flex-1 min-w-40 max-w-xs`} aria-label={t("voiceGate.wakePhrase")}
+              />
+              <datalist id="voice-gate-wake-words">
+                {(state.wake_words ?? []).map((w) => <option key={w} value={w} />)}
+              </datalist>
+              <select
+                value={wakeLang} onChange={(e) => patch({ wake_lang: e.target.value })}
+                className={field} aria-label={t("voiceGate.wakeLang")} title={t("voiceGate.wakeLang")}
+              >
+                {WAKE_LANGS.map(([code, bcp]) => <option key={code} value={code}>{langNames.of(bcp)}</option>)}
+              </select>
+            </div>
+            {wakeJob ? (
+              <DownloadProgress job={wakeJob} onPause={() => { void api.setupCancel(); }} onResume={(ids) => { void api.setupDownload(ids); }} />
+            ) : state.wake_downloading ? (
+              <p className="text-[11px] leading-snug text-[var(--color-accent-2)]">{t("voiceGate.wakeDownloading")}</p>
+            ) : null}
           </div>
-        </div>
-        <div className="flex items-center gap-2 pl-[27px]">
-          <input
-            type="text" list="voice-gate-wake-words" placeholder={t("voiceGate.anySpeech")}
-            defaultValue={state.wake_word ?? ""}
-            onBlur={(e) => { const v = e.target.value.trim(); if (v !== (state.wake_word ?? "")) patch({ wake_word: v || null }); }}
-            onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-            className={`${field} flex-1 max-w-xs`} aria-label={t("voiceGate.byWord")}
-          />
-          <datalist id="voice-gate-wake-words">
-            {(state.wake_words ?? []).map((w) => <option key={w} value={w} />)}
-          </datalist>
-          {state.wake_word && (
-            <select
-              value={wakeLang} onChange={(e) => patch({ wake_lang: e.target.value })}
-              className={field} aria-label={t("voiceGate.wakeLang")} title={t("voiceGate.wakeLang")}
-            >
-              {WAKE_LANGS.map(([code, bcp]) => <option key={code} value={code}>{langNames.of(bcp)}</option>)}
-            </select>
-          )}
-        </div>
-        {state.wake_downloading && (
-          <p className="pl-[27px] text-[11px] leading-snug text-[var(--color-accent-2)]">{t("voiceGate.wakeDownloading")}</p>
         )}
       </div>
 

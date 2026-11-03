@@ -1196,6 +1196,7 @@ say-no-text = O texto está vazio: escreva o que dizer ao agente.
 record-test-other = Há outra gravação em curso, não um teste de microfone.
 record-test-none = Ainda não houve teste de microfone.
 voice-gate-too-short = A gravação é curta demais para aprender a sua voz — repita a frase.
+voice-gate-not-heard = Não consegui distinguir a sua voz — diga a frase com clareza e tente de novo.
 setup-comp-crisperwhisper-purpose = Reconhecimento de fala em 99 idiomas com marcas de tempo, além dos 25 europeus do Parakeet. Licença: nyra health Non-Commercial (LICENSE.md junto aos pesos)
 acpp-no-server = O motor audio.cpp não está instalado ({ $path }): baixe-o em Definições → Modelos
 acpp-no-libraries = O motor audio.cpp não pode iniciar: faltam as suas bibliotecas CUDA ({ $files }). Baixe-as em Definições → Modelos

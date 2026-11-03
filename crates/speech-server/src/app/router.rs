@@ -88,6 +88,8 @@ pub fn build_router(state: AppState) -> Router {
         .route("/voices/catalog", get(voices_catalog))
         .route("/voice-gate", get(voice_gate_get).post(voice_gate_set))
         .route("/voice-gate/enroll", post(voice_gate_enroll))
+        .route("/voice-gate/test", post(voice_gate_test))
+        .route("/voice-gate/score", get(voice_gate_score))
         .route("/voice-gate/owner", delete(voice_gate_forget))
         .route("/voices/sample", get(voice_api::sample))
         .route("/voices/photo", get(voice_api::photo).post(voice_api::set_photo))
