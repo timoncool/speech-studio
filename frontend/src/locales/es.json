@@ -2112,6 +2112,14 @@
     }
   },
   "voiceGate": {
+    "intro": "Live escucha en segundo plano e inicia una conversación con el agente por sí mismo. Elige qué la inicia: tu propia voz, una frase de activación o ambas.",
+    "byVoice": "Iniciar con mi voz",
+    "byVoiceHint": "Live reconoce tu voz y empieza solo cuando hablas tú; la voz de otra persona no la inicia.",
+    "byWord": "Frase de activación",
+    "byWordHint": "Mientras haya una frase, la conversación empieza solo cuando la dices (en cualquier idioma). Déjalo vacío para no usar frase de activación.",
+    "byWordHintVoice": "Mientras haya una frase, la conversación empieza cuando la dices con tu propia voz. Déjalo vacío para iniciar con cualquier habla tuya.",
+    "enrollListening": "Sigue hablando: termina solo",
+    "enrollCancel": "Cancelar",
     "section": "Puerta de voz",
     "sectionHint": "Inicia una conversación solo con tu voz",
     "enable": "Activar solo con mi voz",

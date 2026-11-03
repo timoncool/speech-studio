@@ -4,6 +4,27 @@ What changed, newest first. Dates are release dates; the app is versioned by its
 build. Every change a user can see is written here in the commit that makes it, and the
 release notes on GitHub are taken from the release's section.
 
+## 0.4.0 — 2026-11-03
+
+### Added
+
+- **A voice gate for Live — start a conversation hands-free** (Settings → Voice gate): the studio listens in the background and begins talking to the agent by itself, by **your own voice** (record it once; a speaker-recognition model, ReDimNet2-B3, recognises you and starts only when you speak) and/or by a **wake phrase you set, in any language** («Эй Клод», «Привет Анифса», «Hey Claude»): a universal phone recogniser (PhoneticXeus) and eSpeak-ng spot the phrase, so there is no training and no fixed word list. Recording your voice finishes by itself once enough is heard. Everything is off by default; the voiceprint and the wake model stay on the device.
+- **Start Speech Studio on login** (Settings → Appearance): the studio launches with the computer, so Live is ready at once. Off by default.
+- **Talk to the agent from Claude Code by voice**: a companion mod, [studio-voice](https://github.com/timoncool/speech-studio-voice), shows the studio's status above the prompt, speaks the agent's replies aloud as they finish (optionally shortened by Haiku to a spoken line) and feeds your speech back as the next prompt.
+- **A volume control on the player** ([#22](https://github.com/timoncool/speech-studio/issues/22)): mute and set the level of what is voiced, kept in sync with Settings.
+- **Export can skip the blocks that are not voiced** ([#24](https://github.com/timoncool/speech-studio/issues/24)): a project with empty blocks still exports the rest.
+- **Make library voices from a recording's speakers, and a Logs folder** ([#20](https://github.com/timoncool/speech-studio/issues/20)).
+
+### Fixed
+
+- **A cough, a laugh or a short noise no longer interrupts the agent in Live**: only real, continuing speech takes the floor (semantic barge-in, as voice agents do it), and the agent's speech is stopped at once when it does.
+- **A block that comes back empty is voiced again on the engine's own recommended settings** ([#18](https://github.com/timoncool/speech-studio/issues/18)), instead of staying unvoiced.
+- **A transient «LoadLibraryExW failed» on the third re-voicing or recognition is retried** ([#21](https://github.com/timoncool/speech-studio/issues/21)) instead of failing the take.
+- **The agent connects to MCP again** ([#23](https://github.com/timoncool/speech-studio/issues/23)).
+- **No more double dot in an export's file name** ([#19](https://github.com/timoncool/speech-studio/issues/19)).
+- **The voice catalogue and library search every field** — name, description, language, gender, age and year — not just the name and description.
+- **The changelog tab shows the changelog again**: its heading format had drifted from what the window parsed, so it had gone blank.
+
 ## 0.3.5 — 2026-10-28
 
 ### Added

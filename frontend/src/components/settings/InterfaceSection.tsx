@@ -1,7 +1,8 @@
 import { useEffect, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AudioLines, Footprints, Languages, Music, Scaling, SunMoon, Volume2 } from "lucide-react";
+import { AudioLines, Footprints, Languages, Music, Rocket, Scaling, SunMoon, Volume2 } from "lucide-react";
 import { livePlaybackEnabled, setLivePlaybackEnabled } from "../../lib/livePlayback";
+import { voiceGateApi } from "../../lib/voiceGate";
 import { setSimpleMode, useSimpleMode } from "../../lib/simpleMode";
 import { DUB_LANGS, LANGS, setLang, type Lang } from "../../lib/i18n";
 import { playSfx, setSfxEnabled, sfxEnabled } from "../../lib/sfx";
@@ -20,11 +21,20 @@ export default function InterfaceSection() {
   const [theme, setThemeState] = useState<Theme>(savedTheme());
   const [volume, setVolume] = useState(Math.round(masterVolume() * 100));
   const [scale, setScale] = useState(storedUiScale());
+  const [autostart, setAutostart] = useState(false);
   const simple = useSimpleMode();
   const selectId = useId();
   const themeId = useId();
   const volumeId = useId();
   const scaleId = useId();
+  useEffect(() => {
+    voiceGateApi.get().then((g) => setAutostart(g.autostart), () => undefined);
+  }, []);
+  const toggleAutostart = () => {
+    const v = !autostart;
+    setAutostart(v);
+    voiceGateApi.set({ autostart: v }).then((g) => setAutostart(g.autostart), () => setAutostart(!v));
+  };
   useEffect(() => {
     const onScale = (e: Event) => setScale((e as CustomEvent<number>).detail);
     const onVolume = (e: Event) => setVolume(Math.round((e as CustomEvent<number>).detail * 100));
@@ -86,6 +96,7 @@ export default function InterfaceSection() {
         onToggle={() => { const v = !sfx; setSfx(v); setSfxEnabled(v); if (v) playSfx("notify"); }} />
       <SettingSwitch icon={AudioLines} label={t("prefs.livePlayback")} hint={t("prefs.livePlaybackHint")} on={live}
         onToggle={() => { const v = !live; setLive(v); setLivePlaybackEnabled(v); }} />
+      <SettingSwitch icon={Rocket} label={t("voiceGate.autostart")} hint={t("voiceGate.autostartHint")} on={autostart} onToggle={toggleAutostart} />
       <SettingSwitch icon={Footprints} label={t("simple.title")} hint={t("simple.hint")} on={simple} onToggle={() => setSimpleMode(!simple)} />
     </div>
     <ShortcutsSection />

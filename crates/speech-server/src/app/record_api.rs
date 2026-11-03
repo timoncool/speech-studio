@@ -344,7 +344,8 @@ pub(super) async fn voice_gate_set(State(st): State<AppState>, Json(body): Json<
     if wake_downloading {
         let _ = st.downloads.start(vec!["wake-word".into()]); // "busy" just means a download is already under way
     }
-    Json(json!({ "enabled": cfg.enabled, "threshold": cfg.threshold, "wake_word": cfg.wake_word, "wake_lang": cfg.wake_lang, "autostart": cfg.autostart, "wake_downloading": wake_downloading })).into_response()
+    // the full state, as GET returns it, so a caller can replace its state with the reply and not lose a field
+    Json(json!({ "enabled": cfg.enabled, "threshold": cfg.threshold, "wake_word": cfg.wake_word, "wake_lang": cfg.wake_lang, "autostart": cfg.autostart, "enrolled": crate::voice_gate::enrolled(&st.models_root), "wake_words": crate::voice_gate::wake_words(), "wake_downloading": wake_downloading })).into_response()
 }
 
 /// POST /voice-gate/enroll — learn the owner's voice from the last microphone recording (`.mic-test.wav`). The model is

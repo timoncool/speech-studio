@@ -2112,6 +2112,14 @@
     }
   },
   "voiceGate": {
+    "intro": "Live écoute en arrière-plan et démarre une conversation avec l'agent de lui-même. Choisissez ce qui la déclenche — votre propre voix, une phrase d'activation, ou les deux.",
+    "byVoice": "Démarrer sur ma voix",
+    "byVoiceHint": "Live reconnaît votre voix et ne démarre que lorsque vous parlez — la voix de quelqu'un d'autre ne la déclenche pas.",
+    "byWord": "Phrase d'activation",
+    "byWordHint": "Tant qu'une phrase est définie, la conversation ne démarre que lorsque vous la dites (dans n'importe quelle langue). Laissez vide pour ne pas utiliser de phrase d'activation.",
+    "byWordHintVoice": "Tant qu'une phrase est définie, la conversation démarre lorsque vous la dites de votre propre voix. Laissez vide pour démarrer sur n'importe quelle parole de vous.",
+    "enrollListening": "Continuez à parler — ça se termine tout seul",
+    "enrollCancel": "Annuler",
     "section": "Filtre vocal",
     "sectionHint": "Démarre une conversation uniquement sur votre voix",
     "enable": "Activer uniquement sur ma voix",

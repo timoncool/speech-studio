@@ -2112,6 +2112,14 @@
     }
   },
   "voiceGate": {
+    "intro": "Live listens in the background and starts a conversation with the agent by itself. Choose what starts it — your own voice, a wake phrase, or both.",
+    "byVoice": "Start on my voice",
+    "byVoiceHint": "Live recognises your voice and starts only when you speak — someone else's voice won't start it.",
+    "byWord": "Wake phrase",
+    "byWordHint": "While a phrase is set, a conversation starts only when you say it (any language). Leave empty to not use a wake phrase.",
+    "byWordHintVoice": "While a phrase is set, a conversation starts when you say it in your own voice. Leave empty to start on any of your speech.",
+    "enrollListening": "Keep speaking — it finishes by itself",
+    "enrollCancel": "Cancel",
     "section": "Voice gate",
     "sectionHint": "Start a conversation only on your voice",
     "enable": "Activate only on my voice",

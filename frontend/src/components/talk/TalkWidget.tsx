@@ -23,8 +23,8 @@ export default function TalkWidget() {
   const button = "grid h-8 w-8 shrink-0 place-items-center rounded-full transition-colors disabled:opacity-40";
 
   return (
-    <main data-tauri-drag-region title={t("talk.widgetMove")} className="flex h-full w-full items-center p-1.5 select-none">
-      <div data-tauri-drag-region className="flex h-full w-full items-center gap-2 rounded-full border border-white/10 bg-[#0d1117]/85 pl-1.5 pr-2 text-white shadow-[0_8px_30px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+    <main data-tauri-drag-region title={t("talk.widgetMove")} className="flex h-full w-full items-center p-6 select-none">
+      <div data-tauri-drag-region className="flex h-full w-full items-center gap-2 rounded-full border border-white/10 bg-[#0d1117]/85 pl-1.5 pr-2 text-white shadow-[0_4px_16px_rgba(0,0,0,0.45)] backdrop-blur-xl">
         <TalkVisual look={look} state={state} level={loudness} bands={talk.bands} token={state === "thinking" ? "--color-accent-2" : "--color-accent"} className={look === "wave" || look === "bars" || look === "matrix" ? "pointer-events-none h-12 w-20 shrink-0" : "pointer-events-none h-14 w-14 shrink-0"} />
         <div data-tauri-drag-region className="min-w-0 flex-1 leading-tight">
           <p role="status" aria-live="polite" className="text-[11px] font-medium text-white/60">{t(`talk.state_${state}`)}</p>

@@ -74,8 +74,8 @@ fn open_talk_widget(app: tauri::AppHandle, url: tauri::Url) {
         let for_close = app.clone();
         let built = WebviewWindowBuilder::new(&app, "widget", WebviewUrl::External(url))
             .title(speech_server::i18n::text("talk-widget-title", &[]))
-            .inner_size(420.0, 84.0)
-            .min_inner_size(300.0, 72.0)
+            .inner_size(468.0, 120.0)
+            .min_inner_size(360.0, 108.0)
             .transparent(true)
             .decorations(false)
             .shadow(false)
