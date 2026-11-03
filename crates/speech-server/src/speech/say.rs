@@ -439,11 +439,11 @@ fn hushed() -> bool {
     }
 }
 
-/// POST /speech/listen {lang?, device?, engine?} — the microphone heard live for a conversation: each phrase the person ends with
-/// a pause is recognised (`next`), and their speaking over the studio stops its speech.
 pub async fn listen_start(State(st): State<AppState>, headers: HeaderMap, body: Option<Json<Value>>) -> Response {
     let body = body.map(|Json(v)| v).unwrap_or(Value::Null);
     let lang = body.get("lang").and_then(Value::as_str).unwrap_or("auto");
+    // the voice gate keys the conversation on the owner's voice only while it is armed (and set on in its settings)
+    let gate_on = crate::voice_gate::config(&st.models_root).enabled;
     // the microphone is on already (the person turned it on): this conversation listens to it too, and a recogniser
     // named here hears its next phrase while the microphone goes on recording
     if let Some(pid) = crate::listening::recording().filter(|_| crate::listening::recognition::state()["running"] == true) {
@@ -460,8 +460,9 @@ pub async fn listen_start(State(st): State<AppState>, headers: HeaderMap, body: 
             }
         }
         watch_interruptions(st.workspace, st.jobs);
+        crate::voice_gate::arm(gate_on);
         let (asr, lang) = crate::listening::recognition::engine().unwrap_or_default();
-        return Json(json!({ "pid": pid, "live": true, "joined": true, "asr": asr, "lang": lang })).into_response();
+        return Json(json!({ "pid": pid, "live": true, "joined": true, "asr": asr, "lang": lang, "gate": gate_on })).into_response();
     }
     // the microphone is the person's: an agent listens to a conversation the person started and never turns it on
     if crate::app::agent::by_agent(&headers) {
@@ -472,6 +473,7 @@ pub async fn listen_start(State(st): State<AppState>, headers: HeaderMap, body: 
         return started;
     }
     watch_interruptions(st.workspace, st.jobs);
+    crate::voice_gate::arm(gate_on);
     started
 }
 
@@ -556,11 +558,14 @@ pub async fn listen_next(axum::extract::Query(q): axum::extract::Query<HashMap<S
     loop {
         let state = crate::listening::recognition::state();
         let all = state["lines"].as_array().cloned().unwrap_or_default();
+        // under the voice gate, only the owner's phrases reach the agent (what the person typed is always theirs)
+        let gate = crate::voice_gate::is_armed();
         let fresh: Vec<Value> = all
             .iter()
             .enumerate()
             .skip(after)
             .filter(|(_, l)| l["typed"] == true || !is_echo(l["text"].as_str().unwrap_or_default()))
+            .filter(|(_, l)| !gate || l["typed"] == true || l["owner"].as_bool() != Some(false))
             .map(|(n, l)| json!({ "n": n + 1, "text": l["text"], "start": l["start"], "end": l["end"] }))
             .collect();
         let running = state["running"].as_bool().unwrap_or(false);
@@ -577,6 +582,7 @@ pub async fn listen_next(axum::extract::Query(q): axum::extract::Query<HashMap<S
 /// An agent may turn it off too: only turning it on is the person's.
 pub async fn listen_stop(State(st): State<AppState>) -> Response {
     LISTENING.store(false, std::sync::atomic::Ordering::Relaxed);
+    crate::voice_gate::arm(false);
     let stopped = crate::listening::http::record_stop(State(st)).await;
     if !stopped.status().is_success() {
         return stopped;

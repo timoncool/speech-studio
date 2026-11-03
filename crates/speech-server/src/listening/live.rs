@@ -38,6 +38,8 @@ struct Live {
     muted: bool,
     /// The places in `lines` of what the person typed: their own words, never the studio's voice heard back.
     typed: std::collections::HashSet<usize>,
+    /// The places in `lines` the voice gate judged NOT the owner's voice (only when a gated conversation is armed).
+    foreign: std::collections::HashSet<usize>,
     /// The recogniser that hears now, as the window names it, and the language asked of it.
     engine: String,
     lang: String,
@@ -67,6 +69,7 @@ pub fn start(repo_root: &Path, models_root: &Path, lang: &str, engine: &str) -> 
         error: None,
         muted: false,
         typed: Default::default(),
+        foreign: Default::default(),
         engine: choice.label(),
         lang: lang.to_string(),
         stop: stop.clone(),
@@ -152,7 +155,7 @@ pub fn state() -> Value {
     match live().lock().unwrap_or_else(|p| p.into_inner()).as_ref() {
         Some(l) => json!({
             "running": !l.stop.load(Ordering::Relaxed),
-            "lines": l.lines.iter().enumerate().map(|(n, (a, z, text))| json!({ "start": a, "end": z, "text": text, "typed": l.typed.contains(&n) })).collect::<Vec<_>>(),
+            "lines": l.lines.iter().enumerate().map(|(n, (a, z, text))| json!({ "start": a, "end": z, "text": text, "typed": l.typed.contains(&n), "owner": !l.foreign.contains(&n) })).collect::<Vec<_>>(),
             "partial": l.partial.as_ref().map(|(a, text)| json!({ "start": a, "text": text })),
             "error": l.error,
             "muted": l.muted,
@@ -306,7 +309,15 @@ fn listen(choice: crate::engines::models::AsrChoice, models_root: &Path, lang: &
         }));
         if !text.is_empty() {
             let line = (((offset + a) * 100.0).round() / 100.0, ((offset + z) * 100.0).round() / 100.0, text);
-            with(|l| l.lines.push(line));
+            // under an armed voice gate, judge whether this phrase is the owner from the phrase's own 16 kHz audio
+            let owner = crate::voice_gate::owner_check(models_root, &audio[from_a.min(to_z)..to_z]);
+            with(|l| {
+                let n = l.lines.len();
+                l.lines.push(line);
+                if owner == Some(false) {
+                    l.foreign.insert(n);
+                }
+            });
         }
         let used = ((z * sr as f64) as usize).min(pending.len());
         pending.drain(..used);
@@ -340,7 +351,7 @@ mod tests {
         let lang = std::env::var("LIVE_LANG").unwrap_or_else(|_| "ru".into());
         let choice = crate::app::recognition::choice(&root, &models, &lang, "test").unwrap();
         std::env::set_var("DUB_ASR_BACKEND", crate::engines::models::stage_backend(&models, "asr_backend"));
-        *live().lock().unwrap() = Some(Live { lines: Vec::new(), partial: None, error: None, muted: false, typed: Default::default(), engine: String::new(), lang: lang.clone(), stop: Arc::new(AtomicBool::new(false)), worker: None });
+        *live().lock().unwrap() = Some(Live { lines: Vec::new(), partial: None, error: None, muted: false, typed: Default::default(), foreign: Default::default(), engine: String::new(), lang: lang.clone(), stop: Arc::new(AtomicBool::new(false)), worker: None });
         let (to, from) = channel::<Vec<f32>>();
         let feeder = std::thread::spawn(move || {
             for chunk in x.chunks((sr / 10) as usize) {

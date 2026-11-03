@@ -637,6 +637,31 @@ pub(super) fn tools() -> Vec<Tool> {
             schema: || object(json!({ "id": { "type": "string" }, "reason": { "type": "string" } }), &["id"]),
             call: |_| composite("window_drop"),
         },
+        // ---------------------------------------------------------------- the voice gate (Live keys on the owner's voice)
+        Tool {
+            name: "voice_gate",
+            description: "The voice gate's settings and state: whether it is on, the cosine threshold, the wake word (or none), whether to start on login, whether the owner has enrolled a voice, and the wake words on offer.",
+            schema: nothing,
+            call: |_| get("/voice-gate".into()),
+        },
+        Tool {
+            name: "voice_gate_set",
+            description: "Change the voice gate's settings: enabled, threshold (0..1), wake_word (a word, or null for any speech from the owner), autostart. Only the fields given are changed.",
+            schema: || object(json!({ "enabled": { "type": "boolean" }, "threshold": { "type": "number", "minimum": 0, "maximum": 1 }, "wake_word": { "type": ["string", "null"] }, "autostart": { "type": "boolean" } }), &[]),
+            call: |args| post("/voice-gate".into(), args.clone()),
+        },
+        Tool {
+            name: "voice_gate_enroll",
+            description: "Learn the owner's voice from the last microphone recording (record one first with record_test), so the gate recognises it; the model is downloaded on first use.",
+            schema: nothing,
+            call: |_| post("/voice-gate/enroll".into(), json!({})),
+        },
+        Tool {
+            name: "voice_gate_forget",
+            description: "Forget the owner's enrolled voice.",
+            schema: nothing,
+            call: |_| send(Method::DELETE, "/voice-gate/owner".into(), json!({})),
+        },
         Tool {
             name: "studio_batch",
             description: "Run several tools in one call, in order, through this MCP server: calls is a list of {name, arguments}. It stops at the first that fails unless keep_going is true; answers each one's result or error. One call's time limit still applies, so put long work in jobs and studio_wait for them.",

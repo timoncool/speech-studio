@@ -6,6 +6,7 @@
 use ort::session::Session;
 use ort::value::TensorRef;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
 /// The embedder works on 16 kHz mono audio.
@@ -184,6 +185,40 @@ pub fn score(models_root: &Path, gpu: bool, samples: &[f32]) -> Result<Option<f3
 /// Whether this speech is the owner, at or above the configured threshold.
 pub fn is_owner(models_root: &Path, gpu: bool, cfg: &Config, samples: &[f32]) -> Result<bool, String> {
     Ok(score(models_root, gpu, samples)?.is_some_and(|s| s >= cfg.threshold))
+}
+
+/// The gate is armed only for a Live conversation (set when one starts), so the live recogniser checks the owner's
+/// voice there and not when a recording is simply being transcribed.
+static ARMED: AtomicBool = AtomicBool::new(false);
+
+/// Arm or disarm the gate for the Live conversation.
+pub fn arm(on: bool) {
+    ARMED.store(on, Ordering::Relaxed);
+}
+
+/// Whether a gated Live conversation is under way.
+pub fn is_armed() -> bool {
+    ARMED.load(Ordering::Relaxed)
+}
+
+/// For the live recogniser: whether a phrase is the owner. None means the gate does not apply here — it is not armed,
+/// is off, no one has enrolled, or the embedding failed — and the phrase is then let through (fail-open, so a gate
+/// slip never silences a real conversation). CPU, so a short phrase stays off the agent's GPU.
+pub fn owner_check(models_root: &Path, samples: &[f32]) -> Option<bool> {
+    if !is_armed() {
+        return None;
+    }
+    let cfg = config(models_root);
+    if !cfg.enabled || !enrolled(models_root) {
+        return None;
+    }
+    match is_owner(models_root, false, &cfg, samples) {
+        Ok(owner) => Some(owner),
+        Err(e) => {
+            tracing::warn!("voice gate check: {e}");
+            None
+        }
+    }
 }
 
 #[cfg(test)]
