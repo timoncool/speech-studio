@@ -347,7 +347,7 @@ export default function VoiceGateSection() {
               <input
                 type="text" list="voice-gate-wake-words" placeholder={t("voiceGate.wakePlaceholder")}
                 defaultValue={state.wake_word ?? ""}
-                onBlur={(e) => { const v = e.target.value.trim(); if (v !== (state.wake_word ?? "")) patch({ wake_word: v || null }); }}
+                onBlur={(e) => { const v = e.target.value.trim(); if (v !== (state.wake_word ?? "")) patch({ wake_word: v || null, wake_lang: wakeLang }); }}
                 onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
                 className={`${field} flex-1 min-w-40 max-w-xs`} aria-label={t("voiceGate.wakePhrase")}
               />
