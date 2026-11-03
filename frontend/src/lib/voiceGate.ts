@@ -32,4 +32,6 @@ export const voiceGateApi = {
   test: (on: boolean) => postCoded<{ testing: boolean }>("/voice-gate/test", { on }),
   /** The live match of the voice check against the enrolled voice (0..1), with the configured threshold; `ready` false until enough speech. */
   score: () => getCoded<{ score: number | null; threshold: number; ready: boolean }>("/voice-gate/score"),
+  /** The live phone overlap of the voice check with the configured wake phrase (0..1), with the wake threshold; `ready` false until enough speech or no phrase set. */
+  wakeScore: () => getCoded<{ score: number | null; threshold: number; ready: boolean }>("/voice-gate/wake-score"),
 };

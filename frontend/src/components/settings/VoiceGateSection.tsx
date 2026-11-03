@@ -38,6 +38,9 @@ export default function VoiceGateSection() {
   const [testing, setTesting] = useState(false);
   const [match, setMatch] = useState<number | null>(null);
   const [wakeOn, setWakeOn] = useState<boolean | null>(null);
+  const [wakeTesting, setWakeTesting] = useState(false);
+  const [wakeMatch, setWakeMatch] = useState<number | null>(null);
+  const [wakeThresh, setWakeThresh] = useState(0.6);
   const level = useRef(0);
   const speechSecs = useRef(0);
   const elapsedSecs = useRef(0);
@@ -79,12 +82,30 @@ export default function VoiceGateSection() {
       level.current = 0;
       return;
     }
+    let scoring = false;
     const id = window.setInterval(() => {
-      voiceGateApi.score().then((s) => setMatch(s.ready ? s.score : null), () => undefined);
       talkApi.level().then((l) => { level.current = l.level; }, () => { level.current = 0; });
-    }, 500);
+      if (!scoring) {
+        scoring = true;
+        voiceGateApi.score().then((s) => setMatch(s.ready ? s.score : null)).catch(() => {}).finally(() => { scoring = false; });
+      }
+    }, POLL_MS);
     return () => window.clearInterval(id);
   }, [testing]);
+
+  // While checking the wake phrase: poll how strongly it is heard and the level, so the person says it and sees it fire.
+  useEffect(() => {
+    if (!wakeTesting) return;
+    let scoring = false;
+    const id = window.setInterval(() => {
+      talkApi.level().then((l) => { level.current = l.level; }, () => { level.current = 0; });
+      if (!scoring) {
+        scoring = true;
+        voiceGateApi.wakeScore().then((s) => { setWakeMatch(s.ready ? s.score : null); setWakeThresh(s.threshold); }).catch(() => {}).finally(() => { scoring = false; });
+      }
+    }, POLL_MS);
+    return () => window.clearInterval(id);
+  }, [wakeTesting]);
 
   // Merge the save's reply into the current state: the POST reply carries the saved fields but not `wake_words` /
   // `enrolled`, so replacing state outright would drop them and crash the render.
@@ -136,21 +157,36 @@ export default function VoiceGateSection() {
     voiceGateApi.forget().then((r) => setState((s) => (s ? { ...s, enrolled: r.enrolled } : s)), (e: unknown) => setProblem(errorText(e)));
   };
 
+  // the voice check and the wake-phrase check share one microphone tap: start it when the first turns on, stop it when
+  // the last turns off, so toggling one never cuts the other short.
   const toggleTest = async () => {
     setProblem(null);
     const next = !testing;
-    setTesting(next);
-    setMatch(null);
     try {
-      await voiceGateApi.test(next);
+      if (!wakeTesting) await voiceGateApi.test(next);
+      setTesting(next);
+      setMatch(null);
     } catch (e) {
       setTesting(false);
       setProblem(errorText(e));
     }
   };
 
-  // stop the live check if the panel goes away
-  useEffect(() => () => { if (testing) void voiceGateApi.test(false).catch(() => {}); }, [testing]);
+  const toggleWakeTest = async () => {
+    setProblem(null);
+    const next = !wakeTesting;
+    try {
+      if (!testing) await voiceGateApi.test(next);
+      setWakeTesting(next);
+      setWakeMatch(null);
+    } catch (e) {
+      setWakeTesting(false);
+      setProblem(errorText(e));
+    }
+  };
+
+  // stop the live check (voice or wake) if the panel goes away
+  useEffect(() => () => { if (testing || wakeTesting) void voiceGateApi.test(false).catch(() => {}); }, [testing, wakeTesting]);
 
   if (!state) return <p className="text-[11px] text-[var(--color-muted)]">…</p>;
 
@@ -165,7 +201,8 @@ export default function VoiceGateSection() {
     ["ja", "ja"], ["ko", "ko"], ["ar", "ar"], ["hi", "hi"], ["tr", "tr"], ["pl", "pl"], ["uk", "uk"],
   ];
 
-  const wakeJob = setup.status?.active && setup.status.active.ids.includes("wake-word") ? setup.status.active : null;
+  const active = setup.status?.active;
+  const wakeJob = active && active.ids.includes("wake-word") && (active.total <= 0 || active.downloaded < active.total) ? active : null;
   const wakeActive = wakeOn === null ? state.wake_word != null : wakeOn;
   const toggleWake = () => {
     const next = !wakeActive;
@@ -177,6 +214,9 @@ export default function VoiceGateSection() {
   const pct = (v: number) => Math.max(0, Math.min(100, ((v - METER_LOW) / (METER_HIGH - METER_LOW)) * 100));
   const verdict = match === null ? null : match >= state.threshold ? "yes" : match >= state.threshold - CLOSE_MARGIN ? "close" : "no";
   const verdictColor = verdict === "yes" ? "var(--color-good)" : verdict === "close" ? "var(--color-cue-rate)" : "var(--color-muted)";
+  // the wake-phrase check: phone overlap runs 0..1, so the bar fills the whole slider and the marker sits at the threshold
+  const pctWake = (v: number) => Math.max(0, Math.min(100, v * 100));
+  const wakeHit = wakeMatch !== null && wakeMatch >= wakeThresh;
 
   const field = "shrink-0 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md px-2 py-1 text-[12px]";
   const small = "shrink-0 rounded-md border border-[var(--color-border)] px-2.5 py-1 text-[11px] text-[var(--color-text)] hover:border-[var(--color-accent)] disabled:opacity-40";
@@ -235,23 +275,9 @@ export default function VoiceGateSection() {
               </div>
             </div>
 
-            <div className="flex items-center gap-3 px-3 py-2.5">
-              <div className="min-w-0 flex-1">
-                <span className="block text-[13px] font-medium">{t("voiceGate.sensitivity")}</span>
-                <span className="block text-[11px] leading-snug text-[var(--color-muted)]">{t("voiceGate.sensitivityHint")}</span>
-              </div>
-              <input
-                type="range" min={0.3} max={0.8} step={0.01} value={state.threshold}
-                onChange={(e) => setState((s) => (s ? { ...s, threshold: Number(e.target.value) } : s))}
-                onPointerUp={(e) => patch({ threshold: Number((e.target as HTMLInputElement).value) })}
-                className="shrink-0 w-32 accent-[var(--color-accent)]" aria-label={t("voiceGate.sensitivity")}
-              />
-              <span className="w-9 text-right mono text-[11px] tabular-nums text-[var(--color-muted)]">{state.threshold.toFixed(2)}</span>
-            </div>
-
-            {/* live voice check: speak and watch how the model hears you, tune the sensitivity by it */}
+            {/* live voice check + the sensitivity it tunes — only once there is a voice to check against */}
             {state.enrolled && (
-              <div className="px-3 py-2.5 space-y-2">
+              <div className="px-3 py-2.5 space-y-2.5">
                 <div className="flex items-center gap-3">
                   <div className="min-w-0 flex-1">
                     <span className="block text-[13px] font-medium">{t("voiceGate.testVoice")}</span>
@@ -261,6 +287,19 @@ export default function VoiceGateSection() {
                     className={`${small} inline-flex items-center gap-1.5 ${testing ? "border-[var(--color-accent)] text-[var(--color-accent)]" : ""}`}>
                     {testing ? <X size={13} /> : <AudioLines size={13} />}{testing ? t("voiceGate.testStop") : t("voiceGate.testStart")}
                   </button>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="min-w-0 flex-1">
+                    <span className="block text-[13px] font-medium">{t("voiceGate.sensitivity")}</span>
+                    <span className="block text-[11px] leading-snug text-[var(--color-muted)]">{t("voiceGate.sensitivityHint")}</span>
+                  </div>
+                  <input
+                    type="range" min={0.3} max={0.8} step={0.01} value={state.threshold}
+                    onChange={(e) => setState((s) => (s ? { ...s, threshold: Number(e.target.value) } : s))}
+                    onPointerUp={(e) => patch({ threshold: Number((e.target as HTMLInputElement).value) })}
+                    className="shrink-0 w-32 accent-[var(--color-accent)]" aria-label={t("voiceGate.sensitivity")}
+                  />
+                  <span className="w-9 text-right mono text-[11px] tabular-nums text-[var(--color-muted)]">{state.threshold.toFixed(2)}</span>
                 </div>
                 {testing && (
                   <div className="space-y-2">
@@ -319,6 +358,37 @@ export default function VoiceGateSection() {
             ) : state.wake_downloading ? (
               <p className="text-[11px] leading-snug text-[var(--color-accent-2)]">{t("voiceGate.wakeDownloading")}</p>
             ) : null}
+
+            {/* live phrase check: say the phrase and watch whether, and how strongly, it is recognised */}
+            {state.wake_word?.trim() && !wakeJob && !state.wake_downloading && (
+              <div className="pt-1 space-y-2">
+                <div className="flex items-center gap-3">
+                  <div className="min-w-0 flex-1">
+                    <span className="block text-[13px] font-medium">{t("voiceGate.testWake")}</span>
+                    <span className="block text-[11px] leading-snug text-[var(--color-muted)]">{t("voiceGate.testWakeHint")}</span>
+                  </div>
+                  <button onClick={() => void toggleWakeTest()} disabled={recording}
+                    className={`${small} inline-flex items-center gap-1.5 ${wakeTesting ? "border-[var(--color-accent)] text-[var(--color-accent)]" : ""}`}>
+                    {wakeTesting ? <X size={13} /> : <AudioLines size={13} />}{wakeTesting ? t("voiceGate.testStop") : t("voiceGate.testStart")}
+                  </button>
+                </div>
+                {wakeTesting && (
+                  <div className="space-y-2">
+                    <LevelMeter peak={() => level.current} label={t("talk.inputLevel")} />
+                    <div className="relative h-2.5 rounded-full bg-[var(--color-surface-2)] overflow-hidden">
+                      <div className="h-full transition-[width] duration-200" style={{ width: `${wakeMatch === null ? 0 : pctWake(wakeMatch)}%`, background: wakeHit ? "var(--color-good)" : "var(--color-cue-rate)" }} />
+                      <div className="absolute top-0 bottom-0 w-0.5 bg-[var(--color-text)]/70" style={{ left: `${pctWake(wakeThresh)}%` }} title={t("voiceGate.thresholdMark")} />
+                    </div>
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span style={{ color: wakeHit ? "var(--color-good)" : "var(--color-muted)" }} className="font-medium">
+                        {wakeMatch === null ? t("voiceGate.wakeSay") : wakeHit ? t("voiceGate.wakeHit") : t("voiceGate.wakeMiss")}
+                      </span>
+                      {wakeMatch !== null && <span className="mono tabular-nums text-[var(--color-muted)]">{t("voiceGate.matchPct", { pct: Math.round(wakeMatch * 100) })}</span>}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

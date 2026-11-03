@@ -442,6 +442,24 @@ pub(super) async fn voice_gate_score(State(st): State<AppState>) -> Response {
     }
 }
 
+
+/// GET /voice-gate/wake-score — the live phone overlap of the voice check (POST /voice-gate/test) with the configured
+/// wake phrase, 0..=1, and the wake threshold; `ready` is false until there is enough speech or no phrase is set. The
+/// person says the phrase and watches whether, and how strongly, it is recognised, trying different voices.
+pub(super) async fn voice_gate_wake_score(State(st): State<AppState>) -> Response {
+    let models = st.models_root.clone();
+    let done = tokio::task::spawn_blocking(move || -> Result<(Option<f32>, f32), String> {
+        let score = crate::voice_gate::wake_test_score(&models, false)?;
+        Ok((score, crate::voice_gate::wake_threshold()))
+    })
+    .await;
+    match done {
+        Ok(Ok((score, threshold))) => Json(json!({ "score": score.map(|s| (s * 100.0).round() / 100.0), "threshold": threshold, "ready": score.is_some() })).into_response(),
+        Ok(Err(e)) => internal_error(e),
+        Err(e) => join_failure(e),
+    }
+}
+
 /// DELETE /voice-gate/owner — forget the enrolled voice (the privacy delete).
 pub(super) async fn voice_gate_forget(State(st): State<AppState>) -> Response {
     match crate::voice_gate::forget_owner(&st.models_root) {

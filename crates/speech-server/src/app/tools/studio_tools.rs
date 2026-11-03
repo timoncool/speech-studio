@@ -675,6 +675,12 @@ pub(super) fn tools() -> Vec<Tool> {
             call: |_| get("/voice-gate/score".into()),
         },
         Tool {
+            name: "voice_gate_wake_score",
+            description: "The live phone overlap of the voice check (voice_gate_test) with the configured wake phrase, 0..1, with the wake threshold; ready is false until there is enough speech or no phrase is set. The owner says the phrase and sees whether, and how strongly, it is recognised.",
+            schema: nothing,
+            call: |_| get("/voice-gate/wake-score".into()),
+        },
+        Tool {
             name: "studio_batch",
             description: "Run several tools in one call, in order, through this MCP server: calls is a list of {name, arguments}. It stops at the first that fails unless keep_going is true; answers each one's result or error. One call's time limit still applies, so put long work in jobs and studio_wait for them.",
             schema: || object(json!({ "calls": { "type": "array", "items": { "type": "object", "properties": { "name": { "type": "string" }, "arguments": { "type": "object" } }, "required": ["name"] } }, "keep_going": { "type": "boolean" } }), &["calls"]),

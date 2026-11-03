@@ -223,6 +223,28 @@ pub fn test_score(models_root: &Path) -> Result<Option<f32>, String> {
     score(models_root, false, &samples)
 }
 
+
+/// The wake threshold the live phrase check is judged against — the same value `gate_line` fires on.
+pub fn wake_threshold() -> f32 {
+    WAKE_THRESHOLD
+}
+
+/// The live phone overlap of the test window with the configured wake phrase, 0..=1; None while there is under a second
+/// of audio, no phrase is set, or the recogniser is not installed. Reuses the voice check's microphone tap and window.
+pub fn wake_test_score(models_root: &Path, gpu: bool) -> Result<Option<f32>, String> {
+    let cfg = config(models_root);
+    let phrase = match cfg.wake_word {
+        Some(p) if !p.trim().is_empty() => p,
+        _ => return Ok(None),
+    };
+    let lang = cfg.wake_lang.unwrap_or_else(|| "en".into());
+    let samples = TEST_WINDOW.lock().unwrap_or_else(|p| p.into_inner()).clone();
+    if samples.len() < SR as usize {
+        return Ok(None);
+    }
+    crate::wake_word::overlap_score(models_root, gpu, &lang, &phrase, &samples)
+}
+
 /// Whether this speech is the owner, at or above the configured threshold.
 pub fn is_owner(models_root: &Path, gpu: bool, cfg: &Config, samples: &[f32]) -> Result<bool, String> {
     Ok(score(models_root, gpu, samples)?.is_some_and(|s| s >= cfg.threshold))
