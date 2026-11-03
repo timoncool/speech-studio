@@ -15,6 +15,7 @@ mod speech;
 mod text;
 mod voice_gate;
 mod voices;
+mod wake_word;
 
 pub use app::flush_hub_on_exit;
 pub use app::{
