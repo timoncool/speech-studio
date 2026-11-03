@@ -442,8 +442,10 @@ fn hushed() -> bool {
 pub async fn listen_start(State(st): State<AppState>, headers: HeaderMap, body: Option<Json<Value>>) -> Response {
     let body = body.map(|Json(v)| v).unwrap_or(Value::Null);
     let lang = body.get("lang").and_then(Value::as_str).unwrap_or("auto");
-    // the voice gate keys the conversation on the owner's voice only while it is armed (and set on in its settings)
-    let gate_on = crate::voice_gate::config(&st.models_root).enabled;
+    // the voice gate is armed while a Live conversation runs, when the person turned on the owner's-voice gate or set
+    // a wake word; the live recogniser then keys each phrase on it
+    let gate_cfg = crate::voice_gate::config(&st.models_root);
+    let gate_on = gate_cfg.enabled || gate_cfg.wake_word.as_deref().map(str::trim).is_some_and(|w| !w.is_empty());
     // the microphone is on already (the person turned it on): this conversation listens to it too, and a recogniser
     // named here hears its next phrase while the microphone goes on recording
     if let Some(pid) = crate::listening::recording().filter(|_| crate::listening::recognition::state()["running"] == true) {

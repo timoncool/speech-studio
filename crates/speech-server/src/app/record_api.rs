@@ -309,6 +309,7 @@ pub(super) async fn voice_gate_get(State(st): State<AppState>) -> Response {
         "enabled": cfg.enabled,
         "threshold": cfg.threshold,
         "wake_word": cfg.wake_word,
+        "wake_lang": cfg.wake_lang,
         "autostart": cfg.autostart,
         "enrolled": crate::voice_gate::enrolled(&st.models_root),
         "wake_words": crate::voice_gate::wake_words(),
@@ -316,7 +317,7 @@ pub(super) async fn voice_gate_get(State(st): State<AppState>) -> Response {
     .into_response()
 }
 
-/// POST /voice-gate {enabled?, threshold?, wake_word?, autostart?} — save the gate's settings.
+/// POST /voice-gate {enabled?, threshold?, wake_word?, wake_lang?, autostart?} — save the gate's settings.
 pub(super) async fn voice_gate_set(State(st): State<AppState>, Json(body): Json<Value>) -> Response {
     let mut cfg = crate::voice_gate::config(&st.models_root);
     if let Some(v) = body.get("enabled").and_then(Value::as_bool) {
@@ -326,7 +327,10 @@ pub(super) async fn voice_gate_set(State(st): State<AppState>, Json(body): Json<
         cfg.threshold = (v as f32).clamp(0.0, 1.0);
     }
     if body.get("wake_word").is_some() {
-        cfg.wake_word = body.get("wake_word").and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_string);
+        cfg.wake_word = body.get("wake_word").and_then(Value::as_str).filter(|s| !s.trim().is_empty()).map(|s| s.trim().to_string());
+    }
+    if body.get("wake_lang").is_some() {
+        cfg.wake_lang = body.get("wake_lang").and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_string);
     }
     if let Some(v) = body.get("autostart").and_then(Value::as_bool) {
         cfg.autostart = v;
@@ -334,7 +338,13 @@ pub(super) async fn voice_gate_set(State(st): State<AppState>, Json(body): Json<
     if let Err(e) = crate::voice_gate::save_config(&st.models_root, &cfg) {
         return internal_error(e);
     }
-    Json(json!({ "enabled": cfg.enabled, "threshold": cfg.threshold, "wake_word": cfg.wake_word, "autostart": cfg.autostart })).into_response()
+    // a wake word needs its recogniser; if it is not on disk yet, pull it in the background (progress in /setup/status)
+    // so it is ready by the time Live runs — never let the gate fail silently for a missing model
+    let wake_downloading = cfg.wake_word.is_some() && !crate::wake_word::model_path(&st.models_root).is_file();
+    if wake_downloading {
+        let _ = st.downloads.start(vec!["wake-word".into()]); // "busy" just means a download is already under way
+    }
+    Json(json!({ "enabled": cfg.enabled, "threshold": cfg.threshold, "wake_word": cfg.wake_word, "wake_lang": cfg.wake_lang, "autostart": cfg.autostart, "wake_downloading": wake_downloading })).into_response()
 }
 
 /// POST /voice-gate/enroll — learn the owner's voice from the last microphone recording (`.mic-test.wav`). The model is

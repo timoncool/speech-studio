@@ -309,8 +309,9 @@ fn listen(choice: crate::engines::models::AsrChoice, models_root: &Path, lang: &
         }));
         if !text.is_empty() {
             let line = (((offset + a) * 100.0).round() / 100.0, ((offset + z) * 100.0).round() / 100.0, text);
-            // under an armed voice gate, judge whether this phrase is the owner from the phrase's own 16 kHz audio
-            let owner = crate::voice_gate::owner_check(models_root, &audio[from_a.min(to_z)..to_z]);
+            // under an armed voice gate, judge whether this phrase reaches the agent (owner's voice and, if a wake
+            // word is set, that it has woken the conversation), from the phrase's own 16 kHz audio
+            let owner = crate::voice_gate::gate_line(models_root, &audio[from_a.min(to_z)..to_z]);
             with(|l| {
                 let n = l.lines.len();
                 l.lines.push(line);

@@ -10,7 +10,7 @@ import { errorText } from "../../lib/voices";
 /// The voice gate: Live starts a conversation only on the owner's voice (and, when set, a wake word). Everything is
 /// off by default; the owner enrols their voice once, and the audio never leaves the device.
 export default function VoiceGateSection() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [state, setState] = useState<VoiceGate | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
@@ -27,7 +27,7 @@ export default function VoiceGateSection() {
     return () => window.clearInterval(id);
   }, [recording]);
 
-  const patch = (p: Partial<Pick<VoiceGate, "enabled" | "threshold" | "wake_word" | "autostart">>) => {
+  const patch = (p: Partial<Pick<VoiceGate, "enabled" | "threshold" | "wake_word" | "wake_lang" | "autostart">>) => {
     setProblem(null);
     voiceGateApi.set(p).then(setState, (e: unknown) => setProblem(errorText(e)));
   };
@@ -62,6 +62,17 @@ export default function VoiceGateSection() {
   };
 
   if (!state) return <p className="text-[11px] text-[var(--color-muted)]">…</p>;
+
+  // the phrase's language for grapheme-to-phoneme: [eSpeak-ng voice code, BCP-47 code for the display name]; the name
+  // itself comes localized from the browser, so nothing is hardcoded. Default to the interface language.
+  const uiLang = i18n.language.slice(0, 2);
+  const wakeLangOf = (ui: string) => (ui === "zh" ? "cmn" : ui);
+  const wakeLang = state.wake_lang ?? wakeLangOf(uiLang);
+  const langNames = new Intl.DisplayNames([i18n.language], { type: "language" });
+  const WAKE_LANGS: [string, string][] = [
+    ["en", "en"], ["ru", "ru"], ["cmn", "zh"], ["es", "es"], ["pt", "pt"], ["fr", "fr"], ["de", "de"], ["it", "it"],
+    ["ja", "ja"], ["ko", "ko"], ["ar", "ar"], ["hi", "hi"], ["tr", "tr"], ["pl", "pl"], ["uk", "uk"],
+  ];
 
   const field = "shrink-0 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md px-2 py-1 text-[12px]";
   const small = "shrink-0 rounded-md border border-[var(--color-border)] px-2.5 py-1 text-[11px] text-[var(--color-text)] hover:border-[var(--color-accent)] disabled:opacity-40";
@@ -123,20 +134,37 @@ export default function VoiceGateSection() {
           <span className="w-9 text-right mono text-[11px] tabular-nums text-[var(--color-muted)]">{state.threshold.toFixed(2)}</span>
         </div>
 
-        <div className="flex items-center gap-3 px-3 py-2.5">
-          <div className="min-w-0 flex-1">
-            <span className="block text-[13px] font-medium">{t("voiceGate.wakeWord")}</span>
-            <span className="block text-[11px] leading-snug text-[var(--color-muted)]">
-              {state.wake_words.length ? t("voiceGate.wakeWordHint") : t("voiceGate.wakeWordSoon")}
-            </span>
+        <div className="flex flex-col gap-2 px-3 py-2.5">
+          <div className="flex items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <span className="block text-[13px] font-medium">{t("voiceGate.wakeWord")}</span>
+              <span className="block text-[11px] leading-snug text-[var(--color-muted)]">{t("voiceGate.wakeWordHint")}</span>
+            </div>
+            <input
+              type="text" list="voice-gate-wake-words" placeholder={t("voiceGate.anySpeech")}
+              defaultValue={state.wake_word ?? ""}
+              onBlur={(e) => { const v = e.target.value.trim(); if (v !== (state.wake_word ?? "")) patch({ wake_word: v || null }); }}
+              onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+              className={`${field} w-44`} aria-label={t("voiceGate.wakeWord")}
+            />
+            <datalist id="voice-gate-wake-words">
+              {state.wake_words.map((w) => <option key={w} value={w} />)}
+            </datalist>
           </div>
-          <select
-            value={state.wake_word ?? ""} disabled={!state.wake_words.length}
-            onChange={(e) => patch({ wake_word: e.target.value || null })} className={field} aria-label={t("voiceGate.wakeWord")}
-          >
-            <option value="">{t("voiceGate.anySpeech")}</option>
-            {state.wake_words.map((w) => <option key={w} value={w}>{w}</option>)}
-          </select>
+          {state.wake_word && (
+            <div className="flex items-center gap-2 pl-0.5">
+              <span className="text-[11px] text-[var(--color-muted)]">{t("voiceGate.wakeLang")}</span>
+              <select
+                value={wakeLang} onChange={(e) => patch({ wake_lang: e.target.value })}
+                className={field} aria-label={t("voiceGate.wakeLang")}
+              >
+                {WAKE_LANGS.map(([code, bcp]) => <option key={code} value={code}>{langNames.of(bcp)}</option>)}
+              </select>
+            </div>
+          )}
+          {state.wake_downloading && (
+            <p className="pl-0.5 text-[11px] leading-snug text-[var(--color-accent-2)]">{t("voiceGate.wakeDownloading")}</p>
+          )}
         </div>
 
         <SettingSwitch

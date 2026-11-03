@@ -1400,6 +1400,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d817e038c30374a4bcb22f94d0a8a0e216958d4c3dcde369b1439fec4bdda6e6"
 
 [[package]]
+name = "espeak-ng"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "213ed87669515192b61f34dc6d6c36adeb75ae424b63e32612a65a1e21e9bee3"
+dependencies = [
+ "bitflags 2.13.2",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "euclid"
 version = "0.20.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4672,6 +4682,7 @@ dependencies = [
  "dub-translate",
  "ego-tree",
  "encoding_rs",
+ "espeak-ng",
  "fancy-regex",
  "flate2",
  "fluent-templates",

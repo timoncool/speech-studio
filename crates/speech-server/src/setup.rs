@@ -1381,6 +1381,23 @@ pub fn manifest() -> Vec<Component> {
             markers: &[Marker { rel: "models/voice-gate/redimnet2_b3_lm.onnx", expect: 19_369_751 }],
             external_url: None,
         },
+        // Wake word for Live: PhoneticXeus universal phone recogniser ("An Empirical Recipe for Universal Phone
+        // Recognition", int8 ONNX, raw 16 kHz waveform -> IPA CTC) so a phrase the owner sets, in any language, wakes
+        // the gate; the phrase is turned to IPA by the bundled eSpeak-ng G2P. Pulled only when a wake word is set.
+        Component {
+            id: "wake-word",
+            name: t!("setup-comp-wake-word-name"),
+            purpose: t!("setup-comp-wake-word-purpose"),
+            requirement: Requirement::Optional,
+            delivery: Delivery::Download,
+            size: 581_978_869,
+            files: &[
+                FileSpec { url: "https://huggingface.co/allan-valin/phoneticxeus-onnx/resolve/acdf27a7043d48ea1f73151324939591d8ee53d0/model.int8.onnx", dest_rel: "models/wake-word/model.int8.onnx", size: 581_972_892, sha256: "395b6ce944e77999bcc92c1a8d322b65697fbf4b734246cd75a914cf48080adc", extract: Extract::None },
+                FileSpec { url: "https://huggingface.co/allan-valin/phoneticxeus-onnx/resolve/acdf27a7043d48ea1f73151324939591d8ee53d0/ipa_vocab.json", dest_rel: "models/wake-word/ipa_vocab.json", size: 5_977, sha256: "96c70e0f72c02aa882a6cf9083b2e1a007c37ff5890a94afc3bf0039748654c3", extract: Extract::None },
+            ],
+            markers: &[Marker { rel: "models/wake-word/model.int8.onnx", expect: 581_972_892 }],
+            external_url: None,
+        },
         // Ударения, «ё» и омографы русского текста: RUAccent (MIT) — словарь, символьная сеть и сеть омографов
         // tiny2, обе int8; ревизия закреплена.
         Component {

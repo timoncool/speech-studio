@@ -3,6 +3,7 @@
 //! speaker verification, 192-d, run on ONNX Runtime) is kept, and later speech is let through only when its embedding
 //! matches the enrolled one by cosine similarity. Off by default.
 
+use crate::wake_word::says_wake;
 use ort::session::Session;
 use ort::value::TensorRef;
 use std::path::{Path, PathBuf};
@@ -86,6 +87,10 @@ pub fn cosine(a: &[f32], b: &[f32]) -> f32 {
     }
 }
 
+/// Phone-overlap at or above which the set wake phrase counts as heard. The recogniser is imperfect, so an exact
+/// match is not required; tuned at the end-to-end test on real speech.
+pub const WAKE_THRESHOLD: f32 = 0.6;
+
 /// How the owner set the gate up. Off by default: the feature is opt-in.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Config {
@@ -93,21 +98,25 @@ pub struct Config {
     pub enabled: bool,
     /// Cosine at or above which the speech is the owner (conservative by default — fewer false activations).
     pub threshold: f32,
-    /// A wake word that must also be heard, or None for any speech from the owner.
+    /// A wake word that, when set, must be heard before the conversation starts; None for any speech (gated by voice).
     pub wake_word: Option<String>,
+    /// The language of the wake phrase for grapheme-to-phoneme (an eSpeak-ng voice code such as "ru", "en", "cmn");
+    /// None defaults to English. The settings pre-fill it with the interface language.
+    #[serde(default)]
+    pub wake_lang: Option<String>,
     /// Start Speech Studio on login (per-OS). Off by default.
     pub autostart: bool,
 }
 
 impl Default for Config {
     fn default() -> Self {
-        Self { enabled: false, threshold: DEFAULT_THRESHOLD, wake_word: None, autostart: false }
+        Self { enabled: false, threshold: DEFAULT_THRESHOLD, wake_word: None, wake_lang: None, autostart: false }
     }
 }
 
-/// The wake words on offer (filled when the wake-word model lands); empty for now, so the gate keys on the voice alone.
+/// Example wake phrases for the settings field (hints only — any phrase in any language works).
 pub fn wake_words() -> &'static [&'static str] {
-    &[]
+    &["Привет Анифса", "Эй Клод", "Hey Claude", "Okey Studio"]
 }
 
 /// The gate's own folder next to the model, where its settings and the owner's voice print live.
@@ -190,10 +199,14 @@ pub fn is_owner(models_root: &Path, gpu: bool, cfg: &Config, samples: &[f32]) ->
 /// The gate is armed only for a Live conversation (set when one starts), so the live recogniser checks the owner's
 /// voice there and not when a recording is simply being transcribed.
 static ARMED: AtomicBool = AtomicBool::new(false);
+/// With a wake word set, the conversation stays dormant until the phrase is heard; this turns true once it is, for
+/// the rest of the Live session. Reset whenever the gate is (dis)armed, so every new conversation starts dormant.
+static AWAKE: AtomicBool = AtomicBool::new(false);
 
-/// Arm or disarm the gate for the Live conversation.
+/// Arm or disarm the gate for the Live conversation; either way the wake-word activation resets to dormant.
 pub fn arm(on: bool) {
     ARMED.store(on, Ordering::Relaxed);
+    AWAKE.store(false, Ordering::Relaxed);
 }
 
 /// Whether a gated Live conversation is under way.
@@ -201,24 +214,52 @@ pub fn is_armed() -> bool {
     ARMED.load(Ordering::Relaxed)
 }
 
-/// For the live recogniser: whether a phrase is the owner. None means the gate does not apply here — it is not armed,
-/// is off, no one has enrolled, or the embedding failed — and the phrase is then let through (fail-open, so a gate
-/// slip never silences a real conversation). CPU, so a short phrase stays off the agent's GPU.
-pub fn owner_check(models_root: &Path, samples: &[f32]) -> Option<bool> {
+/// Whether the wake word has already woken this conversation (or none is set).
+pub fn is_awake() -> bool {
+    AWAKE.load(Ordering::Relaxed)
+}
+
+/// For the live recogniser: whether a phrase reaches the agent. `None` means the gate does not apply here (not armed,
+/// or nothing is configured) so the phrase is let through. `Some(false)` suppresses the phrase — it is not the owner,
+/// or a wake word is set and has not been heard yet. `Some(true)` lets it through. The checks run on CPU: they fire
+/// only on short spoken phrases, and the 582 MB wake recogniser runs only while dormant, so keeping both off VRAM
+/// leaves the GPU free for the voicing and recognition that must be fast once the conversation is under way. On any
+/// error the gate fails open (a slip never silences a real conversation).
+pub fn gate_line(models_root: &Path, samples: &[f32]) -> Option<bool> {
     if !is_armed() {
         return None;
     }
     let cfg = config(models_root);
-    if !cfg.enabled || !enrolled(models_root) {
+    let owner_gate = cfg.enabled && enrolled(models_root);
+    let wake = cfg.wake_word.as_deref().map(str::trim).filter(|w| !w.is_empty());
+    if !owner_gate && wake.is_none() {
         return None;
     }
-    match is_owner(models_root, false, &cfg, samples) {
-        Ok(owner) => Some(owner),
-        Err(e) => {
-            tracing::warn!("voice gate check: {e}");
-            None
+    // speaker identity, when the owner gate is on; otherwise any voice counts as the owner for the wake step
+    let is_owner_voice = if owner_gate {
+        match is_owner(models_root, false, &cfg, samples) {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::warn!("voice gate check: {e}");
+                return None; // fail open
+            }
+        }
+    } else {
+        true
+    };
+    // with a wake word set, stay dormant until the phrase is heard (from the owner's voice, when the gate is on)
+    if let Some(phrase) = wake {
+        if !is_awake() {
+            let lang = cfg.wake_lang.as_deref().unwrap_or("");
+            let woke = is_owner_voice && says_wake(models_root, false, lang, phrase, WAKE_THRESHOLD, samples).unwrap_or(false);
+            if woke {
+                AWAKE.store(true, Ordering::Relaxed);
+                return Some(true);
+            }
+            return Some(false);
         }
     }
+    Some(is_owner_voice)
 }
 
 #[cfg(test)]
