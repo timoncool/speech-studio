@@ -10,6 +10,9 @@ import { errorText } from "../../lib/voices";
 // Enough clean speech (seconds) for a solid speaker print: a text-dependent passphrase wants a couple of seconds at
 // least (Azure Speaker Recognition, Nuance VocalPassword, Neurotechnology); we take a little more, then auto-finish.
 const ENROLL_SPEECH_SECONDS = 3.5;
+// A hard cap on the recording so enrolment always finishes on its own, even on a quiet microphone whose speech never
+// clears the floor — the enrol call then uses whatever was captured (and says so if it is too short).
+const ENROLL_MAX_SECONDS = 12;
 // RMS level above which the microphone is hearing speech rather than room noise.
 const SPEECH_FLOOR = 0.06;
 const POLL_MS = 120;
@@ -25,6 +28,7 @@ export default function VoiceGateSection() {
   const [busy, setBusy] = useState(false);
   const level = useRef(0);
   const speechSecs = useRef(0);
+  const elapsedSecs = useRef(0);
   const finishing = useRef(false);
 
   useEffect(() => {
@@ -36,17 +40,18 @@ export default function VoiceGateSection() {
     if (!recording) {
       level.current = 0;
       speechSecs.current = 0;
+      elapsedSecs.current = 0;
       return;
     }
     const id = window.setInterval(() => {
+      elapsedSecs.current += POLL_MS / 1000;
       talkApi.level().then((l) => {
         level.current = l.level;
-        if (l.level > SPEECH_FLOOR) {
-          speechSecs.current += POLL_MS / 1000;
-          if (speechSecs.current >= ENROLL_SPEECH_SECONDS && !finishing.current) {
-            finishing.current = true;
-            void finishEnroll();
-          }
+        if (l.level > SPEECH_FLOOR) speechSecs.current += POLL_MS / 1000;
+        const enough = speechSecs.current >= ENROLL_SPEECH_SECONDS || elapsedSecs.current >= ENROLL_MAX_SECONDS;
+        if (enough && !finishing.current) {
+          finishing.current = true;
+          void finishEnroll();
         }
       }, () => { level.current = 0; });
     }, POLL_MS);
