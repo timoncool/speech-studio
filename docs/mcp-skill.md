@@ -127,7 +127,10 @@ connected and the address to paste.
   numbers of `voice_listen`) gives words a minute, the pauses of 500 ms and 1000 ms, filler words with where they
   were (a lower bound: recognition drops 'эээ' and 'um'), how soon they answered the studio and their speech and
   silence; `voice_lines` gives their lines with each word's time, to quote them. Quote these numbers, never count
-  yourself. You may turn the microphone down, never up: `voice_listen_mute` mutes it,
+  yourself. To compare two attempts or two engines, `live_bench` measures and keeps each run as a JSON file in the
+  studio's `bench` folder (the answer has its path): `latency` — the median and 95th percentile of the waits of the
+  last conversation steps; `floor` — phrases marked as an interruption or not against the rule that raises one;
+  `asr` — the word error rate on `bench/asr.json` (recordings with their texts). You may turn the microphone down, never up: `voice_listen_mute` mutes it,
   `voice_listen_stop` ends the conversation. A phrase the person types in Live (`voice_listen_type` puts one in) comes
   from `voice_listen` like a spoken one. `say_silence` stops everything said aloud, in every session. The person's
   microphone test in Live: `voice_record_level` while it runs, `mic_test_stop`, `mic_test_audio` for what it heard.

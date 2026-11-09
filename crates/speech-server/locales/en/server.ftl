@@ -1223,3 +1223,7 @@ acpp-out-of-memory = The audio.cpp engine ran out of video memory: choose a ligh
 acpp-no-device = This computer has no device the audio.cpp engine was set to: choose another device for voicing or recognition in Settings → Models ({ $error })
 update-reason-transcribe-own-ggml = Recognition no longer fails after voicing with Qwen3-TTS: the engine's libraries got names of their own
 update-reason-newer = A newer version
+bench-no-timings = No timings yet: hold a Live conversation first, then measure.
+bench-set-empty = { $path } has no phrases.
+bench-no-asr-set = The recognition benchmark needs its set: { $path } — a list of {"{"}"audio": file, "text": what it says, "lang": its language{"}"}.
+bench-kind = The benchmark has no kind «{ $kind }»: latency, floor or asr.

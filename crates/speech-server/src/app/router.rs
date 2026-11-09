@@ -189,6 +189,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/speech/listen/metrics", get(say_api::listen_metrics))
         .route("/speech/listen/lines", get(say_api::listen_lines))
         .route("/speech/listen/floor", get(say_api::voice_floor))
+        .route("/speech/bench", post(say_api::bench))
         .route("/speech/listen/mute", post(say_api::listen_mute))
         .route("/mic/state", get(say_api::mic_state_route))
         .route("/timings", get(timings::route))

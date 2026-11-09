@@ -78,7 +78,7 @@ pub(crate) use revisions::{save_with_revision, PROJECT_CHANGED};
 
 pub(crate) use localize::Localize;
 
-pub(crate) use timings::{arrived, note, since_arrival};
+pub(crate) use timings::{arrived, note, recent_timings, since_arrival};
 
 #[cfg(test)]
 pub(crate) use engine_setup::{download_components, remove_components, setup_status};

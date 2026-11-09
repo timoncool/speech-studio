@@ -612,6 +612,23 @@ fn floor_grew(base: Option<usize>, words: usize) -> bool {
     words >= FLOOR_WORDS_STRONG || matches!(base, Some(b) if words > b)
 }
 
+/// Whether `heard`, said over the studio word by word, raises an interruption: the rule the conversation's watch
+/// applies to the growing partial (`takes_the_floor`, then `floor_grew` from the word count it was first seen at).
+pub(super) fn would_take_floor(heard: &str) -> bool {
+    let words = crate::audio::qc::normalize(heard);
+    let mut base = None;
+    for n in 1..=words.len() {
+        if !takes_the_floor(&words[..n].join(" ")) {
+            continue;
+        }
+        if floor_grew(base, n) {
+            return true;
+        }
+        base.get_or_insert(n);
+    }
+    false
+}
+
 /// While a Live conversation runs, tells each time the person takes the floor over the studio's speech (`floor`): the
 /// setting says whether the studio stops at once, the agent decides with the studio quieter meanwhile, or nobody stops it.
 fn watch_interruptions(workspace: std::path::PathBuf, models_root: std::path::PathBuf, queue: jobs::JobQueue) {

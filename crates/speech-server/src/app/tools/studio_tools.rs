@@ -432,6 +432,12 @@ pub(super) fn tools() -> Vec<Tool> {
             call: |args| get(format!("/timings{}", query(&[("kind", given(args, "kind")), ("last", args.get("last").and_then(Value::as_u64).map(|v| v.to_string()))]))),
         },
         Tool {
+            name: "live_bench",
+            description: "Measure Live and keep the run as a JSON file in the studio's bench folder (the answer has its path; every run is a file of its own, to compare two): latency - median and 95th percentile of the waits of the last conversation steps (after_speech_ms from the end of the person's speech to its text, first_ms and heard_ms from a phrase's text to its first sound, queue_wait_ms and how many gaps were over 300 ms; rounds: how many last steps, 200 when not given) - hold a conversation first; floor - phrases marked as an interruption or not against the rule that raises one: the share of false cuts and of missed turns (the studio's own set, or bench/floor.json in the studio's folder: [{text or audio, lang, interrupt}]); asr - the word error rate of the chosen recogniser on bench/asr.json: [{audio, text, lang}], each recording heard rounds times for the time.",
+            schema: || object(json!({ "kind": { "type": "string", "enum": ["latency", "floor", "asr"] }, "rounds": { "type": "integer", "minimum": 1 } }), &["kind"]),
+            call: |args| post("/speech/bench".into(), json!({ "kind": text(args, "kind")?, "rounds": args.get("rounds").and_then(Value::as_u64).unwrap_or(0) })),
+        },
+        Tool {
             name: "voice_listen_type",
             description: "Put a phrase into the conversation as if the person said it, as typing in Live's text field does: voice_listen gives it next.",
             schema: || object(json!({ "text": { "type": "string" } }), &["text"]),

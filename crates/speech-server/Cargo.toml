@@ -127,3 +127,8 @@ dub-llm = { git = "https://github.com/timoncool/dub-studio", rev = "a1275a83c500
 [[example]]
 name = "readme-downloads"
 path = "../../scripts/readme-downloads.rs"
+
+# Live's benchmark from the command line (scripts/live-bench.rs), the code of the live_bench tool.
+[[example]]
+name = "live-bench"
+path = "../../scripts/live-bench.rs"

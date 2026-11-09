@@ -1217,3 +1217,7 @@ acpp-out-of-memory = Le moteur audio.cpp manque de mémoire vidéo : choisissez 
 acpp-no-device = Cet ordinateur n’a pas l’appareil choisi pour le moteur audio.cpp : choisissez un autre appareil pour la voix ou la reconnaissance dans Réglages → Modèles ({ $error })
 update-reason-transcribe-own-ggml = La reconnaissance n'échoue plus après une synthèse avec Qwen3-TTS : les bibliothèques du moteur ont leurs propres noms
 update-reason-newer = Une version plus récente
+bench-no-timings = Pas encore de mesures : tenez d'abord une conversation dans Live, puis mesurez.
+bench-set-empty = { $path } ne contient aucune phrase.
+bench-no-asr-set = La mesure de la reconnaissance a besoin de son jeu : { $path } — une liste de {"{"}"audio": fichier, "text": ce qu'il dit, "lang": sa langue{"}"}.
+bench-kind = La mesure n'a pas de type « { $kind } » : latency, floor ou asr.

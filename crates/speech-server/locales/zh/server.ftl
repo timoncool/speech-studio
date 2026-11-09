@@ -1016,3 +1016,7 @@ acpp-out-of-memory = audio.cpp 引擎显存不足：请在 设置 → 模型 中
 acpp-no-device = 这台电脑没有为 audio.cpp 引擎选择的设备：请在 设置 → 模型 中为配音或识别选择其他设备（{ $error }）
 update-reason-transcribe-own-ggml = 用 Qwen3-TTS 配音后识别不再失败：引擎的库有了自己的名称
 update-reason-newer = 新版本
+bench-no-timings = 还没有测量数据：请先在 Live 中进行一次对话，然后再测量。
+bench-set-empty = { $path } 中没有短语。
+bench-no-asr-set = 识别测量需要数据集：{ $path } — 由 {"{"}"audio": 文件, "text": 其内容, "lang": 语言{"}"} 组成的列表。
+bench-kind = 测量没有“{ $kind }”这种类型：latency、floor 或 asr。

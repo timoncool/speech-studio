@@ -1,6 +1,7 @@
 mod acx;
 mod api;
 mod auto_cast;
+mod bench;
 mod book_import;
 mod book_rebuild;
 mod corpus;
@@ -63,7 +64,10 @@ pub(crate) mod talk {
     };
     pub(crate) use super::floor::{say_continue, voice_floor};
     pub(crate) use super::metrics::{lines as listen_lines, metrics as listen_metrics};
+    pub(crate) use super::bench::route as bench;
 }
+
+pub use bench::live_bench;
 
 pub(crate) mod floor_settings {
     pub(crate) use super::floor::{guard, is_value, with_defaults, Guard};

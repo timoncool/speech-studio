@@ -27,6 +27,7 @@ pub use app::{
 pub use dub_llm::net;
 pub use engines::models::apply_faces_backend;
 pub use jobs::JobQueue;
+pub use speech::live_bench;
 pub use platform::process_group;
 #[cfg(windows)]
 pub use setup::windows_downloads;

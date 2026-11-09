@@ -43,6 +43,13 @@ pub fn since_arrival(block: &str) -> Option<u64> {
     ARRIVED.lock().unwrap_or_else(|p| p.into_inner()).as_ref()?.get(block).map(|t| t.elapsed().as_millis() as u64)
 }
 
+/// The last `last` steps noted, oldest first: of `kind`, or of every kind.
+pub fn recent_timings(kind: Option<&str>, last: usize) -> Vec<Value> {
+    let log = LOG.lock().unwrap_or_else(|p| p.into_inner());
+    let picked: Vec<&Value> = log.iter().filter(|s| kind.is_none_or(|k| s["kind"] == k)).collect();
+    picked[picked.len().saturating_sub(last)..].iter().map(|s| (*s).clone()).collect()
+}
+
 /// GET /timings?kind=&last= — the latest steps, oldest first: every kind, or asr, tts or load; the last `last` (100).
 pub async fn route(Query(q): Query<HashMap<String, String>>) -> Json<Value> {
     let kind = q.get("kind").map(String::as_str).filter(|k| !k.is_empty());
