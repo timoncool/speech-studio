@@ -22,8 +22,7 @@ static MODEL: LazyLock<Mutex<Option<(PathBuf, Model)>>> = LazyLock::new(|| Mutex
 
 fn load(path: &Path) -> Result<Model, String> {
     let err = |e: &dyn std::fmt::Display| format!("{}: {e}", path.display());
-    let session = Session::builder()
-        .map_err(|e| err(&e))?
+    let session = crate::app::ort_session()?
         .with_intra_threads(1)
         .map_err(|e| err(&e))?
         .commit_from_file(path)

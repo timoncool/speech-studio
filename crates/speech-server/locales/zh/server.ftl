@@ -710,6 +710,7 @@ faces-model-missing = 未找到模型（{ $path }）
 ffmpeg-exit = ffmpeg 退出码 { $code }：{ $tail }
 ffmpeg-killed = ffmpeg 在没有退出码的情况下停止：{ $tail }
 onnx-runtime = ONNX 运行时：{ $error }
+onnx-runtime-load = ONNX 运行时 { $file } 未能加载（{ $error }）。多数情况是旧版 Microsoft Visual C++ 运行库所致：请从微软官网安装最新的 Visual C++ 2015–2022 Redistributable (x64)，然后重启工作室
 files-error = 文件：{ $error }
 model-no-outputs = 模型没有返回任何输出
 faces-output-shape = { $model }：模型输出的形状不符合预期 { $shape }

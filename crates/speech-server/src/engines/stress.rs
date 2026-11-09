@@ -98,8 +98,7 @@ impl Stresser {
 
 fn session(path: &Path, threads: usize) -> Result<Session, String> {
     let err = |e: &dyn std::fmt::Display| format!("{}: {e}", path.display());
-    Session::builder()
-        .map_err(|e| err(&e))?
+    crate::app::ort_session()?
         .with_intra_threads(threads)
         .map_err(|e| err(&e))?
         .commit_from_file(path)

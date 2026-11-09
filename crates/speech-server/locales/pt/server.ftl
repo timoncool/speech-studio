@@ -911,6 +911,7 @@ faces-model-missing = o modelo não foi encontrado ({ $path })
 ffmpeg-exit = o ffmpeg terminou com o código { $code }: { $tail }
 ffmpeg-killed = o ffmpeg parou sem código de saída: { $tail }
 onnx-runtime = o ambiente ONNX: { $error }
+onnx-runtime-load = o ambiente ONNX { $file } não carregou ({ $error }). Quase sempre um Microsoft Visual C++ antigo o impede: instale o Visual C++ 2015–2022 Redistributable (x64) atual da Microsoft e reinicie o estúdio
 files-error = arquivos: { $error }
 model-no-outputs = o modelo não devolveu saídas
 faces-output-shape = { $model }: a saída do modelo tem uma forma inesperada { $shape }

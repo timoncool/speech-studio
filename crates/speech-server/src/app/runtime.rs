@@ -74,7 +74,7 @@ pub fn augment_path_for_tools(repo_root: &Path) {
 
 /// Прописать ORT_DYLIB_PATH (onnxruntime 1.28) в окружение процесса до старта сервера: ort грузит dylib лениво,
 /// а по голому имени Windows нашла бы раньше PATH onnxruntime.dll другой версии из System32 (Windows AI).
-/// GPU-сборка (cuda13) приоритетнее — суперсет CPU+CUDA; `beside_exe` — копия рядом с exe (портатив).
+/// GPU-сборка (cuda13) — где CUDA работает, иначе процессорная (`pick_ort`); `beside_exe` — копия рядом с exe (портатив).
 /// The graphics card chosen in the settings goes into the process environment before anything starts CUDA: the studio's
 /// engines and every engine process it starts see that card alone, counted in PCI bus order as NVML and nvidia-smi
 /// count. Applies from the next start.
@@ -95,22 +95,17 @@ pub fn set_ort_dylib_env(repo_root: &Path, beside_exe: &Path) -> Result<(), Stri
     ORT_PATH_OURS.store(true, std::sync::atomic::Ordering::Relaxed);
     let rt = repo_root.join("models").join("runtime");
     let candidates = dub_core::runtime::ort_candidates(&repo_root.join("models"));
-    let found = candidates
-        .iter()
-        .cloned()
-        .chain([
-            beside_exe.join(dub_core::runtime::ORT_LIBRARY),
-            rt.join("onnxruntime-1.28.dll"),
-            rt.join("onnxruntime.dll"),
-        ])
-        .find(|cand| cand.is_file());
+    let cuda = hw::gpu_report().cuda13_ok;
+    let found = pick_ort(&candidates, cuda).or_else(|| {
+        [beside_exe.join(dub_core::runtime::ORT_LIBRARY), rt.join("onnxruntime-1.28.dll"), rt.join("onnxruntime.dll")].into_iter().find(|cand| cand.is_file())
+    });
     match found {
         Some(cand) => std::env::set_var("ORT_DYLIB_PATH", cand),
         None => {
             // Nothing downloaded yet: point at the build we will fetch (GPU first on CUDA) so ort
             // finds it once the ONNX Runtime component lands. macOS ships a single Apple-silicon
             // build, so there can be only one candidate -- never assume a GPU+CPU pair here.
-            let pick = if hw::gpu_report().cuda13_ok { candidates.first() } else { candidates.last() };
+            let pick = if cuda { candidates.first() } else { candidates.last() };
             if let Some(pick) = pick {
                 std::env::set_var("ORT_DYLIB_PATH", pick);
             }
@@ -118,6 +113,29 @@ pub fn set_ort_dylib_env(repo_root: &Path, beside_exe: &Path) -> Result<(), Stri
         }
     }
     Ok(())
+}
+
+/// The ONNX Runtime build the process loads from `candidates` (the GPU build first, as `ort_candidates` gives them)
+/// that are on disk: the GPU build only where CUDA works (`cuda`), the processor build otherwise — the small models
+/// (stresses, the voice gate, denoising) need no card, and a GPU build on a machine without working CUDA is where it
+/// fails to load; the GPU build when it is the only one there.
+fn pick_ort(candidates: &[std::path::PathBuf], cuda: bool) -> Option<std::path::PathBuf> {
+    let present: Vec<&std::path::PathBuf> = candidates.iter().filter(|c| c.is_file()).collect();
+    let preferred = if cuda { present.first() } else { present.last() };
+    preferred.map(|c| (*c).clone())
+}
+
+/// A session builder on the process's ONNX Runtime; a runtime that cannot be loaded is told with its file and what to do.
+pub(crate) fn ort_session() -> Result<ort::session::builder::SessionBuilder, String> {
+    ort::session::Session::builder().map_err(|e| ort_failure(&e.to_string()))
+}
+
+fn ort_failure(error: &str) -> String {
+    if !error.contains("Failed to load ONNX Runtime") {
+        return t!("onnx-runtime", error = error.to_string());
+    }
+    let file = std::env::var("ORT_DYLIB_PATH").unwrap_or_default();
+    t!("onnx-runtime-load", file = file, error = error.to_string())
 }
 
 /// Microsoft's ONNX Runtime builds send usage telemetry unless the environment turns it off. The options of the one
@@ -139,19 +157,41 @@ mod tests {
         assert_eq!(super::ort_telemetry_off(), Ok(()), "a second start of the setup keeps the options it set");
         assert!(!ort::init().with_telemetry(true).commit(), "options set later do not replace telemetry off");
     }
+
+    /// Without working CUDA the processor build of ONNX Runtime is loaded, with it the GPU build as before; one build
+    /// on disk is loaded whatever it is, none is none.
+    #[test]
+    fn the_processor_build_is_loaded_where_cuda_does_not_work() {
+        let dir = tempfile::tempdir().unwrap();
+        let candidates = dub_core::runtime::ort_candidates(dir.path());
+        assert_eq!(super::pick_ort(&candidates, false), None);
+        for c in &candidates {
+            std::fs::create_dir_all(c.parent().unwrap()).unwrap();
+            std::fs::write(c, b"MZ").unwrap();
+        }
+        assert_eq!(super::pick_ort(&candidates, true).as_ref(), candidates.first(), "CUDA works: the GPU build");
+        assert_eq!(super::pick_ort(&candidates, false).as_ref(), candidates.last(), "no CUDA: the processor build");
+        std::fs::remove_file(candidates.last().unwrap()).unwrap();
+        assert_eq!(super::pick_ort(&candidates, false).as_ref(), candidates.first(), "the only build there");
+    }
+
+    /// A runtime that does not load is named by its file with what to do; another error of it is told as it is.
+    #[test]
+    fn a_runtime_that_does_not_load_is_named_with_what_to_do() {
+        let told = super::ort_failure("Failed to load ONNX Runtime dylib onnxruntime.dll: LoadLibraryExW failed (source 1114)");
+        assert!(told.contains("Visual C++") && told.contains("1114"), "{told}");
+        assert!(!super::ort_failure("model is broken").contains("Visual C++"));
+    }
 }
 
-/// ONNX Runtime just downloaded: the path on the best installed build (CUDA first), while the process has not loaded
-/// one yet (ort loads it at the first session; a build loaded before is replaced only by a restart).
+/// ONNX Runtime just downloaded: the path on the build `pick_ort` takes, while the process has not loaded one yet (ort
+/// loads it at the first session; a build loaded before is replaced only by a restart).
 pub(crate) fn point_ort(repo_root: &Path) {
     if !ORT_PATH_OURS.load(std::sync::atomic::Ordering::Relaxed) {
         return;
     }
-    if let Some(gpu) = dub_core::runtime::ort_candidates(&repo_root.join("models"))
-        .into_iter()
-        .find(|c| c.is_file())
-    {
-        std::env::set_var("ORT_DYLIB_PATH", gpu);
+    if let Some(build) = pick_ort(&dub_core::runtime::ort_candidates(&repo_root.join("models")), hw::gpu_report().cuda13_ok) {
+        std::env::set_var("ORT_DYLIB_PATH", build);
     }
 }
 

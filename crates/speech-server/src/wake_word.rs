@@ -38,7 +38,7 @@ impl PhoneRecognizer {
                 vocab[id] = sym;
             }
         }
-        let mut builder = Session::builder().map_err(|e| format!("ort builder: {e}"))?;
+        let mut builder = crate::app::ort_session()?;
         if gpu {
             builder = builder
                 .with_execution_providers([ort::ep::CUDA::default().build().error_on_failure()])

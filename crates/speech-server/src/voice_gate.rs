@@ -27,7 +27,7 @@ pub struct Embedder {
 impl Embedder {
     /// Load the model; `gpu` runs it on CUDA (a failure to reach CUDA is an error, not a silent fall back to CPU).
     pub fn load(onnx: &Path, gpu: bool) -> Result<Self, String> {
-        let mut builder = Session::builder().map_err(|e| format!("ort builder: {e}"))?;
+        let mut builder = crate::app::ort_session()?;
         if gpu {
             builder = builder
                 .with_execution_providers([ort::ep::CUDA::default().build().error_on_failure()])
