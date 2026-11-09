@@ -5,7 +5,9 @@ export type SayPhrase = { id: string; text: string; state: "said" | "waiting" | 
 /** The voice agents speak aloud with when they give none: chosen in Live's sound window. */
 export type TalkVoice = { engine: string; voice: string | null; params: SpeechParams | null };
 export type HeardLine = { start: number; end: number; text: string };
-export type LiveHeard = { running: boolean; lines: HeardLine[]; partial: { start: number; text: string } | null; error: string | null; muted: boolean };
+export type LiveHeard = { running: boolean; lines: HeardLine[]; partial: { start: number; text: string } | null; error: string | null; muted: boolean;
+  /** Why Smart Turn did not answer this conversation (its phrase ended by the pause). */
+  turn_error?: string | null };
 
 /** A role for a Live conversation: a ready idea of who the agent plays, a file in the studio's roles folder. */
 export type LiveRole = {
@@ -25,7 +27,7 @@ export type LiveRoles = { folder: string; roles: LiveRole[]; playing: LiveRole |
 
 /** The spoken conversation: the microphone heard live, and what an agent says aloud through the studio. */
 export const talkApi = {
-  listenStart: (lang: string, device?: string, engine?: string) => postCoded<{ pid: string }>("/speech/listen", { lang, device, engine }),
+  listenStart: (lang: string, device?: string, engine?: string) => postCoded<{ pid: string; turn?: { mode: string; downloading: boolean; note: string | null } }>("/speech/listen", { lang, device, engine }),
   listenStop: () => sendCoded<unknown>("DELETE", "/speech/listen"),
   toggleMute: () => postCoded<{ muted: boolean }>("/speech/listen/mute", { toggle: true }),
   type: (text: string) => postCoded<{ ok: boolean }>("/speech/listen/text", { text }),

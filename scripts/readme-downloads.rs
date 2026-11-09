@@ -244,6 +244,7 @@ fn name_of(id: &str) -> Option<&'static str> {
         "dpdfnet" => "DPDFNet 48 kHz (noise suppression)",
         "voice-gate" => "Voice gate (ReDimNet2-B3)",
         "wake-word" => "Wake word (PhoneticXeus int8)",
+        "smart-turn" => "Smart Turn v3.2 (end of phrase in Live)",
         _ => return None,
     })
 }

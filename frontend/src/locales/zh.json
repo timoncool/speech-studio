@@ -2580,6 +2580,10 @@
     "echoGuard_gate": "按你的声音",
     "echoGuard_text": "仅按字词",
     "echoGuardHint": "防止智能体从扬声器听到自己。戴耳机时任一选项都可以；“按你的声音”需要在声音门禁中录制你的声音。",
+    "turn": "你的句子何时结束",
+    "turnHint": "按停顿：你沉默 0.7 秒即算一句结束。Smart Turn：模型还会听这句话听起来是否说完——更少在说到一半时打断你，但有时会多等一会儿才判断句末。首次使用下载 32 MB。",
+    "turn_timer": "按停顿",
+    "turn_smart_turn": "Smart Turn（模型）",
     "echoGuardNoOwner": "请在“设置 › 声音门禁”中录制你的声音：在此之前防护按音量工作。"
   },
   "mic": {

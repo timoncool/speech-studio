@@ -41,6 +41,7 @@ export function useTalk({ fed }: { fed: boolean }) {
         setHeard(h.lines);
         setPartial(h.partial?.text ?? "");
         if (h.error) setError(h.error);
+        else if (h.turn_error) setError(h.turn_error);
         if (seen.current < 0 || h.lines.length < seen.current) seen.current = h.lines.length;
         if (h.lines.length > seen.current) {
           const fresh = h.lines.slice(seen.current).map((l) => ({ who: "person" as const, text: l.text, at: Date.now() }));
@@ -100,7 +101,8 @@ export function useTalk({ fed }: { fed: boolean }) {
   const listen = useCallback(async () => {
     const { lang, device, asr } = talkPrefs();
     try {
-      await talkApi.listenStart(lang, device || undefined, asr || undefined);
+      const r = await talkApi.listenStart(lang, device || undefined, asr || undefined);
+      if (r.turn?.note) setError(r.turn.note);
       setRunning(true);
       setMuted(false);
     } catch (e) {

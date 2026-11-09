@@ -2580,6 +2580,10 @@
     "echoGuard_gate": "Par votre voix",
     "echoGuard_text": "Par les mots seulement",
     "echoGuardHint": "Empêche l’agent de s’entendre dans les haut-parleurs. Avec un casque, tout choix convient ; « par votre voix » demande votre voix enregistrée dans le filtre vocal.",
+    "turn": "Fin de votre phrase",
+    "turnHint": "Par la pause : la phrase finit quand vous vous taisez 0,7 s. Smart Turn : le modèle entend aussi si la phrase sonne finie ; il vous coupe moins souvent au milieu d’un mot, mais attend parfois un peu plus la fin. Télécharge 32 Mo la première fois.",
+    "turn_timer": "Par la pause",
+    "turn_smart_turn": "Smart Turn (le modèle)",
     "echoGuardNoOwner": "Enregistrez votre voix dans Réglages, filtre vocal : d’ici là, la protection fonctionne par le volume."
   },
   "mic": {

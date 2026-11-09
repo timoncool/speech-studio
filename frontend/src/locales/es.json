@@ -2580,6 +2580,10 @@
     "echoGuard_gate": "Por tu voz",
     "echoGuard_text": "Solo por palabras",
     "echoGuardHint": "Evita que el agente se oiga a sí mismo por los altavoces. Con auriculares sirve cualquiera; «por tu voz» necesita tu voz grabada en el filtro de voz.",
+    "turn": "Fin de tu frase",
+    "turnHint": "Por la pausa: la frase termina cuando callas 0,7 s. Smart Turn: el modelo también oye si la frase suena terminada; te corta a media palabra con menos frecuencia, pero a veces espera un poco más el final. La primera vez descarga 32 MB.",
+    "turn_timer": "Por la pausa",
+    "turn_smart_turn": "Smart Turn (el modelo)",
     "echoGuardNoOwner": "Graba tu voz en Ajustes, filtro de voz: hasta entonces la protección funciona por volumen."
   },
   "mic": {

@@ -2580,6 +2580,10 @@
     "echoGuard_gate": "Pela sua voz",
     "echoGuard_text": "Só pelas palavras",
     "echoGuardHint": "Impede que o agente ouça a si mesmo pelos alto-falantes. Com fones, qualquer opção serve; “pela sua voz” precisa da sua voz gravada no filtro de voz.",
+    "turn": "Fim da sua frase",
+    "turnHint": "Pela pausa: a frase acaba quando você fica 0,7 s em silêncio. Smart Turn: o modelo também ouve se a frase soa terminada; corta você no meio da palavra com menos frequência, mas às vezes espera um pouco mais pelo fim. Baixa 32 MB na primeira vez.",
+    "turn_timer": "Pela pausa",
+    "turn_smart_turn": "Smart Turn (o modelo)",
     "echoGuardNoOwner": "Grave sua voz em Configurações, filtro de voz: até lá a proteção funciona pelo volume."
   },
   "mic": {

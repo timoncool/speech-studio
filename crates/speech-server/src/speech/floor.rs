@@ -90,9 +90,43 @@ pub fn guard(models_root: &Path) -> Guard {
     chosen(models_root, GUARD_KEY).as_deref().and_then(Guard::parse).unwrap_or(DEFAULT_GUARD)
 }
 
+/// How Live hears that the person finished a phrase: by a pause alone (timer), or the pause and then Smart Turn v3.2
+/// asked whether the phrase sounds finished (smart_turn): fewer phrases cut off as the person thinks, some ends heard a
+/// moment later.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Turn {
+    Timer,
+    SmartTurn,
+}
+
+impl Turn {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Turn::Timer => "timer",
+            Turn::SmartTurn => "smart_turn",
+        }
+    }
+
+    fn parse(s: &str) -> Option<Self> {
+        match s {
+            "timer" => Some(Turn::Timer),
+            "smart_turn" => Some(Turn::SmartTurn),
+            _ => None,
+        }
+    }
+}
+
+pub const TURN_KEY: &str = "live_turn";
+pub const DEFAULT_TURN: Turn = Turn::Timer;
+
+pub fn turn(models_root: &Path) -> Turn {
+    chosen(models_root, TURN_KEY).as_deref().and_then(Turn::parse).unwrap_or(DEFAULT_TURN)
+}
+
 pub fn is_value(key: &str, value: &str) -> Option<bool> {
     match key {
         GUARD_KEY => Some(Guard::parse(value).is_some()),
+        TURN_KEY => Some(Turn::parse(value).is_some()),
         MODE_KEY => Some(Mode::parse(value).is_some()),
         WAIT_KEY => Some(value.parse::<u64>().is_ok_and(|ms| WAIT_MS.contains(&ms))),
         _ => None,
@@ -114,7 +148,7 @@ pub fn wait_ms(models_root: &Path) -> u64 {
 /// The settings as the window shows them: the defaults where the person chose none; nothing is written.
 pub fn with_defaults(mut sel: Value) -> Value {
     if let Some(obj) = sel.as_object_mut() {
-        for (k, v) in [(MODE_KEY, DEFAULT_MODE.as_str().to_string()), (WAIT_KEY, DEFAULT_WAIT_MS.to_string()), (GUARD_KEY, DEFAULT_GUARD.as_str().to_string())] {
+        for (k, v) in [(MODE_KEY, DEFAULT_MODE.as_str().to_string()), (WAIT_KEY, DEFAULT_WAIT_MS.to_string()), (GUARD_KEY, DEFAULT_GUARD.as_str().to_string()), (TURN_KEY, DEFAULT_TURN.as_str().to_string())] {
             if obj.get(k).and_then(Value::as_str).is_none_or(|x| x.trim().is_empty()) {
                 obj.insert(k.into(), v.into());
             }
@@ -402,5 +436,17 @@ mod tests {
         let shown = with_defaults(json!({}));
         assert_eq!(shown[MODE_KEY], "agent");
         assert_eq!(shown[WAIT_KEY], "1200");
+    }
+
+    /// The end of a phrase is heard by the pause unless Smart Turn is chosen; the setting shows in the window's settings.
+    #[test]
+    fn the_end_of_a_phrase_is_by_the_pause_unless_smart_turn_is_chosen() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(turn(dir.path()), Turn::Timer);
+        assert_eq!(with_defaults(json!({}))[TURN_KEY], "timer");
+        assert_eq!(is_value(TURN_KEY, "smart_turn"), Some(true));
+        assert_eq!(is_value(TURN_KEY, "model"), Some(false));
+        std::fs::write(dir.path().join("active.json"), json!({ TURN_KEY: "smart_turn" }).to_string()).unwrap();
+        assert_eq!(turn(dir.path()), Turn::SmartTurn);
     }
 }

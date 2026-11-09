@@ -128,6 +128,28 @@ pub fn higgs_gguf(models_root: &Path) -> PathBuf {
     dir.join(format!("{quant}.gguf"))
 }
 
+/// The model id of Smart Turn v3.2 on the server.
+pub const SMART_TURN: &str = "smart-turn";
+
+/// Smart Turn v3.2's GGUF (component `smart-turn`).
+pub fn smart_turn_gguf(models_root: &Path) -> PathBuf {
+    models_root.join("smart-turn").join("smart-turn-v3.2-f32.gguf")
+}
+
+/// Whether the speech in `wav` (16 kHz mono, the phrase's last seconds up to its end) sounds like a finished turn, by
+/// Smart Turn v3.2 on the server the voicing engines use (the same build, no second copy for a 32 MB model): the
+/// model's probability, finished when it is over `threshold`.
+pub fn turn_finished(repo_root: &Path, models_root: &Path, wav: &Path, threshold: f64) -> Result<(bool, f64), String> {
+    let build = build_for(crate::engines::models::server_choice(models_root, "tts_backend"))?;
+    let server = server(repo_root, models_root, build, SMART_TURN)?;
+    let answer = server
+        .run_task(SMART_TURN, serde_json::json!({ "audio": wav, "options": { "threshold": threshold.to_string() } }), &AtomicBool::new(false))
+        .map_err(|e| localize(&e))?;
+    let data = answer.get("custom_schema_output").or_else(|| answer.get("result").and_then(|r| r.get("custom_schema_output"))).and_then(|o| o.get("data"));
+    let p = data.and_then(|d| d.get("probability")).and_then(Value::as_f64).ok_or_else(|| format!("Smart Turn answered without a probability: {answer}"))?;
+    Ok((p > threshold, p))
+}
+
 /// Every model the server can carry now. A model whose files are not on disk stays out: the server reads each
 /// configured model's contract when it starts, and one missing file would stop all of them.
 fn models(models_root: &Path) -> Vec<ModelEntry> {
@@ -148,6 +170,21 @@ fn models(models_root: &Path) -> Vec<ModelEntry> {
     }
     if crate::engines::audio8::installed(models_root) {
         out.push(ModelEntry::audio8_tts(AUDIO8, &crate::engines::audio8::gguf(models_root)));
+    }
+    let turn = smart_turn_gguf(models_root);
+    if turn.is_file() {
+        out.push(ModelEntry {
+            id: SMART_TURN.to_string(),
+            family: "smart_turn".into(),
+            path: turn,
+            task: "turn".into(),
+            mode: acpp_server::Mode::Offline,
+            load_options: Map::new(),
+            session_options: Map::new(),
+            default_request_options: Map::new(),
+            busy_timeout_ms: None,
+            output_rate: None,
+        });
     }
     // the transcribe.cpp GGUFs, which audio.cpp reads in place
     for id in SERVER_ASR {
@@ -449,5 +486,42 @@ mod tests {
         let (x, sr) = crate::audio::wavio::read_mono_f32(&first).unwrap();
         assert_eq!(sr, 24_000);
         assert_eq!(x.len() as u64 % crate::audio::media::HIGGS_HOP, 0);
+    }
+
+    /// How long one Smart Turn decision takes on the server of the voicing build (`SMART_ROOT` — a studio root with the
+    /// server and `models/smart-turn`, its active.json choosing `tts_backend`), over 8 s windows of `SMART_WAV` every 4 s:
+    /// the median and the slowest, after the first call that loads the model.
+    #[test]
+    #[ignore = "needs the audio.cpp server and Smart Turn"]
+    fn smart_turn_decision_time() {
+        struct StopServers;
+        impl Drop for StopServers {
+            fn drop(&mut self) {
+                acpp_server::SERVERS.stop_all();
+            }
+        }
+        let _servers = StopServers;
+        let root = std::path::PathBuf::from(std::env::var("SMART_ROOT").expect("SMART_ROOT"));
+        let wav = std::path::PathBuf::from(std::env::var("SMART_WAV").expect("SMART_WAV"));
+        let models = root.join("models");
+        let work = tempfile::tempdir_in(&root).unwrap();
+        let x16 = work.path().join("all.wav");
+        crate::audio::media::to_16k_mono(&wav, &x16).unwrap();
+        let (x, _) = crate::audio::wavio::read_mono_f32(&x16).unwrap();
+        let mut ms = Vec::new();
+        let mut finished = 0;
+        for (k, end) in (8 * 16_000..x.len()).step_by(4 * 16_000).take(25).enumerate() {
+            let clip = work.path().join(format!("{k}.wav"));
+            crate::audio::wavio::write_mono_f32(&clip, &x[end - 8 * 16_000..end], 16_000).unwrap();
+            let started = std::time::Instant::now();
+            let (done, _) = super::turn_finished(&root, &models, &clip, 0.5).unwrap();
+            if k > 0 {
+                ms.push(started.elapsed().as_secs_f64() * 1000.0);
+            }
+            finished += done as usize;
+        }
+        ms.sort_by(f64::total_cmp);
+        let backend = super::build_for(crate::engines::models::server_choice(&models, "tts_backend")).unwrap();
+        eprintln!("Smart Turn on {backend:?}: {} decisions, median {:.0} ms, slowest {:.0} ms; {finished} heard finished", ms.len(), ms[ms.len() / 2], ms[ms.len() - 1]);
     }
 }

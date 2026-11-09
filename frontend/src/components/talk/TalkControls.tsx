@@ -158,6 +158,7 @@ function VoiceTab() {
 
 const INTERRUPT = ["agent", "always", "never"] as const;
 const ECHO_GUARD = ["duplex", "gate", "text"] as const;
+const TURN = ["timer", "smart_turn"] as const;
 
 /** Who stops the agent when the person speaks over it, and how long the agent has to decide. */
 function InterruptSetting() {
@@ -205,6 +206,12 @@ function InterruptSetting() {
         </select>
       </label>
       {guard === "gate" && enrolled === false && <p className="text-[11px] text-[var(--color-warn)]">{t("talk.echoGuardNoOwner")}</p>}
+      <label className={label}>
+        <span className="flex items-center gap-1">{t("talk.turn")} <Hint text={t("talk.turnHint")} /></span>
+        <select value={slot(sel, "live_turn") ?? ""} onChange={(e) => save("live_turn", e.target.value)} className={field}>
+          {TURN.map((m) => <option key={m} value={m}>{t(`talk.turn_${m}`)}</option>)}
+        </select>
+      </label>
       {problem && <p role="alert" className="text-[11px] text-[var(--color-warn)]">{problem}</p>}
     </div>
   );

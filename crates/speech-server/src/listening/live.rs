@@ -50,6 +50,8 @@ struct Live {
     words: std::collections::HashMap<usize, Vec<HeardWord>>,
     /// Seconds of the microphone the half-duplex took for the studio's own sound and held back.
     duplex_secs: f64,
+    /// Why Smart Turn did not answer, the first time this conversation (each time goes to the log).
+    turn_error: Option<String>,
     /// The moment the recording's second 0 was.
     zero: std::time::Instant,
     /// The recogniser that hears now, as the window names it, and the language asked of it.
@@ -83,7 +85,7 @@ pub fn start(repo_root: &Path, models_root: &Path, lang: &str, engine: &str) -> 
         typed: Default::default(),
         foreign: Default::default(),
         echo: Default::default(),
-        words: Default::default(), duplex_secs: 0.0,
+        words: Default::default(), duplex_secs: 0.0, turn_error: None,
         zero: std::time::Instant::now(),
         engine: choice.label(),
         lang: lang.to_string(),
@@ -143,6 +145,16 @@ fn heard_as(mut chunk: Vec<f32>) -> Vec<f32> {
         chunk.fill(0.0);
     }
     chunk
+}
+
+/// 16 kHz mono samples as a PCM16 WAV.
+fn write_16k(path: &Path, samples: &[f32]) -> Result<(), String> {
+    let spec = hound::WavSpec { channels: 1, sample_rate: 16_000, bits_per_sample: 16, sample_format: hound::SampleFormat::Int };
+    let mut w = hound::WavWriter::create(path, spec).map_err(|e| format!("{}: {e}", path.display()))?;
+    for s in samples {
+        w.write_sample((s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16).map_err(|e| e.to_string())?;
+    }
+    w.finalize().map_err(|e| e.to_string())
 }
 
 /// While the studio speaks, the microphone is heard only when it is louder than the studio's own sound coming back
@@ -257,6 +269,44 @@ impl Intake {
     }
 }
 
+/// After the pause that ends a phrase, Smart Turn may still hear it unfinished; it is then given this much more silence
+/// before it is ended anyway.
+const TURN_EXTRA_SECS: f64 = 1.5;
+/// The seconds before a phrase's end Smart Turn hears.
+const TURN_HEARS_SECS: f64 = 8.0;
+/// Smart Turn's probability over which a phrase is finished.
+const TURN_THRESHOLD: f64 = 0.5;
+
+/// Whether a phrase that paused is ended, by Smart Turn when it is chosen: asked once for each end of speech, the
+/// answer kept until the person speaks again.
+#[derive(Default)]
+struct TurnEnd {
+    asked: Option<(f64, bool)>,
+}
+
+impl TurnEnd {
+    /// The phrase whose speech ends at `last` (seconds of the audio held, `secs` long) paused for at least the pause that
+    /// ends a phrase: whether it ends now. `ask` hears it (finished or not); its failure ends the phrase by the pause and
+    /// is answered in `failed`.
+    fn ends(&mut self, secs: f64, last: f64, ask: impl FnOnce() -> Result<bool, String>, failed: &mut Option<String>) -> bool {
+        if secs - last >= PAUSE_SECS + TURN_EXTRA_SECS {
+            return true;
+        }
+        if let Some(finished) = self.asked.filter(|(at, _)| (*at - last).abs() < 1e-6).map(|(_, finished)| finished) {
+            return finished;
+        }
+        let finished = match ask() {
+            Ok(finished) => finished,
+            Err(e) => {
+                *failed = Some(e);
+                true
+            }
+        };
+        self.asked = Some((last, finished));
+        finished
+    }
+}
+
 /// Whether the running session's microphone is muted; None with no session.
 pub fn muted() -> Option<bool> {
     with(|l| l.muted)
@@ -303,6 +353,7 @@ fn state_of(words: bool) -> Value {
             "error": l.error,
             "muted": l.muted,
             "duplex_secs": (l.duplex_secs * 10.0).round() / 10.0,
+            "turn_error": l.turn_error,
         }),
         None => json!({ "running": false, "lines": [], "partial": null, "error": null, "muted": false }),
     }
@@ -328,7 +379,7 @@ pub static TEST_SLOT: Mutex<()> = Mutex::new(());
 /// A conversation that heard `lines` (start, end, text, typed, the owner's voice), its second 0 being `zero`, for tests.
 #[cfg(test)]
 pub fn conversation_for_test(zero: std::time::Instant, lines: &[(f64, f64, &str, bool, bool)]) {
-    let mut l = Live { lines: Vec::new(), partial: None, error: None, muted: false, typed: Default::default(), foreign: Default::default(), echo: Default::default(), words: Default::default(), duplex_secs: 0.0, zero, engine: String::new(), lang: "ru".into(), stop: Arc::new(AtomicBool::new(false)), worker: None };
+    let mut l = Live { lines: Vec::new(), partial: None, error: None, muted: false, typed: Default::default(), foreign: Default::default(), echo: Default::default(), words: Default::default(), duplex_secs: 0.0, turn_error: None, zero, engine: String::new(), lang: "ru".into(), stop: Arc::new(AtomicBool::new(false)), worker: None };
     for (n, (a, z, text, typed, owner)) in lines.iter().enumerate() {
         if *typed {
             l.typed.insert(n);
@@ -433,7 +484,14 @@ fn listen(choice: crate::engines::models::AsrChoice, models_root: &Path, lang: &
         };
         intake.borrow_mut().take(heard_as(chunk), rate(), mode != crate::speech::floor_settings::Guard::Text)
     };
+    let mut turn_end = TurnEnd::default();
+    let mut turn_mode = crate::speech::floor_settings::turn(models_root);
+    let mut turn_read = std::time::Instant::now();
     while !ended {
+        if turn_read.elapsed() >= Duration::from_secs(1) {
+            turn_mode = crate::speech::floor_settings::turn(models_root);
+            turn_read = std::time::Instant::now();
+        }
         match from.recv_timeout(Duration::from_millis(300)) {
             Ok(chunk) => pending.extend(take(chunk)),
             Err(RecvTimeoutError::Timeout) => {}
@@ -464,7 +522,31 @@ fn listen(choice: crate::engines::models::AsrChoice, models_root: &Path, lang: &
             continue;
         };
         let last = spans.last().map(|s| s.1).unwrap_or(first);
-        let cut = if ended || secs - last >= PAUSE_SECS {
+        let paused = secs - last >= PAUSE_SECS;
+        let turn_said = paused
+            && !ended
+            && turn_mode == crate::speech::floor_settings::Turn::SmartTurn
+            && crate::engines::acpp::smart_turn_gguf(models_root).is_file();
+        let ends = !turn_said || {
+            let mut failed = None;
+            let hear = || -> Result<bool, String> {
+                let z = ((last + EDGE_SECS).min(secs) * 16_000.0) as usize;
+                let piece = &audio[z.saturating_sub((TURN_HEARS_SECS * 16_000.0) as usize)..z.min(audio.len())];
+                let wav = work.path().join("turn.wav");
+                write_16k(&wav, piece)?;
+                let repo_root = models_root.parent().unwrap_or(models_root);
+                crate::engines::acpp::turn_finished(repo_root, models_root, &wav, TURN_THRESHOLD).map(|(finished, _)| finished)
+            };
+            let ends = turn_end.ends(secs, last, hear, &mut failed);
+            if let Some(e) = failed {
+                tracing::error!("[ERROR] live: Smart Turn did not answer, the phrase is ended by the pause: {e}");
+                with(|l| {
+                    l.turn_error.get_or_insert_with(|| t!("live-turn-failed", error = e));
+                });
+            }
+            ends
+        };
+        let cut = if ended || (paused && ends) {
             Some((last + EDGE_SECS).min(secs))
         } else if last - first >= LONGEST_SECS {
             // the stream has heard up to the end already: a cut before it would leave those words to the next phrase too
@@ -574,12 +656,14 @@ mod tests {
         let choice = crate::app::recognition::choice(&root, &models, &lang, "test").unwrap();
         let streams = matches!(&choice, crate::engines::models::AsrChoice::Ggml { model, .. } | crate::engines::models::AsrChoice::Server { model, .. } if model.id == "nemotron");
         std::env::set_var("DUB_ASR_BACKEND", crate::engines::models::stage_backend(&models, "asr_backend"));
-        *live().lock().unwrap() = Some(Live { lines: Vec::new(), partial: None, error: None, muted: false, typed: Default::default(), foreign: Default::default(), echo: Default::default(), words: Default::default(), duplex_secs: 0.0, zero: std::time::Instant::now(), engine: String::new(), lang: lang.clone(), stop: Arc::new(AtomicBool::new(false)), worker: None });
+        *live().lock().unwrap() = Some(Live { lines: Vec::new(), partial: None, error: None, muted: false, typed: Default::default(), foreign: Default::default(), echo: Default::default(), words: Default::default(), duplex_secs: 0.0, turn_error: None, zero: std::time::Instant::now(), engine: String::new(), lang: lang.clone(), stop: Arc::new(AtomicBool::new(false)), worker: None });
         let (to, from) = channel::<Vec<f32>>();
+        // LIVE_SPEED: how many times faster than it was recorded the recording is fed (1 when not set)
+        let speed: f64 = std::env::var("LIVE_SPEED").ok().and_then(|s| s.parse().ok()).unwrap_or(1.0);
         let feeder = std::thread::spawn(move || {
             for chunk in x.chunks((sr / 10) as usize) {
                 to.send(chunk.to_vec()).unwrap();
-                std::thread::sleep(Duration::from_millis(100));
+                std::thread::sleep(Duration::from_secs_f64(0.1 / speed.max(0.1)));
             }
         });
         let partials = std::thread::spawn(|| {
@@ -604,6 +688,7 @@ mod tests {
         assert!(!seen.is_empty(), "no text while the phrase went on");
         let heard = live().lock().unwrap().take().unwrap();
         let lines = heard.lines;
+        eprintln!("{} lines heard; Smart Turn: {}", lines.len(), heard.turn_error.as_deref().unwrap_or("no failure"));
         for (n, l) in lines.iter().enumerate() {
             let words = heard.words.get(&n).map(|ws| ws.iter().map(|(w, a, z)| format!("{w}[{a:.2}-{z:.2}]")).collect::<Vec<_>>().join(" "));
             eprintln!("{:.2}-{:.2} {} | words: {}", l.0, l.1, l.2, words.as_deref().unwrap_or("none"));
@@ -691,6 +776,23 @@ mod tests {
             intake.take(vec![0.0; 1_600], 16_000, true);
         }
         assert!(intake.held.is_empty(), "{:?}", intake.held);
+    }
+
+    /// With Smart Turn a paused phrase it hears unfinished waits for more speech or a longer silence; one it hears
+    /// finished ends at the pause; it is asked once per end of speech; its failure ends the phrase by the pause and is told.
+    #[test]
+    fn smart_turn_holds_an_unfinished_phrase_and_lets_a_finished_one_end() {
+        let mut turn = TurnEnd::default();
+        let mut failed = None;
+        let asked = std::cell::Cell::new(0);
+        let unfinished = || { asked.set(asked.get() + 1); Ok(false) };
+        assert!(!turn.ends(5.8, 5.0, unfinished, &mut failed), "heard unfinished: the phrase waits");
+        assert!(!turn.ends(6.5, 5.0, || { asked.set(asked.get() + 1); Ok(false) }, &mut failed), "the answer is kept for this end of speech");
+        assert_eq!(asked.get(), 1);
+        assert!(turn.ends(5.0 + PAUSE_SECS + TURN_EXTRA_SECS, 5.0, || unreachable!(), &mut failed), "a long enough silence ends it anyway");
+        assert!(turn.ends(9.8, 9.0, || Ok(true), &mut failed), "heard finished: ends at the pause");
+        assert!(turn.ends(12.8, 12.0, || Err("the server is gone".into()), &mut failed), "a failure ends it by the pause");
+        assert_eq!(failed.as_deref(), Some("the server is gone"));
     }
 
     /// The owner's voice gate hears the phrase's speech only: the pieces the half-duplex held back (silence put in

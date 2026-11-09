@@ -74,7 +74,7 @@ pub(crate) use roles::playing as role_playing;
 pub use bench::live_bench;
 
 pub(crate) mod floor_settings {
-    pub(crate) use super::floor::{guard, is_value, with_defaults, Guard};
+    pub(crate) use super::floor::{guard, is_value, turn, with_defaults, Guard, Turn};
 }
 
 pub(crate) mod stream {

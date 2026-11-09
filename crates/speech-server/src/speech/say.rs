@@ -558,6 +558,18 @@ pub async fn listen_start(State(st): State<AppState>, headers: HeaderMap, body: 
     if gate_problem.is_some() {
         tracing::warn!("voice gate: the owner's print is of an earlier version and is not used; every phrase passes");
     }
+    // Smart Turn chosen and not here yet: it is downloaded, the pause ends phrases until it is
+    let turn = crate::speech::floor_settings::turn(&st.models_root);
+    let turn_downloading = turn == crate::speech::floor_settings::Turn::SmartTurn && !crate::engines::acpp::smart_turn_gguf(&st.models_root).is_file();
+    if turn_downloading {
+        let root = st.repo_root.clone();
+        std::thread::spawn(move || {
+            if let Err(e) = crate::app::ensure_components(&root, &["smart-turn"], &|_| {}) {
+                tracing::error!("[ERROR] live: Smart Turn was not downloaded, phrases end by the pause: {e}");
+            }
+        });
+    }
+    let turn_state = json!({ "mode": turn.as_str(), "downloading": turn_downloading, "note": turn_downloading.then(|| t!("live-turn-downloading")) });
     // the microphone is on already (the person turned it on): this conversation listens to it too, and a recogniser
     // named here hears its next phrase while the microphone goes on recording
     if let Some(pid) = crate::listening::recording().filter(|_| crate::listening::recognition::state()["running"] == true) {
@@ -576,7 +588,7 @@ pub async fn listen_start(State(st): State<AppState>, headers: HeaderMap, body: 
         crate::voice_gate::arm_live(&st.models_root, owner_guard);
         watch_interruptions(st.workspace, st.models_root, st.jobs);
         let (asr, lang) = crate::listening::recognition::engine().unwrap_or_default();
-        return Json(json!({ "pid": pid, "live": true, "joined": true, "asr": asr, "lang": lang, "gate": gate_on, "gate_problem": gate_problem, "echo_guard": guarding })).into_response();
+        return Json(json!({ "pid": pid, "live": true, "joined": true, "asr": asr, "lang": lang, "gate": gate_on, "gate_problem": gate_problem, "echo_guard": guarding, "turn": turn_state })).into_response();
     }
     // the microphone is the person's: an agent listens to a conversation the person started and never turns it on
     if crate::app::agent::by_agent(&headers) {
@@ -591,11 +603,11 @@ pub async fn listen_start(State(st): State<AppState>, headers: HeaderMap, body: 
     super::roles::new_conversation();
     crate::voice_gate::arm_live(&st.models_root, owner_guard);
     watch_interruptions(st.workspace, st.models_root, st.jobs);
-    let Some(problem) = gate_problem else { return started };
     let (parts, body) = started.into_parts();
     match axum::body::to_bytes(body, usize::MAX).await.map_err(|e| e.to_string()).and_then(|b| serde_json::from_slice::<Value>(&b).map_err(|e| e.to_string())) {
         Ok(mut answer) => {
-            answer["gate_problem"] = json!(problem);
+            answer["gate_problem"] = json!(gate_problem);
+            answer["turn"] = turn_state;
             (parts.status, Json(answer)).into_response()
         }
         Err(e) => refuse(StatusCode::INTERNAL_SERVER_ERROR, "internal", e),

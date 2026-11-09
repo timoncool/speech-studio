@@ -1452,6 +1452,19 @@ pub fn manifest() -> Vec<Component> {
             markers: &[Marker { rel: "models/ruaccent/nn/nn_omograph/big_poetry/model.onnx", expect: 181_553_054 }],
             external_url: None,
         },
+        // The end of a phrase in Live heard by Smart Turn v3.2 (pipecat, BSD-2) on the audio.cpp server, when the person
+        // chooses it over the pause alone. Pulled only then.
+        Component {
+            id: "smart-turn",
+            name: t!("setup-comp-smart-turn-name"),
+            purpose: t!("setup-comp-smart-turn-purpose"),
+            requirement: Requirement::Optional,
+            delivery: Delivery::Download,
+            size: 32_014_304,
+            files: &[FileSpec { url: "https://huggingface.co/audio-cpp/audio.cpp-gguf/resolve/73ce4162f6cce370dd533c6782b772135c1b2a8e/Smart-Turn-v3-GGUF/smart-turn-v3.2-f32.gguf", dest_rel: "models/smart-turn/smart-turn-v3.2-f32.gguf", size: 32_014_304, sha256: "dbd3fde8c39271b201c950d43f027318a3ec650292e40cecc37a29f82abc1e88", extract: Extract::None }],
+            markers: &[Marker { rel: "models/smart-turn/smart-turn-v3.2-f32.gguf", expect: 32_014_304 }],
+            external_url: None,
+        },
         Component {
             id: "silero-vad",
             name: t!("setup-comp-silero-vad-name"),

@@ -2580,6 +2580,10 @@
     "echoGuard_gate": "By your voice",
     "echoGuard_text": "By words only",
     "echoGuardHint": "Keeps the agent from hearing itself from the speakers. With headphones any choice works; by your voice needs your voice recorded in the voice gate.",
+    "turn": "End of your phrase",
+    "turnHint": "By the pause: a phrase ends when you are silent for 0.7 s. Smart Turn: the model also hears whether the phrase sounds finished, so it cuts you off mid-word less often, but sometimes waits a little longer for the end of a phrase. Downloads 32 MB the first time.",
+    "turn_timer": "By the pause",
+    "turn_smart_turn": "Smart Turn (the model)",
     "echoGuardNoOwner": "Record your voice in Settings, voice gate: until then the protection works by loudness."
   },
   "mic": {
