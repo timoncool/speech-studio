@@ -407,6 +407,7 @@ export default function ProjectEditor({ pid, onBack }: { pid: string; onBack: ()
       }
       const mend = e instanceof ApiError ? NOT_READY_SETTINGS[e.code] : undefined;
       if (mend) openSettings(mend);
+      if (e instanceof ApiError && e.code === "no_model") setSettings(true);
     } finally { setJob(null); }
   };
   /** A voicing of this project started elsewhere (the agent, another window) is followed here as if started here. */

@@ -458,6 +458,11 @@ fn fetch_checked(
     loop {
         tries += 1;
         let have = std::fs::metadata(&part).map(|m| m.len()).unwrap_or(0).min(size);
+        // a part already whole (the last try broke off before it took its name) is checked as it is: asked for the
+        // rest, a server answers there is none
+        if size > 0 && have == size {
+            break;
+        }
         let got = (|| -> Result<u64, String> {
             let mut req = client.get(url);
             if have > 0 {
@@ -728,6 +733,20 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let dest = dir.path().join("v.mp3");
         std::fs::write(dir.path().join("v.mp3.part"), &body[..10]).unwrap();
+        fetch_checked(&client, &format!("{}/v", server.base()), &dest, body.len() as u64, None, &|_| {}).unwrap();
+        assert_eq!(std::fs::read(&dest).unwrap(), body);
+    }
+
+    /// A part already whole on disk takes its name without asking the server anything.
+    #[test]
+    fn a_whole_part_takes_its_name_without_asking_again() {
+        use dub_llm::test_http::serve;
+        let body = b"voice bytes, all of them".to_vec();
+        let server = serve(vec![]);
+        let client = reqwest::blocking::Client::builder().no_proxy().build().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let dest = dir.path().join("v.mp3");
+        std::fs::write(dir.path().join("v.mp3.part"), &body).unwrap();
         fetch_checked(&client, &format!("{}/v", server.base()), &dest, body.len() as u64, None, &|_| {}).unwrap();
         assert_eq!(std::fs::read(&dest).unwrap(), body);
     }

@@ -1141,7 +1141,8 @@ pub(crate) fn no_voice(p: &SpeechPaths, project: &SpeechProject, wanted: &[Strin
 
 /// Why the engines of the `wanted` blocks cannot voice them here, told before voicing starts: a cloud engine without
 /// its key or model, a local engine not downloaded, or the card chosen for it that it cannot run on. The code says what
-/// it is (`no_key`, `model_missing`, `no_device`), the window opening the settings where it is mended. None when they
+/// it is (`no_key`, `no_model`, `model_missing`, `no_device`), the window opening the settings where it is mended (the
+/// project's own for its cloud model). None when they
 /// all can.
 pub(crate) fn not_ready(p: &SpeechPaths, project: &SpeechProject, wanted: &[String]) -> Option<(&'static str, String)> {
     let mut engines: Vec<&str> = Vec::new();
@@ -1154,13 +1155,14 @@ pub(crate) fn not_ready(p: &SpeechPaths, project: &SpeechProject, wanted: &[Stri
     for id in engines {
         match id {
             "google" if crate::platform::credentials::google_api_key().is_none() => return Some(("no_key", t!("cloud-no-key", provider = "Google"))),
+            "openrouter" if crate::engines::models::openrouter_key().is_none() => return Some(("no_key", t!("cloud-tts-no-key"))),
             "fal" | "runware" => {
                 let provider = if id == "fal" { vs_providers::Provider::Fal } else { vs_providers::Provider::Runware };
                 if crate::platform::credentials::provider_key(provider).is_none() {
                     return Some(("no_key", t!("cloud-no-key", provider = provider.as_str())));
                 }
                 if project.settings.cloud_model.trim().is_empty() {
-                    return Some(("no_key", t!("cloud-no-model", provider = provider.as_str())));
+                    return Some(("no_model", t!("cloud-no-model", provider = provider.as_str())));
                 }
             }
             _ => {}
