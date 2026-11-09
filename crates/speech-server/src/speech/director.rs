@@ -490,6 +490,49 @@ pub fn punctuate(llm: &ChatClient, blocks: &[(String, String, String)], lang: &s
     rewrite(llm, &system, blocks, 0.2, progress, &|before, after| (same_words(before, after) && tags(before) == tags(after) && yo(before) == yo(after)).then(|| after.to_string()))
 }
 
+/// Lines rewritten as the person asks (`instruction`: shorter, more formal, another joke): each stays one spoken line of
+/// its speaker. Any wording is taken but an empty one; the project is not touched.
+pub fn rewrite_as_asked(llm: &ChatClient, blocks: &[(String, String, String)], lang: &str, instruction: &str, progress: &dyn Fn(usize, usize)) -> Result<(Vec<Enriched>, usize), String> {
+    let system = format!(
+        "You are a script editor rewriting lines that a speech engine reads aloud{lang_note}. Rewrite each line as this instruction says: «{instruction}». Each line stays what its speaker says aloud, in that speaker's manner and in the line's own language: no stage directions or sound effects inside the text, numbers as they are said, no line merged with another or split in two. A line the instruction does not concern stays exactly as it is. Answer JSON {{\"lines\": [{{\"id\": ..., \"text\": ...}}]}} with every line given, in the same order.",
+        lang_note = lang_note(lang),
+    );
+    rewrite(llm, &system, blocks, 0.7, progress, &|_, after| Some(after.trim().to_string()).filter(|a| !a.is_empty()))
+}
+
+/// The end of a script that fits the model's context beside its answer: its last lines, the earliest first.
+fn script_tail(written: &[(String, String)]) -> String {
+    let mut size = 0;
+    let mut tail: Vec<String> = written
+        .iter()
+        .rev()
+        .take_while(|(_, text)| {
+            size += text.chars().count();
+            size <= CHUNK_CHARS * 2
+        })
+        .map(|(speaker, text)| format!("{speaker}: {text}"))
+        .collect();
+    tail.reverse();
+    tail.join("\n")
+}
+
+/// What comes next in a script already written: new lines for the same speakers, from the line after its last one;
+/// `direction` says where it goes when the person has a wish. Nothing written is repeated or changed.
+pub fn continue_script(llm: &ChatClient, speakers: &[Speaker], written: &[(String, String)], lang: &str, minutes: u32, direction: &str) -> Result<Vec<Line>, String> {
+    let names: Vec<String> = speakers.iter().map(|s| s.name.clone()).collect();
+    let words = minutes.clamp(1, 20) * 140;
+    let system = format!(
+        "{rules} The script so far is given, its last lines: write only what comes next, starting from the line after its last one. Do not repeat, rewrite or sum up the lines given; keep each speaker's manner as it is in them and the language they speak.",
+        rules = podcast_rules(&names.join("; "), lang, &words.to_string()),
+    );
+    let wish = if direction.trim().is_empty() { String::new() } else { format!("\n\nWhat comes next: {}", direction.trim()) };
+    let lines = ask(llm, &system, &format!("{}{wish}", script_tail(written)), &lines_schema(Some(&names)), (words * 4).clamp(1_024, 8_192))?;
+    if lines.is_empty() {
+        return Err(t!("director-empty"));
+    }
+    Ok(lines)
+}
+
 fn lang_note(lang: &str) -> String {
     if lang.is_empty() || lang == "auto" { String::new() } else { format!(" (language: {lang})") }
 }
@@ -557,6 +600,21 @@ mod tests {
         assert_eq!(letters("Ёлка, сказал он."), letters("елка — сказал он"));
         assert_ne!(letters("Ёлка, сказал он."), letters("Ёлка, он."));
         assert_eq!(letters("他买了３本书，ＯＫ。"), letters("他买了3本书, ok."), "full-width digits and letters are the same text");
+    }
+
+    /// The director continues a script from its end: of a long one it reads the last lines that fit, in their order,
+    /// each with who says it.
+    #[test]
+    fn a_script_is_continued_from_its_last_lines() {
+        let short = vec![("Анна".to_string(), "Привет.".to_string()), ("Олег".to_string(), "Здравствуй.".to_string())];
+        assert_eq!(script_tail(&short), "Анна: Привет.\nОлег: Здравствуй.");
+        let long: Vec<(String, String)> = (0..200).map(|i| (format!("S{}", i % 2), format!("{i} {}", "слово ".repeat(20)))).collect();
+        let tail = script_tail(&long);
+        assert!(tail.chars().count() <= CHUNK_CHARS * 2 + 200 * 8, "{}", tail.chars().count());
+        assert!(tail.ends_with(long[199].1.as_str()) && !tail.contains("S0: 0 "));
+        let first = tail.lines().next().unwrap();
+        let kept = tail.lines().count();
+        assert_eq!(first, format!("S{}: {}", (200 - kept) % 2, long[200 - kept].1), "the lines are in the script's order");
     }
 
     fn said(speaker: &str, text: &str) -> Line {

@@ -201,7 +201,10 @@ connected and the address to paste.
   `dictionary_import` (Balabolka .dic, .rex, .bxd), `dictionary_try` + `dictionary_try_file` (hear a rule before saving
   it), `project_dictionary_counts` (how often each rule fires in a project), `project_unknown_words` (the words no
   dictionary knows).
-- **Director model**: `podcast_write` (topic and speakers with their manner -> a new project),
+- **Director model**: `podcast_write` (topic and speakers with their manner -> a new project), inside a project
+  `project_extend` (what comes next in its script for the speakers it has; the result is lines to add) and
+  `project_enrich` with mode `rewrite` and an `instruction` (the chosen blocks worded anew; the result is before and
+  after) - neither changes the project, you apply what you accept with `project_update`;
   `project_cast_characters` (one chapter split into the narrator and characters word for word).
 
 ## Listening: recognition

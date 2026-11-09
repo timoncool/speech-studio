@@ -153,9 +153,56 @@ pub async fn cast(State(st): State<AppState>, AxPath(pid): AxPath<String>, Json(
 pub struct EnrichReq {
     #[serde(default)]
     ids: Option<Vec<String>>,
-    /// `tags` (default) — expression tags by meaning; `punctuation` — punctuation for reading aloud.
+    /// `tags` (default) — expression tags by meaning; `punctuation` — punctuation for reading aloud; `rewrite` — the
+    /// lines worded anew as `instruction` says.
     #[serde(default)]
     mode: Option<String>,
+    #[serde(default)]
+    instruction: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct ExtendReq {
+    #[serde(default = "five")]
+    minutes: u32,
+    /// Where the script goes next, when the person has a wish.
+    #[serde(default)]
+    direction: String,
+}
+
+/// POST /projects/{pid}/extend {minutes?, direction?} — the director writes what comes next in the project's script, for
+/// the speakers it has, as a job; the project is not changed: the result is the new lines, which the window or the
+/// agent adds after the last block.
+pub async fn extend(State(st): State<AppState>, AxPath(pid): AxPath<String>, Json(req): Json<ExtendReq>) -> Response {
+    if let Err(e) = crate::speech::load(&st.workspace, &pid) {
+        return refuse(StatusCode::NOT_FOUND, "no_project", e);
+    }
+    let p = paths(&st);
+    let pid2 = pid.clone();
+    let job: jobs::JobFn = Box::new(move |progress: jobs::ProgressFn| {
+        let cb = |ev: Value| progress(ev);
+        let project = crate::speech::load(&p.workspace, &pid2)?;
+        let written: Vec<(String, String)> = project.blocks().filter(|b| !b.hidden && !crate::speech::project::says_nothing(&b.text)).map(|b| (b.speaker.clone(), b.text.clone())).collect();
+        let mut speakers: Vec<director::Speaker> = Vec::new();
+        for (name, _) in &written {
+            if !speakers.iter().any(|s| &s.name == name) {
+                speakers.push(director::Speaker { name: name.clone(), manner: String::new() });
+            }
+        }
+        if written.is_empty() {
+            return Err(t!("director-nothing-written"));
+        }
+        step(&cb, t!("director-starting"), 2);
+        let provider = llm(&p, &cb)?;
+        step(&cb, t!("director-writing", model = provider.describe()), 20);
+        let lines = director::continue_script(provider.client(), &speakers, &written, &project.settings.lang, req.minutes, &req.direction)?;
+        step(&cb, t!("director-done"), 100);
+        Ok(json!({ "lines": lines.into_iter().map(|l| json!({ "speaker": l.speaker, "text": l.text.trim(), "direction": l.direction.trim() })).collect::<Vec<_>>() }))
+    });
+    match st.jobs.enqueue(jobs::JobMeta::new(jobs::JobKind::Write, Some(&pid)), job).await {
+        Ok(job_id) => Json(json!({ "job_id": job_id })).into_response(),
+        Err(e) => crate::app::enqueue_error(e),
+    }
 }
 
 /// POST /projects/{pid}/enrich {ids?} — режиссёр предлагает теги экспрессии по смыслу (только теги движка блока,
@@ -180,8 +227,19 @@ pub async fn enrich(State(st): State<AppState>, AxPath(pid): AxPath<String>, Jso
             step(&cb, t!("director-done"), 100);
             return Ok(json!({ "changes": made.into_iter().map(|c| json!({ "id": c.id, "before": c.before, "after": c.after })).collect::<Vec<_>>(), "refused": refused }));
         }
+        if req.mode.as_deref() == Some("rewrite") {
+            let instruction = req.instruction.as_deref().map(str::trim).filter(|i| !i.is_empty()).ok_or_else(|| t!("director-no-instruction"))?;
+            let blocks: Vec<(String, String, String)> = project.blocks().filter(wanted).map(|b| (b.id.clone(), b.speaker.clone(), b.text.clone())).collect();
+            step(&cb, t!("director-starting"), 2);
+            let provider = llm(&p, &cb)?;
+            let (made, refused) = director::rewrite_as_asked(provider.client(), &blocks, &project.settings.lang, instruction, &|n, of| {
+                step(&cb, t!("director-rewriting", n = (n + 1) as i64, total = of as i64), (5 + n * 90 / of.max(1)) as i64);
+            })?;
+            step(&cb, t!("director-done"), 100);
+            return Ok(json!({ "changes": made.into_iter().map(|c| json!({ "id": c.id, "before": c.before, "after": c.after })).collect::<Vec<_>>(), "refused": refused }));
+        }
         if let Some(m) = req.mode.as_deref().filter(|m| *m != "tags") {
-            return Err(format!("mode {m} is not tags or punctuation"));
+            return Err(format!("mode {m} is not tags, punctuation or rewrite"));
         }
         let mut groups: Vec<(crate::engines::Engine, Vec<(String, String, String)>)> = Vec::new();
         for b in project.blocks().filter(wanted) {

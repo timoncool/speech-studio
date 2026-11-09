@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, BookOpen, BookUp, ChartGantt, Download, Drama, History, ListOrdered, Loader2, MessagesSquare, Redo2, Search, Settings2, Sparkles, SpellCheck, Square, Undo2, Users, Wand2, X, ListChecks } from "lucide-react";
+import { ArrowLeft, BookOpen, BookUp, ChartGantt, Download, Drama, History, ListOrdered, Loader2, MessagesSquare, PenLine, Redo2, Search, Settings2, Sparkles, SpellCheck, Square, Undo2, Users, Wand2, X, ListChecks } from "lucide-react";
 import { api, ApiError } from "../../lib/api";
 import type { VoiceAge, VoiceGender } from "../../lib/api";
 import { activeTake, engineOf, fxOf, newId, VOICE_FX, spliceChars, SPEAKER_TINTS, speechApi, stressDoubts, voiceOf, type Block, type BlockState, type SpeechProject, type QueuedSynth, type StressWord, type BookPreview } from "../../lib/speech";
@@ -23,7 +23,8 @@ import OwnParams from "./OwnParams";
 import { useSimpleMode } from "../../lib/simpleMode";
 import { useVoices } from "../../lib/voices";
 import { comboOf, matches, typingIn, useShortcuts } from "../../lib/shortcuts";
-import EnrichDialog, { type EnrichChange } from "./EnrichDialog";
+import DirectorAsk from "./DirectorAsk";
+import EnrichDialog, { type EnrichChange, type EnrichMode } from "./EnrichDialog";
 import { cloudApi } from "../../lib/cloud";
 import Transport, { type TransportBlock } from "./Transport";
 import { RATES } from "./rates";
@@ -37,6 +38,9 @@ import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, us
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import BlockRow, { type BlockActions } from "./BlockRow";
 import LazyBlock from "./LazyBlock";
+
+/** Where the settings mend what keeps voicing from starting, by the studio's code for it. */
+const NOT_READY_SETTINGS: Record<string, string> = { no_key: "cloud:key", model_missing: "models", no_device: "models" };
 import { LAZY_FROM, showBlockRow } from "./blockRows";
 import VoicePicker from "./VoicePicker";
 import ProjectSettings from "./ProjectSettings";
@@ -130,7 +134,7 @@ export default function ProjectEditor({ pid, onBack }: { pid: string; onBack: ()
   };
   const [enriching, setEnriching] = useState(false);
   const [shownReview, setShownReview] = useState<"all" | "none" | "approved" | "fix">("all");
-  const [enriched, setEnriched] = useState<{ changes: EnrichChange[]; refused: number; mode: "tags" | "punctuation" } | null>(null);
+  const [enriched, setEnriched] = useState<{ changes: EnrichChange[]; refused: number; mode: EnrichMode } | null>(null);
   /** The director's tags for the selected blocks, or every block: shown to keep or drop before anything changes. */
   const enrich = async (ids: string[] | null, mode: "tags" | "punctuation" = "tags") => {
     setEnriching(true);
@@ -140,6 +144,32 @@ export default function ProjectEditor({ pid, onBack }: { pid: string; onBack: ()
       const { job_id } = await speechApi.enrich(pid, ids, mode);
       setEnriched({ ...((await followJob(job_id, "enrich")) as { changes: EnrichChange[]; refused: number }), mode });
     } catch (e) { setJobError(errorText(e)); } finally { setEnriching(false); }
+  };
+  const [asking, setAsking] = useState<{ mode: "extend" | "rewrite"; error: string | null } | null>(null);
+  /** The director asked inside the project: the script's next lines are added after the last block, the chosen blocks
+   * worded anew are shown to keep or drop. Either is one edit, so Undo takes it back. */
+  const direct = async (text: string, minutes: number) => {
+    if (!asking) return;
+    const mode = asking.mode;
+    setEnriching(true);
+    setAsking({ mode, error: null });
+    try {
+      if (!(await askDirector())) return;
+      await flush();
+      if (mode === "rewrite") {
+        const { job_id } = await speechApi.enrich(pid, selected, "rewrite", text);
+        setEnriched({ ...((await followJob(job_id, "enrich")) as { changes: EnrichChange[]; refused: number }), mode });
+      } else {
+        const { job_id } = await speechApi.extend(pid, minutes, text);
+        const { lines } = (await followJob(job_id, "write")) as { lines: { speaker: string; text: string; direction: string }[] };
+        edit((p) => {
+          const last = p.chapters[p.chapters.length - 1];
+          for (const l of lines) last.blocks.push({ id: newId(), speaker: l.speaker, voice: null, text: l.text, direction: l.direction, pause_ms: null, hidden: false, takes: [], active: null, pinned: null, error: null, note: "", marker: "", start: null, end: null });
+          return p;
+        });
+      }
+      setAsking(null);
+    } catch (e) { setAsking({ mode, error: errorText(e) }); } finally { setEnriching(false); }
   };
   const [selected, setSelected] = useState<string[]>([]);
   const [recast, setRecast] = useState<{ speaker: string; to: string | null } | null>(null);
@@ -375,6 +405,8 @@ export default function ProjectEditor({ pid, onBack }: { pid: string; onBack: ()
         setCastOpen(true);
         document.getElementById("speech-cast")?.scrollIntoView({ block: "nearest" });
       }
+      const mend = e instanceof ApiError ? NOT_READY_SETTINGS[e.code] : undefined;
+      if (mend) openSettings(mend);
     } finally { setJob(null); }
   };
   /** A voicing of this project started elsewhere (the agent, another window) is followed here as if started here. */
@@ -709,6 +741,8 @@ export default function ProjectEditor({ pid, onBack }: { pid: string; onBack: ()
           { icon: History, label: t("history.open"), act: () => setHistory(true) },
           { icon: Wand2, label: selected.length ? t("enrich.runSelected", { n: selected.length }) : t("enrich.run"), act: () => void enrich(selected.length ? selected : null), disabled: enriching },
           { icon: Wand2, label: selected.length ? t("enrich.punctSelected", { n: selected.length }) : t("enrich.punct"), act: () => void enrich(selected.length ? selected : null, "punctuation"), disabled: enriching },
+          { icon: PenLine, label: t("enrich.extend"), act: () => setAsking({ mode: "extend", error: null }), disabled: enriching || !blocks.length },
+          ...(selected.length ? [{ icon: PenLine, label: t("enrich.rewriteSelected", { n: selected.length }), act: () => setAsking({ mode: "rewrite" as const, error: null }), disabled: enriching }] : []),
           { icon: MessagesSquare, label: selected.length ? t("speech.splitSpeechSelected", { n: selected.length }) : t("speech.splitSpeech"), act: () => void splitSpeech(selected.length ? selected : null), disabled: splitting || !blocks.length },
           ...(project.book ? [{ icon: BookUp, label: t("book.rebuildOpen"), act: () => bookFile.current?.click() }] : []),
           { icon: SpellCheck, label: t("speech.stressAll"), act: () => void stressBlocks(null), disabled: !!stressing || !blocks.length },
@@ -917,6 +951,7 @@ export default function ProjectEditor({ pid, onBack }: { pid: string; onBack: ()
       )}
       <Transport blocks={transportBlocks} audio={audio} playing={playing} paused={paused} rate={speed} start={selected[0] ?? blocks[0]?.id ?? null} tint={tintOf}
         onPlay={listenFrom} onPause={pauseAudio} onResume={resumeAudio} onStop={stopAudio} onSkip={skip} onRate={changeRate} onShow={showBlock} onEdit={editSpoken} />
+      {asking && <DirectorAsk mode={asking.mode} count={selected.length} busy={enriching} error={asking.error} onRun={(text, minutes) => void direct(text, minutes)} onClose={() => setAsking(null)} />}
       {enriched && (
         <EnrichDialog changes={enriched.changes} refused={enriched.refused} mode={enriched.mode} onClose={() => setEnriched(null)}
           onApply={(kept) => { edit((p) => { for (const b of blockList(p)) { const c = kept.find((x) => x.id === b.id); if (c && b.text === c.before) b.text = c.after; } return p; }); setEnriched(null); }} />

@@ -74,9 +74,15 @@ pub(super) fn tools() -> Vec<Tool> {
         },
         Tool {
             name: "project_enrich",
-            description: "The director model suggests, never changing a word: with mode tags (the default) expression tags for blocks by their meaning, only tags the block's engine reads; with mode punctuation the punctuation for reading aloud (commas, dashes and full stops where speech pauses, a run-on sentence cut in two), tags kept. A job, follow it with studio_wait. Its result lists each changed block as id, before and after, and how many answers were turned down for changed words; nothing is applied - put the texts you accept with project_update. Without ids, every block.",
-            schema: || object(json!({ "pid": pid(), "ids": { "type": "array", "items": { "type": "string" } }, "mode": { "type": "string", "enum": ["tags", "punctuation"] } }), &["pid"]),
+            description: "The director model suggests: with mode tags (the default) expression tags for blocks by their meaning, only tags the block's engine reads, and with mode punctuation the punctuation for reading aloud (commas, dashes and full stops where speech pauses, a run-on sentence cut in two), tags kept - both never changing a word; with mode rewrite the blocks worded anew as instruction says (shorter, more formal, another joke), each still one spoken line of its speaker. A job, follow it with studio_wait. Its result lists each changed block as id, before and after, and how many answers were turned down; nothing is applied - put the texts you accept with project_update. Without ids, every block.",
+            schema: || object(json!({ "pid": pid(), "ids": { "type": "array", "items": { "type": "string" } }, "mode": { "type": "string", "enum": ["tags", "punctuation", "rewrite"] }, "instruction": { "type": "string" } }), &["pid"]),
             call: |args| post(project_path(args, "/enrich")?, body_without(args, &["pid"])),
+        },
+        Tool {
+            name: "project_extend",
+            description: "The director model writes what comes next in a project's script, for the speakers it has, from the line after its last one (it reads the script's last lines; nothing written is repeated or changed): minutes of speech to add (5), direction - where the script goes, when there is a wish. A job, follow it with studio_wait. Its result is lines (speaker, text, direction); nothing is applied - add the ones you accept after the last block with project_update.",
+            schema: || object(json!({ "pid": pid(), "minutes": { "type": "integer", "minimum": 1, "maximum": 20 }, "direction": { "type": "string" } }), &["pid"]),
+            call: |args| post(project_path(args, "/extend")?, body_without(args, &["pid"])),
         },
         Tool {
             name: "project_export",

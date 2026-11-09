@@ -54,7 +54,7 @@ pub(crate) mod http {
         tracks_upload, try_file, try_rule,
     };
     pub(crate) mod director {
-        pub(crate) use super::super::director_api::{cast, enrich, podcast};
+        pub(crate) use super::super::director_api::{cast, enrich, extend, podcast};
     }
 }
 

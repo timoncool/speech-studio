@@ -205,6 +205,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/projects/{pid}/blocks/{bid}/ab", post(speech_api::ab))
         .route("/projects/{pid}/blocks/{bid}/fix", post(speech_api::fix))
         .route("/projects/{pid}/enrich", post(director_api::enrich))
+        .route("/projects/{pid}/extend", post(director_api::extend))
         .route("/projects/{pid}/package", post(speech_api::package))
         .route("/speechproj/import", post(speech_api::import_package))
         .route("/projects/from-subtitles", post(speech_api::from_subtitles))

@@ -189,7 +189,9 @@ export const speechApi = {
   list: () => getCoded<{ projects: ProjectCard[] }>("/projects"),
   podcast: (body: { topic: string; speakers: { name: string; manner: string }[]; minutes: number; lang: string; name?: string }) => postCoded<{ job_id: string }>("/projects/podcast", body),
   castChapter: (pid: string, chapter: string) => postCoded<{ job_id: string }>(`/projects/${pid}/cast`, { chapter }),
-  enrich: (pid: string, ids: string[] | null, mode: "tags" | "punctuation" = "tags") => postCoded<{ job_id: string }>(`/projects/${pid}/enrich`, ids ? { ids, mode } : { mode }),
+  enrich: (pid: string, ids: string[] | null, mode: "tags" | "punctuation" | "rewrite" = "tags", instruction?: string) => postCoded<{ job_id: string }>(`/projects/${pid}/enrich`, { ...(ids ? { ids } : {}), mode, instruction }),
+  /** The director writes what comes next in the project's script; the job's result is the lines to add. */
+  extend: (pid: string, minutes: number, direction: string) => postCoded<{ job_id: string }>(`/projects/${pid}/extend`, { minutes, direction }),
   create: (body: { name?: string; text: string; corpus?: "ru_hard"; voice?: string | null; lang?: string; split?: "paragraphs" | "lines"; files?: { name: string; text: string }[]; engine?: string; key?: string }) => postCoded<{ project_id: string; project: SpeechProject }>("/projects", body),
   get: (pid: string) => getCoded<SpeechProject>(`/projects/${pid}`),
   put: (pid: string, project: SpeechProject) => {
