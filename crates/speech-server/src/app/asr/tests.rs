@@ -31,6 +31,21 @@ fn asr_preparation_uses_its_stage_backend_instead_of_other_stages() {
     assert_eq!(missing_parts(root.path(), &models, "whisper"), whisper);
 }
 
+/// Russian speech VoxLingua107 names Belarusian goes to the model that knows Russian, in Russian, and so does speech
+/// whose second candidate the model knows; speech in a language far from all of the model's (Georgian, Chinese) is
+/// named as it is, for CrisperWhisper or a refusal by name.
+#[test]
+fn a_close_language_the_model_lacks_is_read_in_the_one_it_knows() {
+    let parakeet = ["en", "ru", "uk", "de", "hr", "pl"];
+    let ranked = |xs: &[(&str, f32)]| xs.iter().map(|(c, p)| (c.to_string(), *p)).collect::<Vec<_>>();
+    assert_eq!(routed_language(&ranked(&[("be", 0.94), ("ru", 0.04), ("uk", 0.01)]), &parakeet).as_deref(), Some("ru"));
+    assert_eq!(routed_language(&ranked(&[("be", 0.99), ("lt", 0.004), ("lv", 0.003)]), &parakeet).as_deref(), Some("ru"), "Belarusian alone: read as Russian");
+    assert_eq!(routed_language(&ranked(&[("sl", 0.70), ("hr", 0.25), ("sr", 0.02)]), &parakeet).as_deref(), Some("hr"), "the second candidate is known");
+    assert_eq!(routed_language(&ranked(&[("ka", 0.97), ("hy", 0.01), ("az", 0.01), ("ru", 0.005)]), &parakeet).as_deref(), Some("ka"), "Georgian is not read as Russian");
+    assert_eq!(routed_language(&ranked(&[("zh", 0.90), ("yue", 0.05), ("ja", 0.03)]), &parakeet).as_deref(), Some("zh"));
+    assert_eq!(routed_language(&ranked(&[("be", 0.94), ("ru", 0.04)]), &[]).as_deref(), Some("be"), "a recogniser that reads every language gets the language heard");
+}
+
 #[test]
 fn an_explicit_missing_recognizer_returns_an_error_without_installing() {
     let _language = crate::i18n::test_language("ru");

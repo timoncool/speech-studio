@@ -384,7 +384,7 @@ fn synth_block_with(p: &SpeechPaths, pid: &str, project: &SpeechProject, b: &Blo
         let vp = crate::voices::VoicePaths { repo_root: p.repo_root.clone(), models_root: p.models_root.clone(), voices_dir: p.voices_dir.clone() };
         // a reference without its text is heard here, as «Recognise the reference text» would do
         if crate::voices::read_transcript(&p.voices_dir, v).is_none_or(|t| t.trim().is_empty()) {
-            crate::voices::transcribe(&vp, v, &|_| {})?;
+            crate::voices::transcribe_in(&vp, v, project.lang_of(b), &|_| {})?;
         }
         crate::voices::ensure_words(&vp, v, limit)?;
     }
@@ -1188,7 +1188,7 @@ fn synth_scope(p: &SpeechPaths, pid: &str, scope: &Scope, progress: &dyn Fn(Valu
         let untold = crate::voices::read_transcript(&p.voices_dir, &voice).is_none_or(|t| t.trim().is_empty());
         if clones && untold && !heard.contains(&voice) && library.iter().any(|x| x.name == voice) {
             let vp = crate::voices::VoicePaths { repo_root: p.repo_root.clone(), models_root: p.models_root.clone(), voices_dir: p.voices_dir.clone() };
-            crate::voices::transcribe(&vp, &voice, progress)?;
+            crate::voices::transcribe_in(&vp, &voice, project.lang_of(b), progress)?;
             heard.push(voice);
         }
     }

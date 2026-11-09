@@ -218,10 +218,10 @@ pub fn second_opinion(repo_root: &Path, models_root: &Path, audio: &Path, lang: 
 const OWN_LANGUAGES_MIN: f32 = 0.1;
 
 /// The language of 16 kHz mono speech by VoxLingua107 (its first 30 s), for a model that knows `known` (its own
-/// languages): its likeliest own language while those hold a noticeable share, else the likeliest language a recogniser
-/// here can read, so «auto» never routes a recording to a model that cannot read it (a Chinese reference recognised by
-/// Parakeet, which does not know it, came back empty and was refused as silent). None for a clip too short to hear.
-/// Needs the langid helper and the tcpp build on disk.
+/// languages): its likeliest own language while those hold a noticeable share, else `routed_language` of all the
+/// candidates, so «auto» never routes a recording to a model that cannot read it (a Chinese reference recognised by
+/// Parakeet, which does not know it, came back empty and was refused as silent) nor Russian heard as Belarusian away
+/// from it. None for a clip too short to hear. Needs the langid helper and the tcpp build on disk.
 pub(crate) fn spoken_language(models_root: &Path, wav: &Path, known: &[&str]) -> Result<Option<String>, String> {
     let (pcm, _) = crate::audio::wavio::read_mono_f32_head(wav, 30 * 16_000)?;
     if pcm.len() < dub_asr::tcpp::LANGID_MIN_SAMPLES {
@@ -234,11 +234,33 @@ pub(crate) fn spoken_language(models_root: &Path, wav: &Path, known: &[&str]) ->
     if own.allowed_mass >= OWN_LANGUAGES_MIN {
         return Ok(own.ranked.into_iter().next().map(|(code, _)| code));
     }
-    // Outside the model's own languages the recording goes to CrisperWhisper, so the language must be one it knows:
-    // VoxLingua107 also names languages Whisper has no token for (Esperanto, Guarani, Interlingua, …), which the
-    // recogniser would then refuse by name. The likeliest language a recogniser here can read is taken instead.
     let all = dub_asr::tcpp::detect_language(&engine, &model, pcm, &[])?;
-    Ok(recognisable_language(&all.ranked))
+    Ok(routed_language(&all.ranked, known))
+}
+
+/// How many of the likeliest candidates are looked through for a language the model knows: VoxLingua107 puts a close
+/// language first and the right one just after it (Russian clips came out Belarusian 0.60 / Russian 0.40), while
+/// speech of a language far from all of the model's (Chinese, Georgian) has none of them this high.
+const KNOWN_AMONG: usize = 3;
+
+/// Languages VoxLingua107 takes for a close one: speech it names so is read in the other, when the model knows it.
+const CLOSE: &[(&str, &str)] = &[("be", "ru"), ("uk", "ru"), ("bs", "hr"), ("sr", "hr")];
+
+/// From language candidates ranked by likelihood, the language a model knowing `known` reads the speech in: the first
+/// of the likeliest `KNOWN_AMONG` it knows, itself or as the close language it is taken for; when none of them is, the
+/// likeliest a recogniser here can read (`recognisable_language`), for CrisperWhisper or a refusal by name.
+fn routed_language(ranked: &[(String, f32)], known: &[&str]) -> Option<String> {
+    let knows = |code: &str| known.contains(&code);
+    ranked
+        .iter()
+        .take(KNOWN_AMONG)
+        .find_map(|(code, _)| {
+            if knows(code) {
+                return Some(code.clone());
+            }
+            CLOSE.iter().find(|(from, to)| from == code && knows(to)).map(|(_, to)| to.to_string())
+        })
+        .or_else(|| recognisable_language(ranked))
 }
 
 /// From language candidates ranked by likelihood, the likeliest one a recogniser here can read (CrisperWhisper's
