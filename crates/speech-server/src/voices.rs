@@ -13,7 +13,7 @@ pub(crate) use reference::prepare_reference;
 pub(crate) use jobs::{ensure_words, transcribe, VoicePaths};
 
 pub(crate) use library::{
-    free_name, guess_card, import_audio, list, read_transcript, sanitize, write_card, write_transcript, write_words, Voice, VoiceCard,
+    default_voice, free_name, guess_card, import_audio, list, read_transcript, sanitize, write_card, write_transcript, write_words, Voice, VoiceCard,
     AGES, GENDERS,
 };
 

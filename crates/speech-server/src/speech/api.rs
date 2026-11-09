@@ -187,6 +187,12 @@ pub async fn create(State(st): State<AppState>, Json(body): Json<Value>) -> Resp
         if let Some(l) = loudness {
             project.settings.loudness = l;
         }
+        // an engine that speaks only a library voice gets one, as the window offers it, so voicing does not fail for it
+        if project.settings.voice.is_none() {
+            if let Some(m) = crate::engines::get(&project.settings.engine).filter(|m| m.needs_voice && m.presets.is_empty()) {
+                project.settings.voice = crate::voices::default_voice(&p.voices_dir, &project.settings.lang, m.ref_text_required);
+            }
+        }
         crate::speech::validate(&project)?;
         project.key = key;
         if !direction.is_empty() {

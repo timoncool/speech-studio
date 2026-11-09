@@ -29,12 +29,21 @@ export function rememberVoice(name: string): void {
   try { localStorage.setItem(RECENT, JSON.stringify([name, ...recentVoices().filter((v) => v !== name)].slice(0, 5))); } catch { /* the list stays as it was */ }
 }
 
-/** The library voice an engine that only clones starts with: in the project's language, a favourite first, then one of
- * the pack; an engine that needs the reference text takes only voices that have it. Null when the library has none. */
+/** The library voice an engine that only clones starts with, as the server gives a new project one: in the project's
+ * language before another, with its reference text first when the engine needs it (one without is heard before
+ * voicing), a favourite first, then one of the pack. Null when the library has none. */
 export function defaultLibraryVoice(listing: VoiceListing | null, lang: string, needsText: boolean): string | null {
-  const fit = (listing?.voices ?? []).filter((v) => v.card.kind !== "preset" && (!needsText || !!v.transcript?.trim()) && (!lang || lang === "auto" || v.card.lang === lang));
-  const rank = (v: VoiceEntry) => (v.card.favorite ? 0 : v.card.source === "pack" ? 1 : 2);
-  return [...fit].sort((a, b) => rank(a) - rank(b))[0]?.name ?? null;
+  const own = (listing?.voices ?? []).filter((v) => v.card.kind !== "preset");
+  const rank = (v: VoiceEntry) => [
+    !lang || lang === "auto" || v.card.lang === lang ? 0 : 1,
+    !needsText || v.transcript?.trim() ? 0 : 1,
+    v.card.favorite ? 0 : v.card.source === "pack" ? 1 : 2,
+  ];
+  const before = (a: VoiceEntry, b: VoiceEntry) => {
+    const [x, y] = [rank(a), rank(b)];
+    return x[0] - y[0] || x[1] - y[1] || x[2] - y[2];
+  };
+  return [...own].sort(before)[0]?.name ?? null;
 }
 
 export const errorText = (e: unknown) => (e instanceof ApiError ? e.detail || e.code : e instanceof Error ? e.message : String(e));

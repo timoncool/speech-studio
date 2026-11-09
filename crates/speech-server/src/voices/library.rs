@@ -274,6 +274,21 @@ pub fn list(dir: &Path) -> (Vec<Voice>, Vec<(String, String)>) {
     (voices, broken)
 }
 
+/// The library voice a project gets when its engine speaks only library voices and none is chosen, as the window
+/// offers it: one of `lang` when there is one, else any (a cloning engine speaks another language in it too); one with
+/// its reference text first when the engine `needs_text` (a voice without it is heard before voicing); favourites
+/// first, then the voices of packs.
+pub fn default_voice(dir: &Path, lang: &str, needs_text: bool) -> Option<String> {
+    let voices = list(dir).0;
+    let own = |v: &&Voice| v.card.kind != "preset";
+    let rank = |v: &&Voice| {
+        let same_lang = lang.is_empty() || lang == "auto" || v.card.lang == lang;
+        let told = !needs_text || v.transcript.as_deref().is_some_and(|t| !t.trim().is_empty());
+        (!same_lang, !told, if v.card.favorite { 0 } else if v.card.source == "pack" { 1 } else { 2 })
+    };
+    voices.iter().filter(own).min_by_key(rank).map(|v| v.name.clone())
+}
+
 /// Файлы голоса и их суффиксы после имени (`.wav`, `.words.json`, `.MP3.txt` …), в папке и в `.originals`.
 fn sidecars(dir: &Path, name: &str) -> Vec<(PathBuf, String)> {
     let mut suffixes: Vec<String> = AUDIO_EXTS.iter().chain(PHOTO_EXTS.iter()).chain(["txt", "lab", "json", "words.json"].iter()).map(|e| format!(".{e}")).collect();
@@ -502,6 +517,27 @@ mod tests {
 
     fn voice(dir: &Path, name: &str, ext: &str) {
         std::fs::write(dir.join(format!("{name}.{ext}")), b"RIFF").unwrap();
+    }
+
+    /// A project whose engine speaks only library voices starts with one: of its language before another, with its
+    /// reference text first when the engine needs it (a voice without it is not left out), a favourite first; none with
+    /// an empty library.
+    #[test]
+    fn a_new_project_gets_a_library_voice_as_the_window_offers_it() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(default_voice(dir.path(), "ru", true), None);
+        for (name, lang, favorite, text) in [("Anna", "ru", false, None), ("Bob", "en", true, Some("Hello there.")), ("Vera", "ru", false, Some("Привет."))] {
+            voice(dir.path(), name, "wav");
+            write_card(dir.path(), name, &VoiceCard { lang: lang.into(), favorite, ..Default::default() }).unwrap();
+            if let Some(t) = text {
+                write_transcript(dir.path(), name, t).unwrap();
+            }
+        }
+        assert_eq!(default_voice(dir.path(), "ru", true).as_deref(), Some("Vera"), "its language and its text");
+        assert_eq!(default_voice(dir.path(), "ru", false).as_deref(), Some("Anna"), "its language is enough");
+        assert_eq!(default_voice(dir.path(), "de", true).as_deref(), Some("Bob"), "no voice of German: a favourite with its text");
+        std::fs::remove_file(dir.path().join("Vera.txt")).unwrap();
+        assert_eq!(default_voice(dir.path(), "ru", true).as_deref(), Some("Anna"), "no Russian voice with its text: one without is not left out");
     }
 
     #[test]

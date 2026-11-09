@@ -1107,14 +1107,41 @@ pub fn synth(p: &SpeechPaths, pid: &str, scope: &Scope, progress: &dyn Fn(Value)
     result
 }
 
+/// The blocks `scope` voices, in order.
+pub(crate) fn wanted(project: &SpeechProject, scope: &Scope) -> Vec<String> {
+    let order: Vec<String> = project.blocks().map(|b| b.id.clone()).collect();
+    let start = scope.from.as_ref().and_then(|f| order.iter().position(|id| id == f)).unwrap_or(0);
+    order[start..].iter().filter(|id| scope.ids.as_ref().is_none_or(|ids| ids.contains(id))).cloned().collect()
+}
+
+/// Why the `wanted` blocks cannot be voiced for want of a voice: those whose engine speaks only a library voice and
+/// who have none, by number and text; and what to do when the library has no voice to give them. None when every one
+/// has a voice.
+pub(crate) fn no_voice(p: &SpeechPaths, project: &SpeechProject, wanted: &[String]) -> Option<String> {
+    let silent: Vec<String> = project
+        .blocks()
+        .enumerate()
+        .filter(|(_, b)| wanted.contains(&b.id) && !b.hidden && !sp::says_nothing(&b.text) && project.voice_of(b).is_none())
+        .filter(|(_, b)| crate::engines::get(project.engine_of(b)).is_some_and(|e| e.needs_voice))
+        .map(|(n, b)| format!("{} «{}»", n + 1, sp::visible_snippet(&b.text)))
+        .collect();
+    if silent.is_empty() {
+        return None;
+    }
+    let mut blocks = silent.iter().take(10).cloned().collect::<Vec<_>>().join(", ");
+    if silent.len() > 10 {
+        blocks.push_str(", …");
+    }
+    let library = crate::voices::list(&p.voices_dir).0;
+    Some(if library.iter().any(|v| v.card.kind != "preset") { t!("speech-no-voice-blocks", blocks = blocks) } else { t!("speech-no-voice-library-empty", blocks = blocks) })
+}
+
 fn synth_scope(p: &SpeechPaths, pid: &str, scope: &Scope, progress: &dyn Fn(Value)) -> Result<Value, String> {
     REPEAT_SEED.with(|s| s.set(scope.seed));
     let project = crate::speech::load(&p.workspace, pid)?;
     let qc = project.settings.qc.clone();
     let random_seed = project.settings.params.seed_mode != "fixed";
-    let order: Vec<String> = project.blocks().map(|b| b.id.clone()).collect();
-    let start = scope.from.as_ref().and_then(|f| order.iter().position(|id| id == f)).unwrap_or(0);
-    let wanted: Vec<String> = order[start..].iter().filter(|id| scope.ids.as_ref().is_none_or(|ids| ids.contains(id))).cloned().collect();
+    let wanted = wanted(&project, scope);
     let mut used: Vec<&str> = vec![project.settings.engine.as_str()];
     for b in project.blocks().filter(|b| wanted.contains(&b.id)) {
         if !used.contains(&project.engine_of(b)) {
@@ -1131,19 +1158,8 @@ fn synth_scope(p: &SpeechPaths, pid: &str, scope: &Scope, progress: &dyn Fn(Valu
         }
     }
     // one error naming every block that cannot be voiced, before any model loads
-    let silent: Vec<String> = project
-        .blocks()
-        .enumerate()
-        .filter(|(_, b)| wanted.contains(&b.id) && !b.hidden && project.voice_of(b).is_none())
-        .filter(|(_, b)| crate::engines::get(project.engine_of(b)).is_some_and(|e| e.needs_voice))
-        .map(|(n, b)| format!("{} «{}»", n + 1, sp::visible_snippet(&b.text)))
-        .collect();
-    if !silent.is_empty() {
-        let mut blocks = silent.iter().take(10).cloned().collect::<Vec<_>>().join(", ");
-        if silent.len() > 10 {
-            blocks.push_str(", …");
-        }
-        return Err(t!("speech-no-voice-blocks", blocks = blocks));
+    if let Some(e) = no_voice(p, &project, &wanted) {
+        return Err(e);
     }
     let library = crate::voices::list(&p.voices_dir).0;
     let unknown: Vec<String> = project
@@ -2484,6 +2500,27 @@ mod tests {
         assert_eq!(marked(Some(clean), &["clipping".to_string()]).unwrap().issues, ["clipping"]);
         let raised = crate::audio::qc::Check { passed: true, issues: vec!["clipping".into()], ..Default::default() };
         assert_eq!(marked(Some(raised), &["clipping".to_string()]).unwrap().issues, ["clipping"], "named once");
+    }
+
+    /// Blocks with no voice for an engine that speaks only library voices are named before voicing starts, with what to
+    /// do when the library has no voice; a scene break with nothing to say is not one of them.
+    #[test]
+    fn blocks_without_a_voice_are_told_before_voicing_with_the_step_to_take() {
+        let work = tempfile::tempdir().unwrap();
+        let p = SpeechPaths { repo_root: work.path().into(), workspace: work.path().join("ws"), voices_dir: work.path().join("voices"), models_root: work.path().join("models") };
+        std::fs::create_dir_all(&p.voices_dir).unwrap();
+        let mut project = sp::from_text("Книга", "Первая фраза.\n\n* * *\n\nВторая фраза.", "n");
+        project.chapters[0].blocks.push(Block { id: sp::new_id(), speaker: "n".into(), text: "* * *".into(), ..Default::default() });
+        project.settings.engine = crate::engines::models::DRAMA_TTS.into();
+        let all = wanted(&project, &Scope::default());
+        let empty = no_voice(&p, &project, &all).expect("no voice");
+        assert!(empty.contains("1 «") && empty.contains("2 «") && !empty.contains("3 «"), "{empty}");
+        std::fs::write(p.voices_dir.join("Vera.wav"), b"RIFF").unwrap();
+        let some = no_voice(&p, &project, &all).unwrap();
+        assert!(some.contains("1 «") && some.contains("2 «"), "{some}");
+        assert_ne!(some, empty, "with a voice in the library the step is to choose it, not to add one");
+        project.settings.voice = Some("Vera".into());
+        assert_eq!(no_voice(&p, &project, &all), None);
     }
 
     /// An export that fails while it encodes leaves the file exported before under the same name as it was, and no

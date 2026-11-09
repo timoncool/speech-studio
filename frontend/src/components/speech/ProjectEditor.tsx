@@ -369,7 +369,13 @@ export default function ProjectEditor({ pid, onBack }: { pid: string; onBack: ()
       const job_id = r.job_id;
       setJob({ id: job_id, ids: scope.ids ?? null });
       await followJob(job_id, "synth");
-    } catch (e) { setJobError(errorText(e)); } finally { setJob(null); }
+    } catch (e) {
+      setJobError(errorText(e));
+      if (e instanceof ApiError && e.code === "no_voice") {
+        setCastOpen(true);
+        document.getElementById("speech-cast")?.scrollIntoView({ block: "nearest" });
+      }
+    } finally { setJob(null); }
   };
   /** A voicing of this project started elsewhere (the agent, another window) is followed here as if started here. */
   const adoptJob = useCallback((id: string) => {

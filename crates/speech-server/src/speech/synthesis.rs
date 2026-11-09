@@ -12,9 +12,10 @@ use serde_json::{json, Value};
 mod tests;
 
 pub(super) async fn enqueue(paths: &SpeechPaths, queue: &jobs::JobQueue, pid: String, body: Value) -> Response {
-    if let Err(e) = crate::speech::load(&paths.workspace, &pid) {
-        return refuse(StatusCode::NOT_FOUND, "no_project", e);
-    }
+    let project = match crate::speech::load(&paths.workspace, &pid) {
+        Ok(project) => project,
+        Err(e) => return refuse(StatusCode::NOT_FOUND, "no_project", e),
+    };
     let scope = Scope {
         ids: body
             .get("ids")
@@ -24,6 +25,10 @@ pub(super) async fn enqueue(paths: &SpeechPaths, queue: &jobs::JobQueue, pid: St
         force: body.get("force").and_then(Value::as_bool).unwrap_or(false),
         seed: body.get("seed").and_then(Value::as_u64),
     };
+    // blocks with no voice are told before voicing starts, so the window takes the person to choosing one
+    if let Some(e) = speech_jobs::no_voice(paths, &project, &speech_jobs::wanted(&project, &scope)) {
+        return refuse(StatusCode::CONFLICT, "no_voice", e);
+    }
     let aloud = body.get("aloud").and_then(Value::as_bool).unwrap_or(false);
     for _ in 0..40 {
         if let Some((job_id, jobs::JobKind::Synth)) = queue.active_for(&pid).await {

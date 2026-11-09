@@ -788,6 +788,7 @@ dict-import-unknown = { $name } 不是 Balabolka 词典（.dic、.rex 或 .bxd�
 speech-engine-unknown = 未知的合成引擎：{ $engine }
 speech-lang-unsupported = { $engine } 不支持 { $lang }：请在项目设置中选择其他语言或“自动”
 speech-no-voice-blocks = 这些段落没有声音，而它们的引擎只能使用声音库中的声音：{ $blocks }。请为项目、说话人或段落选择一个声音。
+speech-no-voice-library-empty = 这些段落没有声音，而它们的引擎只能使用声音库中的声音，但声音库里还没有声音：{ $blocks }。请在“声音”页添加一个声音（从文件、录音或声音包），或选择自带声音的引擎。
 speech-unknown-voice-blocks = 这些段落的声音既不在声音库中，也不是其引擎自带的声音（常见于其他引擎的内置声音）：{ $blocks }。请为项目、说话人或段落选择一个声音。
 speechproj-not-a-package = 这不是 Speech Studio 项目文件（.speechproj）
 speechproj-bad-path = 项目文件中有超出其文件夹的路径：{ $path }

@@ -989,6 +989,7 @@ dict-import-unknown = { $name } não é um dicionário do Balabolka (.dic, .rex 
 speech-engine-unknown = Motor de síntese desconhecido: { $engine }
 speech-lang-unsupported = { $engine } não fala { $lang }: escolha outro idioma ou Automático nas configurações do projeto
 speech-no-voice-blocks = Estes blocos não têm voz, e o motor deles só fala com uma voz da biblioteca: { $blocks }. Escolha uma voz para o projeto, o locutor ou o bloco.
+speech-no-voice-library-empty = Estes blocos não têm voz, e o motor deles só fala com uma voz da biblioteca, que ainda não tem vozes: { $blocks }. Adicione uma voz na aba Vozes (de um arquivo, uma gravação ou um pacote) ou escolha um motor com vozes próprias.
 speech-unknown-voice-blocks = Estes blocos têm uma voz que não está na biblioteca nem é uma voz própria do motor deles (muitas vezes uma voz integrada de outro motor): { $blocks }. Escolha uma voz para o projeto, o locutor ou o bloco.
 speechproj-not-a-package = Este não é um arquivo de projeto do Speech Studio (.speechproj)
 speechproj-bad-path = O arquivo de projeto tem um caminho fora da pasta: { $path }

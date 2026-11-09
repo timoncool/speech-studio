@@ -995,6 +995,7 @@ dict-import-unknown = { $name } is not a Balabolka dictionary (.dic, .rex or .bx
 speech-engine-unknown = Unknown synthesis engine: { $engine }
 speech-lang-unsupported = { $engine } does not speak { $lang }: choose another language or Auto in the project settings
 speech-no-voice-blocks = These blocks have no voice, and their engine speaks only with a voice from the library: { $blocks }. Choose a voice for the project, the speaker or the block.
+speech-no-voice-library-empty = These blocks have no voice, and their engine speaks only with a voice from the library, which has no voices yet: { $blocks }. Add a voice in the Voices tab (from a file, a recording or a pack) or choose an engine with voices of its own.
 speech-unknown-voice-blocks = These blocks have a voice that is neither in the library nor one of their engine's own voices (often a built-in voice of another engine): { $blocks }. Choose a voice for the project, the speaker or the block.
 speechproj-not-a-package = This is not a Speech Studio project file (.speechproj)
 speechproj-bad-path = The project file has a path outside its folder: { $path }
