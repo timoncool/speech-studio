@@ -352,18 +352,18 @@ mod platform {
     pub const TRANSCRIBE_ENGINE: Parts = Parts {
         size: dub_asr::tcpp::Build::Cuda.download().size,
         files: &[super::tcpp_file(dub_asr::tcpp::Build::Cuda, "models/transcribe-engine/_engine.zip")],
-        markers: &[Marker { rel: "models/transcribe-engine/transcribe.dll", expect: dub_asr::tcpp::Build::Cuda.library_size() }],
+        markers: &[Marker { rel: "models/transcribe-engine/transcribe.dll", expect: dub_asr::tcpp::Build::Cuda.library_size() }, Marker { rel: "models/transcribe-engine/transcribe-ggml.dll", expect: 0 }],
     };
     pub const TRANSCRIBE_ENGINE_CPU: Parts = Parts {
         size: dub_asr::tcpp::Build::Cpu.download().size,
         files: &[super::tcpp_file(dub_asr::tcpp::Build::Cpu, "models/transcribe-engine-cpu/_engine.zip")],
-        markers: &[Marker { rel: "models/transcribe-engine-cpu/transcribe.dll", expect: dub_asr::tcpp::Build::Cpu.library_size() }],
+        markers: &[Marker { rel: "models/transcribe-engine-cpu/transcribe.dll", expect: dub_asr::tcpp::Build::Cpu.library_size() }, Marker { rel: "models/transcribe-engine-cpu/transcribe-ggml.dll", expect: 0 }],
     };
     // the Vulkan build for a card CUDA 13 does not run on (AMD, Intel, older NVIDIA)
     pub const TRANSCRIBE_ENGINE_VULKAN: Parts = Parts {
         size: dub_asr::tcpp::Build::Vulkan.download().size,
         files: &[super::tcpp_file(dub_asr::tcpp::Build::Vulkan, "models/transcribe-engine-vulkan/_engine.zip")],
-        markers: &[Marker { rel: "models/transcribe-engine-vulkan/transcribe.dll", expect: dub_asr::tcpp::Build::Vulkan.library_size() }],
+        markers: &[Marker { rel: "models/transcribe-engine-vulkan/transcribe.dll", expect: dub_asr::tcpp::Build::Vulkan.library_size() }, Marker { rel: "models/transcribe-engine-vulkan/transcribe-ggml.dll", expect: 0 }],
     };
 
     // Qwen3-TTS (timoncool/qwentts.cpp, branch studio, ABI 7, scripts/build-engine-windows.cmd): qwen.dll with ggml and
@@ -583,17 +583,17 @@ mod platform {
     pub const TRANSCRIBE_ENGINE: Parts = Parts {
         size: dub_asr::tcpp::Build::Cuda.download().size,
         files: &[super::tcpp_file(dub_asr::tcpp::Build::Cuda, "models/transcribe-engine/_engine.tar.gz")],
-        markers: &[Marker { rel: "models/transcribe-engine/libtranscribe.so", expect: dub_asr::tcpp::Build::Cuda.library_size() }],
+        markers: &[Marker { rel: "models/transcribe-engine/libtranscribe.so", expect: dub_asr::tcpp::Build::Cuda.library_size() }, Marker { rel: "models/transcribe-engine/libtranscribe-ggml.so.0", expect: 0 }],
     };
     pub const TRANSCRIBE_ENGINE_CPU: Parts = Parts {
         size: dub_asr::tcpp::Build::Cpu.download().size,
         files: &[super::tcpp_file(dub_asr::tcpp::Build::Cpu, "models/transcribe-engine-cpu/_engine.tar.gz")],
-        markers: &[Marker { rel: "models/transcribe-engine-cpu/libtranscribe.so", expect: dub_asr::tcpp::Build::Cpu.library_size() }],
+        markers: &[Marker { rel: "models/transcribe-engine-cpu/libtranscribe.so", expect: dub_asr::tcpp::Build::Cpu.library_size() }, Marker { rel: "models/transcribe-engine-cpu/libtranscribe-ggml.so.0", expect: 0 }],
     };
     pub const TRANSCRIBE_ENGINE_VULKAN: Parts = Parts {
         size: dub_asr::tcpp::Build::Vulkan.download().size,
         files: &[super::tcpp_file(dub_asr::tcpp::Build::Vulkan, "models/transcribe-engine-vulkan/_engine.tar.gz")],
-        markers: &[Marker { rel: "models/transcribe-engine-vulkan/libtranscribe.so", expect: dub_asr::tcpp::Build::Vulkan.library_size() }],
+        markers: &[Marker { rel: "models/transcribe-engine-vulkan/libtranscribe.so", expect: dub_asr::tcpp::Build::Vulkan.library_size() }, Marker { rel: "models/transcribe-engine-vulkan/libtranscribe-ggml.so.0", expect: 0 }],
     };
 
     // Qwen3-TTS (timoncool/qwentts.cpp, branch studio, ABI 7, scripts/build-engine-linux-docker.sh, Ubuntu 22.04):
