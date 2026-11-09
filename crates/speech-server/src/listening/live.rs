@@ -29,6 +29,9 @@ const HEAR_LANGUAGE_SAMPLES: usize = 2 * 16_000;
 /// A phrase heard live: where it starts and ends in the recording, seconds, and what was said.
 pub type Heard = (f64, f64, String);
 
+/// A word of a phrase heard live: what it says, where it starts and ends in the recording, seconds.
+pub type HeardWord = (String, f64, f64);
+
 struct Live {
     lines: Vec<Heard>,
     /// The phrase being said: where it started and what it says so far, until a pause ends it.
@@ -42,6 +45,9 @@ struct Live {
     foreign: std::collections::HashSet<usize>,
     /// The places in `lines` heard while the studio's own phrase sounded and saying that phrase: its voice heard back.
     echo: std::collections::HashSet<usize>,
+    /// The words of the lines whose recogniser timed them (text, start, end in the recording); a line without an entry
+    /// has no word timings.
+    words: std::collections::HashMap<usize, Vec<HeardWord>>,
     /// The moment the recording's second 0 was.
     zero: std::time::Instant,
     /// The recogniser that hears now, as the window names it, and the language asked of it.
@@ -75,6 +81,7 @@ pub fn start(repo_root: &Path, models_root: &Path, lang: &str, engine: &str) -> 
         typed: Default::default(),
         foreign: Default::default(),
         echo: Default::default(),
+        words: Default::default(),
         zero: std::time::Instant::now(),
         engine: choice.label(),
         lang: lang.to_string(),
@@ -161,7 +168,7 @@ pub fn state() -> Value {
     match live().lock().unwrap_or_else(|p| p.into_inner()).as_ref() {
         Some(l) => json!({
             "running": !l.stop.load(Ordering::Relaxed),
-            "lines": l.lines.iter().enumerate().map(|(n, (a, z, text))| json!({ "start": a, "end": z, "text": text, "typed": l.typed.contains(&n), "owner": !l.foreign.contains(&n), "echo": l.echo.contains(&n) })).collect::<Vec<_>>(),
+            "lines": l.lines.iter().enumerate().map(|(n, (a, z, text))| json!({ "start": a, "end": z, "text": text, "typed": l.typed.contains(&n), "owner": !l.foreign.contains(&n), "echo": l.echo.contains(&n), "words": l.words.get(&n).map(|ws| ws.iter().map(|(w, a, z)| json!({ "text": w, "start": a, "end": z })).collect::<Vec<_>>()), "words_source": if l.typed.contains(&n) { "typed" } else if l.words.contains_key(&n) { "asr" } else { "none" } })).collect::<Vec<_>>(),
             "partial": l.partial.as_ref().map(|(a, text)| json!({ "start": a, "text": text })),
             "error": l.error,
             "muted": l.muted,
@@ -175,6 +182,14 @@ pub fn heard_at(secs: f64) -> Option<std::time::Instant> {
     with(|l| l.zero + Duration::from_secs_f64(secs.max(0.0)))
 }
 
+/// The second of the running recording `at` was (before its start: below 0); None with no conversation.
+pub fn recording_secs(at: std::time::Instant) -> Option<f64> {
+    with(|l| match at.checked_duration_since(l.zero) {
+        Some(after) => after.as_secs_f64(),
+        None => -l.zero.duration_since(at).as_secs_f64(),
+    })
+}
+
 /// Serialises the tests that put a conversation of their own into the one live slot.
 #[cfg(test)]
 pub static TEST_SLOT: Mutex<()> = Mutex::new(());
@@ -182,7 +197,7 @@ pub static TEST_SLOT: Mutex<()> = Mutex::new(());
 /// A conversation that heard `lines` (start, end, text, typed, the owner's voice), its second 0 being `zero`, for tests.
 #[cfg(test)]
 pub fn conversation_for_test(zero: std::time::Instant, lines: &[(f64, f64, &str, bool, bool)]) {
-    let mut l = Live { lines: Vec::new(), partial: None, error: None, muted: false, typed: Default::default(), foreign: Default::default(), echo: Default::default(), zero, engine: String::new(), lang: "ru".into(), stop: Arc::new(AtomicBool::new(false)), worker: None };
+    let mut l = Live { lines: Vec::new(), partial: None, error: None, muted: false, typed: Default::default(), foreign: Default::default(), echo: Default::default(), words: Default::default(), zero, engine: String::new(), lang: "ru".into(), stop: Arc::new(AtomicBool::new(false)), worker: None };
     for (n, (a, z, text, typed, owner)) in lines.iter().enumerate() {
         if *typed {
             l.typed.insert(n);
@@ -195,6 +210,12 @@ pub fn conversation_for_test(zero: std::time::Instant, lines: &[(f64, f64, &str,
         l.lines.push((*a, *z, text.to_string()));
     }
     *live().lock().unwrap_or_else(|p| p.into_inner()) = Some(l);
+}
+
+/// The word timings of the running conversation's line `n` (from 0), for tests.
+#[cfg(test)]
+pub fn words_for_test(n: usize, words: &[(&str, f64, f64)]) {
+    with(|l| l.words.insert(n, words.iter().map(|(w, a, z)| (w.to_string(), *a, *z)).collect()));
 }
 
 #[cfg(test)]
@@ -251,7 +272,7 @@ fn listen(choice: crate::engines::models::AsrChoice, models_root: &Path, lang: &
     let mut ended = false;
     let mut interim_at = 0.0f64;
     let wav = work.path().join("utterance.wav");
-    let mut hear = |piece: &[f32]| -> Result<String, String> {
+    let mut hear = |piece: &[f32]| -> Result<(String, Vec<HeardWord>), String> {
         let spec = hound::WavSpec { channels: 1, sample_rate: 16_000, bits_per_sample: 16, sample_format: hound::SampleFormat::Int };
         let mut w = hound::WavWriter::create(&wav, spec).map_err(|e| e.to_string())?;
         for s in piece {
@@ -259,7 +280,8 @@ fn listen(choice: crate::engines::models::AsrChoice, models_root: &Path, lang: &
         }
         w.finalize().map_err(|e| e.to_string())?;
         let heard = asr.transcribe(&wav, if lang.is_empty() { "auto" } else { lang }).map_err(|e| e.localize())?;
-        Ok(dub_asr::join_text(heard.iter().map(|s| s.text.as_str())))
+        let words: Vec<HeardWord> = heard.iter().flat_map(|s| s.words.iter()).map(|w| (w.word.trim().to_string(), w.start, w.end)).filter(|w| !w.0.is_empty()).collect();
+        Ok((dub_asr::join_text(heard.iter().map(|s| s.text.as_str())), words))
     };
     while !ended {
         match from.recv_timeout(Duration::from_millis(300)) {
@@ -321,18 +343,19 @@ fn listen(choice: crate::engines::models::AsrChoice, models_root: &Path, lang: &
                 with(|l| l.partial = Some((offset + a, so_far)));
             } else if secs - interim_at >= INTERIM_SECS && last - first >= INTERIM_SECS {
                 interim_at = secs;
-                let so_far = hear(&audio[from_a..])?;
+                let (so_far, _) = hear(&audio[from_a..])?;
                 with(|l| l.partial = Some((offset + a, so_far)));
             }
             continue;
         };
         let to_z = ((z * 16_000.0) as usize).min(audio.len());
         let recognising = std::time::Instant::now();
-        let text = match stream.as_mut() {
+        // the stream answers text only: its phrases carry no word timings
+        let (text, words) = match stream.as_mut() {
             Some(s) => {
                 s.feed(&audio[streamed.max(from_a).min(to_z)..to_z])?;
                 streamed = 0;
-                s.finish()?
+                (s.finish()?, Vec::new())
             }
             None => hear(&audio[from_a..to_z])?,
         };
@@ -355,6 +378,10 @@ fn listen(choice: crate::engines::models::AsrChoice, models_root: &Path, lang: &
                 let (from, to) = (l.zero + Duration::from_secs_f64(line.0.max(0.0)), l.zero + Duration::from_secs_f64(line.1.max(0.0)));
                 if crate::speech::is_echo(&line.2, from, to) {
                     l.echo.insert(n);
+                }
+                if !words.is_empty() {
+                    let at = offset + a;
+                    l.words.insert(n, words.iter().map(|(w, s, e)| (w.clone(), ((at + s) * 1000.0).round() / 1000.0, ((at + e) * 1000.0).round() / 1000.0)).collect());
                 }
                 l.lines.push(line);
                 if owner == Some(false) {
@@ -393,8 +420,9 @@ mod tests {
         let (x, sr) = crate::audio::wavio::read_mono_f32(Path::new(&std::env::var("LIVE_WAV").expect("LIVE_WAV"))).unwrap();
         let lang = std::env::var("LIVE_LANG").unwrap_or_else(|_| "ru".into());
         let choice = crate::app::recognition::choice(&root, &models, &lang, "test").unwrap();
+        let streams = matches!(&choice, crate::engines::models::AsrChoice::Ggml { model, .. } | crate::engines::models::AsrChoice::Server { model, .. } if model.id == "nemotron");
         std::env::set_var("DUB_ASR_BACKEND", crate::engines::models::stage_backend(&models, "asr_backend"));
-        *live().lock().unwrap() = Some(Live { lines: Vec::new(), partial: None, error: None, muted: false, typed: Default::default(), foreign: Default::default(), echo: Default::default(), zero: std::time::Instant::now(), engine: String::new(), lang: lang.clone(), stop: Arc::new(AtomicBool::new(false)), worker: None });
+        *live().lock().unwrap() = Some(Live { lines: Vec::new(), partial: None, error: None, muted: false, typed: Default::default(), foreign: Default::default(), echo: Default::default(), words: Default::default(), zero: std::time::Instant::now(), engine: String::new(), lang: lang.clone(), stop: Arc::new(AtomicBool::new(false)), worker: None });
         let (to, from) = channel::<Vec<f32>>();
         let feeder = std::thread::spawn(move || {
             for chunk in x.chunks((sr / 10) as usize) {
@@ -422,9 +450,14 @@ mod tests {
             eprintln!("… {p}");
         }
         assert!(!seen.is_empty(), "no text while the phrase went on");
-        let lines = live().lock().unwrap().take().unwrap().lines;
-        for l in &lines {
-            eprintln!("{:.2}-{:.2} {}", l.0, l.1, l.2);
+        let heard = live().lock().unwrap().take().unwrap();
+        let lines = heard.lines;
+        for (n, l) in lines.iter().enumerate() {
+            let words = heard.words.get(&n).map(|ws| ws.iter().map(|(w, a, z)| format!("{w}[{a:.2}-{z:.2}]")).collect::<Vec<_>>().join(" "));
+            eprintln!("{:.2}-{:.2} {} | words: {}", l.0, l.1, l.2, words.as_deref().unwrap_or("none"));
+        }
+        if !streams {
+            assert!((0..lines.len()).all(|n| heard.words.get(&n).is_some_and(|ws| ws.iter().all(|w| w.1 >= lines[n].0 - 0.01 && w.2 <= lines[n].1 + 0.01))), "every line of a recogniser that times its words carries them, inside the line");
         }
         let expect = std::env::var("LIVE_EXPECT").unwrap_or_else(|_| "1945".into());
         assert!(!lines.is_empty() && lines.iter().any(|l| l.2.contains(&expect)), "{lines:?}");

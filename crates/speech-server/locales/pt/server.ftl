@@ -1009,6 +1009,7 @@ listen-no-source = o projeto não tem gravação
 listen-whisper-missing = o CrisperWhisper foi escolhido, mas não está instalado: baixe-o em Configurações → Modelos
 listen-live-downloading = baixando o reconhecedor; o reconhecimento começa assim que terminar
 say-hushed = a pessoa parou a fala na janela: espere a próxima frase dela antes de continuar
+live-metrics-bad-range = Não é um número de linha: { $value }
 say-mic-off = o microfone está desligado: a pessoa o liga no Live e então voice_listen a ouve
 mic-only-person = só a pessoa liga o microfone, pelo botão no estúdio
 listen-gguf-missing = O modelo de reconhecimento «{ $engine }» não foi baixado: baixe-o com o motor transcribe.cpp em Configurações → Modelos.

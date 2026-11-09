@@ -366,6 +366,18 @@ pub(super) fn tools() -> Vec<Tool> {
             call: |args| get(format!("/speech/listen/next{}", query(&[("after", args.get("after").and_then(Value::as_u64).map(|v| v.to_string())), ("seconds", args.get("seconds").and_then(Value::as_u64).map(|v| v.to_string()))]))),
         },
         Tool {
+            name: "voice_metrics",
+            description: "Measure how the person speaks in the Live conversation, over their lines n from `from` to `to` of voice_listen (both counted; none: all): wpm (words a minute, from the recogniser's word timings when it gave them - wpm_source words - else from the lines' edges - lines), pauses (each silence of 500 ms or more inside their speech: start and end in seconds of the recording, ms, between_words true inside a line or false between two lines with no speech of the studio's in between, long from 1000 ms; pauses_500, pauses_1000), fillers (each filler word with its count and where, ms; RU and EN, plus the words of fillers.json in the studio's working folder; recognition often drops hesitation sounds like 'эээ' and 'um', so it is a lower bound), start_latency (ms from the end of each reply of the studio's to the person's first word: turns, the last and the median; below 0: they spoke over it), speech_secs, silence_secs (neither of you speaking), words. Lines of the studio's own voice heard back (echo) and typed lines are left out and counted; untimed_lines have no word timings (a streaming recogniser like Nemotron gives none) and are measured by their edges, so their inner pauses are not seen. The numbers are counted by the studio: quote them, do not count yourself.",
+            schema: || object(json!({ "from": { "type": "integer", "minimum": 1 }, "to": { "type": "integer", "minimum": 1 } }), &[]),
+            call: |args| get(format!("/speech/listen/metrics{}", query(&[("from", args.get("from").and_then(Value::as_u64).map(|v| v.to_string())), ("to", args.get("to").and_then(Value::as_u64).map(|v| v.to_string()))]))),
+        },
+        Tool {
+            name: "voice_lines",
+            description: "The person's lines of the Live conversation n from `from` to `to` (both counted; none: all), numbered as voice_listen numbers them, each with its words and where each starts and ends in seconds of the recording, to quote the person's own words back. words_source asr: the recogniser timed the words; none: it gave no timings (words null, never made up); typed: the person typed it. words false leaves the timings out. echo and typed as in voice_listen.",
+            schema: || object(json!({ "from": { "type": "integer", "minimum": 1 }, "to": { "type": "integer", "minimum": 1 }, "words": { "type": "boolean" } }), &[]),
+            call: |args| get(format!("/speech/listen/lines{}", query(&[("from", args.get("from").and_then(Value::as_u64).map(|v| v.to_string())), ("to", args.get("to").and_then(Value::as_u64).map(|v| v.to_string())), ("words", args.get("words").and_then(Value::as_bool).map(|v| v.to_string()))]))),
+        },
+        Tool {
             name: "say_voice",
             description: "The voice the person chose in Live for speaking aloud: engine, voice and sampling; say_start takes each one it is not given.",
             schema: nothing,

@@ -808,6 +808,7 @@ listen-no-source = 项目中没有录音
 listen-whisper-missing = 已选择 CrisperWhisper，但尚未安装：请在“设置 → 模型”中下载
 listen-live-downloading = 正在下载识别模型，下载完成后即开始识别
 say-hushed = 用户在窗口中停止了语音：请等待其下一句话后再继续说
+live-metrics-bad-range = 不是行号：{ $value }
 say-mic-off = 麦克风已关闭：由用户在 Live 中打开，之后 voice_listen 才能听到
 mic-only-person = 只有用户本人能在程序中用按钮打开麦克风
 listen-gguf-missing = 识别模型「{ $engine }」尚未下载：请在「设置 → 模型」中下载它和 transcribe.cpp 引擎。

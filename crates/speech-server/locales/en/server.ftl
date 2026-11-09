@@ -1015,6 +1015,7 @@ listen-no-source = the project has no recording
 listen-whisper-missing = CrisperWhisper is chosen, but it is not installed: download it in Settings → Models
 listen-live-downloading = Downloading the recogniser; live recognition starts when it is done
 say-hushed = The person stopped the speech in the window: wait for their next phrase before saying more
+live-metrics-bad-range = Not a line number: { $value }
 say-mic-off = The microphone is off: the person turns it on in Live, then voice_listen hears them
 mic-only-person = Only the person turns the microphone on, with its button in the studio
 listen-gguf-missing = The recognition model "{ $engine }" is not downloaded: get it and the transcribe.cpp engine in Settings → Models.

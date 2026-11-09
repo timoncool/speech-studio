@@ -589,7 +589,7 @@ pub async fn listen_text(Json(body): Json<Value>) -> Response {
 /// back: every line but those the gate judged another voice (or heard before the wake word); what the person typed is
 /// always theirs. The studio's own voice heard back stays in the list, marked `echo`. The list only grows, so a number
 /// once given always names the same line.
-fn person_lines(state: &Value) -> (Vec<Value>, usize) {
+pub(super) fn person_lines(state: &Value) -> (Vec<Value>, usize) {
     let all = state["lines"].as_array().map(Vec::as_slice).unwrap_or_default();
     let mut gated = 0;
     let mut lines = Vec::new();
@@ -598,7 +598,7 @@ fn person_lines(state: &Value) -> (Vec<Value>, usize) {
             gated += 1;
             continue;
         }
-        lines.push(json!({ "n": lines.len() + 1, "text": l["text"], "start": l["start"], "end": l["end"], "echo": l["echo"] == true, "typed": l["typed"] == true }));
+        lines.push(json!({ "n": lines.len() + 1, "text": l["text"], "start": l["start"], "end": l["end"], "echo": l["echo"] == true, "typed": l["typed"] == true, "words": l["words"], "words_source": l["words_source"] }));
     }
     (lines, gated)
 }
@@ -613,7 +613,17 @@ pub async fn listen_next(axum::extract::Query(q): axum::extract::Query<HashMap<S
         let state = crate::listening::recognition::state();
         let (lines, gated) = person_lines(&state);
         let heard = lines.len();
-        let fresh: Vec<Value> = lines.into_iter().skip(after).collect();
+        // word timings are voice_lines' to give: a turn of the conversation needs the words only
+        let fresh: Vec<Value> = lines
+            .into_iter()
+            .skip(after)
+            .map(|mut l| {
+                if let Some(o) = l.as_object_mut() {
+                    o.remove("words");
+                }
+                l
+            })
+            .collect();
         let running = state["running"].as_bool().unwrap_or(false);
         // a recogniser that broke hears nothing more: the agent learns it now, not after the wait
         let broken = !state["error"].is_null();

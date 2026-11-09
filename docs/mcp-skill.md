@@ -115,7 +115,13 @@ connected and the address to paste.
   (`mic_state`, with the recogniser that hears now). With no window of the studio open for a few seconds it turns off by itself. `voice_listen_start` joins
   the conversation the person started (mic_off: ask them to press Live; its `engine` changes the recogniser of the
   running conversation at once); `voice_listen` (after the last `heard`) waits
-  for their next phrase; answer with `say_start` / `say_text` as you write; listen again. When the person speaks over
+  for their next phrase; answer with `say_start` / `say_text` as you write; listen again. A line with `echo: true` is
+  the studio's own voice heard back through the microphone: do not answer it.
+  How the person speaks, counted by the studio from the recogniser's word timings: `voice_metrics` (from, to: line
+  numbers of `voice_listen`) gives words a minute, the pauses of 500 ms and 1000 ms, filler words with where they
+  were (a lower bound: recognition drops 'эээ' and 'um'), how soon they answered the studio and their speech and
+  silence; `voice_lines` gives their lines with each word's time, to quote them. Quote these numbers, never count
+  yourself. When the person speaks over
   the studio, its speech stops by itself. You may turn the microphone down, never up: `voice_listen_mute` mutes it,
   `voice_listen_stop` ends the conversation. A phrase the person types in Live (`voice_listen_type` puts one in) comes
   from `voice_listen` like a spoken one. `say_silence` stops everything said aloud, in every session. The person's

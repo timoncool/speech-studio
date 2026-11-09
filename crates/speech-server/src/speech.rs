@@ -9,6 +9,7 @@ mod director;
 mod director_api;
 mod jobs;
 mod live;
+mod metrics;
 mod package;
 mod preparation;
 mod project;
@@ -54,6 +55,7 @@ pub(crate) mod talk {
         guard_mic, listen_mute, listen_next, listen_start, listen_stop, listen_text, mic_state_route, start, state, stop, stop_all, text,
         voice_get, voice_set,
     };
+    pub(crate) use super::metrics::{lines as listen_lines, metrics as listen_metrics};
 }
 
 pub(crate) mod stream {
