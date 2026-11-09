@@ -1139,6 +1139,44 @@ pub(crate) fn no_voice(p: &SpeechPaths, project: &SpeechProject, wanted: &[Strin
     Some(if library.iter().any(|v| v.card.kind != "preset") { t!("speech-no-voice-blocks", blocks = blocks) } else { t!("speech-no-voice-library-empty", blocks = blocks) })
 }
 
+/// Why the engines of the `wanted` blocks cannot voice them here, told before voicing starts: a cloud engine without
+/// its key or model, a local engine not downloaded, or the card chosen for it that it cannot run on. The code says what
+/// it is (`no_key`, `model_missing`, `no_device`), the window opening the settings where it is mended. None when they
+/// all can.
+pub(crate) fn not_ready(p: &SpeechPaths, project: &SpeechProject, wanted: &[String]) -> Option<(&'static str, String)> {
+    let mut engines: Vec<&str> = Vec::new();
+    for b in project.blocks().filter(|b| wanted.contains(&b.id) && !b.hidden && !sp::says_nothing(&b.text)) {
+        if !engines.contains(&project.engine_of(b)) {
+            engines.push(project.engine_of(b));
+        }
+    }
+    let window = crate::engines::for_window(&p.models_root);
+    for id in engines {
+        match id {
+            "google" if crate::platform::credentials::google_api_key().is_none() => return Some(("no_key", t!("cloud-no-key", provider = "Google"))),
+            "fal" | "runware" => {
+                let provider = if id == "fal" { vs_providers::Provider::Fal } else { vs_providers::Provider::Runware };
+                if crate::platform::credentials::provider_key(provider).is_none() {
+                    return Some(("no_key", t!("cloud-no-key", provider = provider.as_str())));
+                }
+                if project.settings.cloud_model.trim().is_empty() {
+                    return Some(("no_key", t!("cloud-no-model", provider = provider.as_str())));
+                }
+            }
+            _ => {}
+        }
+        if let Some(why) = window.iter().find(|e| e.id == id).and_then(|e| e.unavailable.clone()) {
+            return Some(("model_missing", why));
+        }
+        if ["higgs", crate::engines::supertonic::ENGINE, crate::engines::audio8::ENGINE].contains(&id) {
+            if let Err(e) = crate::engines::acpp::build_for(crate::engines::models::server_choice(&p.models_root, "tts_backend")) {
+                return Some(("no_device", e));
+            }
+        }
+    }
+    None
+}
+
 fn synth_scope(p: &SpeechPaths, pid: &str, scope: &Scope, progress: &dyn Fn(Value)) -> Result<Value, String> {
     REPEAT_SEED.with(|s| s.set(scope.seed));
     let project = crate::speech::load(&p.workspace, pid)?;
@@ -2524,6 +2562,26 @@ mod tests {
         assert_ne!(some, empty, "with a voice in the library the step is to choose it, not to add one");
         project.settings.voice = Some("Vera".into());
         assert_eq!(no_voice(&p, &project, &all), None);
+    }
+
+    /// An engine not downloaded is told before voicing starts, as the window greys it; a block of pauses alone is
+    /// nothing to voice, not an error, and not something to wait for.
+    #[test]
+    fn what_keeps_voicing_from_starting_is_told_before_it() {
+        let work = tempfile::tempdir().unwrap();
+        let p = SpeechPaths { repo_root: work.path().into(), workspace: work.path().join("ws"), voices_dir: work.path().join("voices"), models_root: work.path().join("models") };
+        std::fs::create_dir_all(&p.models_root).unwrap();
+        let mut project = sp::from_text("Книга", "Первая фраза.", "n");
+        project.settings.engine = "higgs".into();
+        let all = wanted(&project, &Scope::default());
+        let (code, why) = not_ready(&p, &project, &all).expect("Higgs is not downloaded here");
+        assert_eq!(code, "model_missing");
+        assert!(why.contains("Higgs"), "{why}");
+        let pauses = Block { id: sp::new_id(), text: "[pause 2s] [pause 500ms]".into(), ..Default::default() };
+        assert!(sp::says_nothing(&pauses.text));
+        assert_eq!(sp::status(&pauses, "k"), "skipped");
+        project.chapters[0].blocks = vec![pauses];
+        assert_eq!(not_ready(&p, &project, &wanted(&project, &Scope::default())), None, "nothing to voice: nothing to be ready for");
     }
 
     /// An export that fails while it encodes leaves the file exported before under the same name as it was, and no

@@ -369,11 +369,14 @@ pub fn all() -> Vec<Engine> {
     vec![higgs(), audio8(), drama(), supertonic(), qwen(), qwen_stress(), openrouter(), catalog("google", "Google Gemini"), catalog("fal", "fal.ai"), catalog("runware", "Runware")]
 }
 
-/// Движки для окна: у Drama 3, Supertonic и Audio8 — почему они здесь не пойдут (видеокарта или нескачанные файлы).
+/// Движки для окна: у Higgs, Drama 3, Supertonic, Audio8 и Qwen3-TTS — почему они здесь не пойдут (видеокарта или
+/// нескачанные файлы).
 pub fn for_window(models_root: &std::path::Path) -> Vec<Engine> {
     let mut all = all();
     for e in all.iter_mut() {
-        if e.id == crate::engines::models::DRAMA_TTS {
+        if e.id == "higgs" && !crate::engines::acpp::higgs_gguf(models_root).is_file() {
+            e.unavailable = Some(t!("render-higgs-model-missing", path = crate::engines::acpp::higgs_gguf(models_root).display().to_string()));
+        } else if e.id == crate::engines::models::DRAMA_TTS {
             e.unavailable = crate::engines::models::drama_unavailable(models_root).or_else(|| (!crate::engines::models::drama_installed(models_root)).then(|| t!("render-drama-missing")));
         } else if e.id == crate::engines::supertonic::ENGINE && !crate::engines::supertonic::installed(models_root) {
             e.unavailable = Some(t!("render-supertonic-missing"));

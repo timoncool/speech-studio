@@ -26,7 +26,11 @@ pub(super) async fn enqueue(paths: &SpeechPaths, queue: &jobs::JobQueue, pid: St
         seed: body.get("seed").and_then(Value::as_u64),
     };
     // blocks with no voice are told before voicing starts, so the window takes the person to choosing one
-    if let Some(e) = speech_jobs::no_voice(paths, &project, &speech_jobs::wanted(&project, &scope)) {
+    let wanted = speech_jobs::wanted(&project, &scope);
+    if let Some((code, e)) = speech_jobs::not_ready(paths, &project, &wanted) {
+        return refuse(StatusCode::CONFLICT, code, e);
+    }
+    if let Some(e) = speech_jobs::no_voice(paths, &project, &wanted) {
         return refuse(StatusCode::CONFLICT, "no_voice", e);
     }
     let aloud = body.get("aloud").and_then(Value::as_bool).unwrap_or(false);

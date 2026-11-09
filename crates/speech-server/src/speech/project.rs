@@ -823,10 +823,10 @@ pub fn status(b: &Block, key: &str) -> &'static str {
     }
 }
 
-/// Whether a text has not a letter or a digit to say: empty, or a scene break such as `* * *` or `—`. Voicing makes
-/// nothing of it, so it is never waited for.
+/// Whether a text has not a letter or a digit to say once its synthesis markup is left out: empty, a scene break such as
+/// `* * *` or `—`, or pauses alone. Voicing makes nothing of it, so it is never waited for.
 pub fn says_nothing(text: &str) -> bool {
-    !text.chars().any(char::is_alphanumeric)
+    !crate::speech::text::visible(text).chars().any(char::is_alphanumeric)
 }
 
 /// The pause after the block before a scene break (`* * *`), which is no block of its own.

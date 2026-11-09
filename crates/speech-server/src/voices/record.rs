@@ -443,8 +443,6 @@ pub fn catalog() -> Result<serde_json::Value, String> {
     Ok(v)
 }
 
-/// Скачать `url` в `dest` через .part: размер и (если задан) SHA-256 сверяются до того, как файл появится под своим
-/// именем. `progress(получено)` — по ходу.
 fn fetch_checked(
     client: &reqwest::blocking::Client,
     url: &str,
@@ -455,42 +453,64 @@ fn fetch_checked(
 ) -> Result<(), String> {
     use std::io::{Read, Write};
     let part = dest.with_extension(format!("{}.part", dest.extension().and_then(|e| e.to_str()).unwrap_or("")));
-    let result = (|| -> Result<(), String> {
-        let mut resp = client.get(url).send().and_then(|r| r.error_for_status()).map_err(|e| format!("{url}: {e}"))?;
-        let mut f = std::fs::File::create(&part).map_err(|e| format!("{}: {e}", part.display()))?;
-        let mut buf = [0u8; 1 << 16];
-        let mut got = 0u64;
-        loop {
-            let n = resp.read(&mut buf).map_err(|e| format!("{url}: {e}"))?;
-            if n == 0 {
-                break;
+    // a dropped connection is taken up again where it stopped, a few times; the part stays for the next try too
+    let mut tries = 0;
+    loop {
+        tries += 1;
+        let have = std::fs::metadata(&part).map(|m| m.len()).unwrap_or(0).min(size);
+        let got = (|| -> Result<u64, String> {
+            let mut req = client.get(url);
+            if have > 0 {
+                req = req.header(reqwest::header::RANGE, format!("bytes={have}-"));
             }
-            got += n as u64;
-            if got > size {
-                return Err(t!("voices-too-large", url = url.to_string(), size = size));
+            let mut resp = req.send().and_then(|r| r.error_for_status()).map_err(|e| format!("{url}: {e}"))?;
+            let resumed = have > 0 && resp.status() == reqwest::StatusCode::PARTIAL_CONTENT;
+            let mut f = if resumed {
+                std::fs::OpenOptions::new().append(true).open(&part).map_err(|e| format!("{}: {e}", part.display()))?
+            } else {
+                std::fs::File::create(&part).map_err(|e| format!("{}: {e}", part.display()))?
+            };
+            let mut got = if resumed { have } else { 0 };
+            let mut buf = [0u8; 1 << 16];
+            loop {
+                let n = resp.read(&mut buf).map_err(|e| format!("{url}: {e}"))?;
+                if n == 0 {
+                    break;
+                }
+                got += n as u64;
+                if got > size {
+                    let _ = std::fs::remove_file(&part);
+                    return Ok(got);
+                }
+                f.write_all(&buf[..n]).map_err(|e| format!("{}: {e}", part.display()))?;
+                progress(got);
             }
-            f.write_all(&buf[..n]).map_err(|e| format!("{}: {e}", part.display()))?;
-            progress(got);
-        }
-        f.flush().map_err(|e| format!("{}: {e}", part.display()))?;
-        if got != size {
-            return Err(t!("voices-size-mismatch", url = url.to_string(), got = got, size = size));
-        }
-        if let Some(want) = sha256 {
-            let got = crate::setup::sha256_file(&part, &|| false)
-                .map_err(|e| format!("{}: {e}", part.display()))?
-                .unwrap_or_default();
-            if got != want {
-                return Err(t!("voices-sha-mismatch", url = url.to_string(), got = got.clone(), want = want.to_string()));
+            f.flush().map_err(|e| format!("{}: {e}", part.display()))?;
+            Ok(got)
+        })();
+        match got {
+            Ok(got) if got == size => break,
+            Ok(got) if got > size => return Err(t!("voices-too-large", url = url.to_string(), size = size)),
+            Ok(got) if tries >= FETCH_TRIES => return Err(t!("voices-size-mismatch", url = url.to_string(), got = got, size = size)),
+            Err(e) if tries >= FETCH_TRIES => return Err(t!("voices-fetch-failed", error = e, tries = tries as i64)),
+            _ => {
+                tracing::warn!("voices: {url} broke off, taken up again where it stopped (try {tries} of {FETCH_TRIES})");
+                std::thread::sleep(std::time::Duration::from_secs(2));
             }
         }
-        std::fs::rename(&part, dest).map_err(|e| format!("{}: {e}", dest.display()))
-    })();
-    if result.is_err() {
-        let _ = std::fs::remove_file(&part);
     }
-    result
+    if let Some(want) = sha256 {
+        let got = crate::setup::sha256_file(&part, &|| false).map_err(|e| format!("{}: {e}", part.display()))?.unwrap_or_default();
+        if got != want {
+            let _ = std::fs::remove_file(&part);
+            return Err(t!("voices-sha-mismatch", url = url.to_string(), got = got.clone(), want = want.to_string()));
+        }
+    }
+    std::fs::rename(&part, dest).map_err(|e| format!("{}: {e}", dest.display()))
 }
+
+/// How many times a download that broke off is taken up again before it is given up.
+const FETCH_TRIES: u32 = 3;
 
 /// Скачать один голос датасета (mp3 + txt, если он есть) в каталог голосов, сверив с каталогом закреплённой ревизии.
 pub fn fetch_voice(dir: &std::path::Path, name: &str) -> Result<(), String> {
@@ -683,7 +703,8 @@ mod tests {
         let _lang = crate::i18n::test_language("ru");
         let body = b"voice bytes".to_vec();
         let sha: String = Sha256::digest(&body).iter().map(|b| format!("{b:02x}")).collect();
-        let server = serve(vec![Reply::bytes(200, "audio/mpeg", body.clone()), Reply::bytes(200, "audio/mpeg", body.clone()), Reply::bytes(200, "audio/mpeg", body.clone())]);
+        let reply = || Reply::bytes(200, "audio/mpeg", body.clone());
+        let server = serve(vec![reply(), reply(), reply(), reply(), reply()]);
         let client = reqwest::blocking::Client::builder().no_proxy().build().unwrap();
         let dir = tempfile::tempdir().unwrap();
         let dest = dir.path().join("v.mp3");
@@ -695,7 +716,20 @@ mod tests {
         let short = fetch_checked(&client, &format!("{}/v", server.base()), &other, n + 1, None, &|_| {}).unwrap_err();
         assert!(short.contains("закреплено"), "{short}");
         assert!(!other.exists(), "a file that failed its check never appears");
-        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1, "no .part is left");
+    }
+
+    /// A download that broke off goes on from where it stopped: the part kept is asked for the rest.
+    #[test]
+    fn a_broken_download_goes_on_from_where_it_stopped() {
+        use dub_llm::test_http::{serve, Reply};
+        let body = b"voice bytes in two parts".to_vec();
+        let server = serve(vec![Reply::bytes(206, "audio/mpeg", body[10..].to_vec())]);
+        let client = reqwest::blocking::Client::builder().no_proxy().build().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let dest = dir.path().join("v.mp3");
+        std::fs::write(dir.path().join("v.mp3.part"), &body[..10]).unwrap();
+        fetch_checked(&client, &format!("{}/v", server.base()), &dest, body.len() as u64, None, &|_| {}).unwrap();
+        assert_eq!(std::fs::read(&dest).unwrap(), body);
     }
 
 
