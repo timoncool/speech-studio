@@ -602,7 +602,7 @@ fn run_guarded(engine: &Tts, call: Call, timeout: Duration, live: Option<Arc<cra
                 streamed = live.is_some();
                 let sr = e.sample_rate();
                 serde_json::from_str::<serde_json::Map<String, Value>>(&op).map_err(|e| e.to_string()).and_then(|opts| {
-                    e.speak(&t, rw.as_deref(), rt.as_deref(), opts, &mut |piece| {
+                    e.speak(&t, &lang, rw.as_deref(), rt.as_deref(), opts, &mut |piece| {
                         if let Some(phrase) = &live {
                             phrase.chunk(piece, sr);
                         }

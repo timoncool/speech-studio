@@ -76,15 +76,16 @@ impl Model {
     }
 
     /// One phrase, every piece to `piece` as it comes; the whole phrase in the answer. With a reference WAV and its
-    /// transcript the model clones that voice, without one it speaks in its own. The model finds the language itself.
-    pub fn speak(&self, text: &str, reference: Option<&Path>, reference_text: Option<&str>, options: Map<String, Value>, piece: &mut dyn FnMut(&[f32])) -> Result<Vec<f32>, String> {
+    /// transcript the model clones that voice, without one it speaks in its own. The model finds the language itself;
+    /// a `lang` set by hand is its hint (it tells Cantonese from Mandarin by it), «auto» gives none.
+    pub fn speak(&self, text: &str, lang: &str, reference: Option<&Path>, reference_text: Option<&str>, options: Map<String, Value>, piece: &mut dyn FnMut(&[f32])) -> Result<Vec<f32>, String> {
         self.cancel.store(false, Ordering::SeqCst);
         let req = SpeechRequest {
             model: crate::engines::acpp::AUDIO8.to_string(),
             input: text.to_string(),
             voice_ref: reference.map(|p| VoiceRef::Path(p.to_path_buf())),
             reference_text: reference_text.filter(|t| !t.trim().is_empty()).map(str::to_string),
-            language: None,
+            language: Some(lang).filter(|l| !l.is_empty() && *l != "auto").map(str::to_string),
             options,
             stall: SPEECH_STALL,
         };
