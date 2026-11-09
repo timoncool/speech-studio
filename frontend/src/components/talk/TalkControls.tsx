@@ -3,7 +3,8 @@ import { useTranslation } from "react-i18next";
 import { AudioLines, ChevronUp, Pause, Play, SendHorizontal, Square, Volume2, VolumeX, X } from "lucide-react";
 import { byPerson, personOnly } from "../../lib/person";
 import { named } from "../../lib/a11y";
-import { api, BASE } from "../../lib/api";
+import { api, BASE, slot, type Selection } from "../../lib/api";
+import { SETTINGS_CHANGED, useChanged } from "../../lib/mcpBridge";
 import { aloudPlayback, onLiveEvents } from "../../lib/livePlayback";
 import { talkApi } from "../../lib/talk";
 import { errorText } from "../../lib/voices";
@@ -15,7 +16,7 @@ import type { EngineCaps, ParamSpec, SpeechParams } from "../../lib/speech";
 import type { TalkVoice } from "../../lib/talk";
 import { setTalkPrefs, useTalkPrefs } from "../../lib/talkPrefs";
 import { LANG_CHOICES } from "../speech/langs";
-import { Tip } from "../Hint";
+import Hint, { Tip } from "../Hint";
 import type { useTalk } from "./useTalk";
 
 type Talk = ReturnType<typeof useTalk>;
@@ -154,6 +155,49 @@ function VoiceTab() {
   );
 }
 
+const INTERRUPT = ["agent", "always", "never"] as const;
+
+/** Who stops the agent when the person speaks over it, and how long the agent has to decide. */
+function InterruptSetting() {
+  const { t } = useTranslation();
+  const [sel, setSel] = useState<Selection | null>(null);
+  const [draft, setDraft] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [reread, setReread] = useState(0);
+  useChanged(SETTINGS_CHANGED, () => setReread((n) => n + 1));
+  useEffect(() => {
+    api.capabilities().then((c) => setSel(c.selection ?? {}), (e: unknown) => setProblem(errorText(e)));
+  }, [reread]);
+  const save = (key: string, value: string) => {
+    api.setSelection(key, value)
+      .then(() => api.capabilities())
+      .then((c) => { setSel(c.selection ?? {}); setDraft(null); setProblem(null); }, (e: unknown) => setProblem(errorText(e)));
+  };
+  if (!sel) return problem ? <p role="alert" className="text-[11px] text-[var(--color-warn)]">{problem}</p> : null;
+  const mode = slot(sel, "live_interrupt") ?? "";
+  const ms = draft ?? slot(sel, "live_interrupt_ms") ?? "";
+  const field = "w-full bg-[var(--color-surface-2)] border border-[var(--color-border)] rounded-md px-2 py-1.5 text-[12px]";
+  const label = "block space-y-1.5 text-[11px] text-[var(--color-muted)]";
+  return (
+    <div className="space-y-3 border-t border-[var(--color-border)] pt-3">
+      <label className={label}>
+        <span className="flex items-center gap-1">{t("talk.interrupt")} <Hint text={t("talk.interruptHint")} /></span>
+        <select value={mode} onChange={(e) => save("live_interrupt", e.target.value)} className={field}>
+          {INTERRUPT.map((m) => <option key={m} value={m}>{t(`talk.interrupt_${m}`)}</option>)}
+        </select>
+      </label>
+      {mode === "agent" && (
+        <label className={label}>{t("talk.interruptMs")}
+          <input type="number" min={200} max={10000} step={100} value={ms} onChange={(e) => setDraft(e.target.value)}
+            onBlur={() => { if (draft !== null) save("live_interrupt_ms", draft); }}
+            onKeyDown={(e) => { if (e.key === "Enter" && draft !== null) save("live_interrupt_ms", draft); }} className={field} />
+        </label>
+      )}
+      {problem && <p role="alert" className="text-[11px] text-[var(--color-warn)]">{problem}</p>}
+    </div>
+  );
+}
+
 type SettingsTab = "mic" | "voice" | "speaker";
 
 /** The microphone and the speaker as call apps set them up: each with a live level meter, the microphone heard back
@@ -265,7 +309,7 @@ function TalkSettings({ running, relisten, test }: { running: boolean; relisten:
       {parakeet && prefs.lang !== "auto" && <p className="text-[11px] text-[var(--color-muted)]">{t("talk.parakeetLang")}</p>}
         </div>
       )}
-      {tab === "voice" && <div role="tabpanel"><VoiceTab /></div>}
+      {tab === "voice" && <div role="tabpanel" className="space-y-3"><VoiceTab /><InterruptSetting /></div>}
       {tab === "speaker" && (
         <div role="tabpanel" className="space-y-4">
       <div className={label}>

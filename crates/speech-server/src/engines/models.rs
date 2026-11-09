@@ -199,6 +199,8 @@ pub fn is_selection_key(key: &str) -> bool {
             | "assistant"       // кто отвечает в панели «Ассистент»: openrouter (модель на ключе) или agent (подключённый MCP-агент)
             | "assistant_model" // модель OpenRouter ассистента
             | "tts_idle_unload_min" // через сколько минут простоя выгружать модель озвучки (0 — никогда)
+            | "live_interrupt"  // кто обрывает речь студии, когда человек говорит поверх: always | agent | never
+            | "live_interrupt_ms" // сколько ждать решения агента, мс, прежде чем студия замолчит сама
             | "qwen_tts_quant"  // квант Qwen3-TTS CustomVoice: Q4_K_M или Q8_0
             | "cloud_ok_speech" | "cloud_ok_listening" | "cloud_ok_director" | "cloud_ok_assistant" // разрешил ли человек отправлять стадию в облако
             | "clone_terms_ok" // принял ли человек условия клонирования голоса
@@ -228,7 +230,7 @@ pub fn is_selection_value(key: &str, value: &str) -> bool {
         "drama_vram_gb" => value.parse::<u32>().is_ok_and(|gb| gb == 0 || (DRAMA_MIN_LIMIT_GB..=256).contains(&gb)),
         "cloud_daily_limit_usd" => value.parse::<f64>().is_ok_and(|v| (0.0..=10_000.0).contains(&v)),
         "google_tts_model" => crate::integrations::google_tts::is_model_id(value),
-        _ => true,
+        _ => crate::speech::floor_settings::is_value(key, value).unwrap_or(true),
     }
 }
 

@@ -1010,6 +1010,7 @@ listen-whisper-missing = CrisperWhisper est choisi, mais il n’est pas install�
 listen-live-downloading = téléchargement du module de reconnaissance ; la reconnaissance démarrera dès qu’il sera prêt
 say-hushed = la personne a arrêté la voix dans la fenêtre : attendez sa phrase suivante avant de reprendre
 live-metrics-bad-range = Ce n’est pas un numéro de ligne : { $value }
+say-no-floor = Personne ne parle par-dessus le studio en ce moment : rien après quoi continuer
 say-mic-off = le micro est coupé : la personne l’allume dans Live, puis voice_listen l’entend
 mic-only-person = seule la personne allume le micro, avec son bouton dans le studio
 listen-gguf-missing = Le modèle de reconnaissance « { $engine } » n'est pas téléchargé : récupérez-le avec le moteur transcribe.cpp dans Réglages → Modèles.

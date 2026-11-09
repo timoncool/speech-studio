@@ -343,9 +343,21 @@ pub(super) fn tools() -> Vec<Tool> {
         },
         Tool {
             name: "say_stop",
-            description: "Stop speaking in this session now: what waits is dropped, the phrase being voiced is cut off and the window falls silent - for when the person starts talking over the studio.",
+            description: "Stop speaking in this session now: what waits is dropped, the phrase being voiced is cut off and the window falls silent - for when the person starts talking over the studio (a voice_floor event waiting for you is told as stopped). say_state then shows the phrases cut off as interrupted.",
             schema: || object(json!({ "session": { "type": "string" } }), &["session"]),
             call: |args| send(Method::DELETE, format!("/speech/say/{}", segment(&text(args, "session")?)), json!({})),
+        },
+        Tool {
+            name: "say_continue",
+            description: "Go on speaking after the person spoke over the studio (a voice_floor event waiting for you): their words were a remark, not a turn. The studio's voice, turned down while you decided, comes back up and the event is told as continued. Answers no_floor when no event waits (you decided late: the studio has stopped by itself after the setting live_interrupt_ms).",
+            schema: || object(json!({ "session": { "type": "string" } }), &["session"]),
+            call: |args| post(format!("/speech/say/{}/continue", segment(&text(args, "session")?)), json!({})),
+        },
+        Tool {
+            name: "voice_floor",
+            description: "Wait for the person to speak over the studio while it says something aloud in Live: the events after the first `after` (the `heard` of the last answer, 0 at first), waiting up to seconds (at most 55). Each: n, partial (what they are saying), words, at (seconds of the recording), mode, decided (null: it waits for you; stop, continue, ended - the studio finished by itself -, none - mode never) and auto (the studio decided on its own). The setting live_interrupt says who decides: agent (the default) - the studio goes on, about 18 dB quieter, and you decide: say_stop to give the person the floor, say_continue to go on; with no word from you within live_interrupt_ms (1200 by default) it stops by itself (auto true); always - it stops at once; never - it never stops, the event only tells you. A backchannel ('угу', 'yeah'), a cough or one word is no event. pending is the event waiting for you.",
+            schema: || object(json!({ "after": { "type": "integer", "minimum": 0 }, "seconds": seconds() }), &[]),
+            call: |args| get(format!("/speech/listen/floor{}", query(&[("after", args.get("after").and_then(Value::as_u64).map(|v| v.to_string())), ("seconds", args.get("seconds").and_then(Value::as_u64).map(|v| v.to_string()))]))),
         },
         Tool {
             name: "say_silence",
@@ -355,7 +367,7 @@ pub(super) fn tools() -> Vec<Tool> {
         },
         Tool {
             name: "voice_listen_start",
-            description: "Join the spoken conversation the person started with Live's microphone button: each phrase they end with a pause is recognised for voice_listen, and their speaking over the studio stops its speech at once. Only the person turns the microphone on, with their own button in the window; no tool and no ui_* click does. When it is off this answers mic_off: ask the person to press Live, then call this again. engine changes the recogniser of the running conversation at once, the microphone recording on (the setting asr_engine is only the default for new recordings); the answer names the recogniser that hears now (asr), as mic_state does. Pair it with say_start: listen, answer with say_text as you write, listen again.",
+            description: "Join the spoken conversation the person started with Live's microphone button: each phrase they end with a pause is recognised for voice_listen, and their speaking over the studio is a voice_floor event (by the setting live_interrupt: you decide, the studio stops at once, or never). Only the person turns the microphone on, with their own button in the window; no tool and no ui_* click does. When it is off this answers mic_off: ask the person to press Live, then call this again. engine changes the recogniser of the running conversation at once, the microphone recording on (the setting asr_engine is only the default for new recordings); the answer names the recogniser that hears now (asr), as mic_state does. Pair it with say_start: listen, answer with say_text as you write, listen again.",
             schema: || object(json!({ "lang": { "type": "string" }, "device": { "type": "string", "description": "a microphone of voice_record_devices; none: the default one" }, "engine": { "type": "string", "enum": ["parakeet", "nemotron", "whisper"], "description": "the recogniser; none: the one in the settings" } }), &[]),
             call: |args| post("/speech/listen".into(), args.clone()),
         },

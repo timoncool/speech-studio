@@ -2534,7 +2534,13 @@
     "ownParams": "Réglages de voix propres",
     "agentNamed": "Connecté : {{name}}",
     "voiceLoading": "Chargement de la voix…",
-    "parakeetLang": "Parakeet détecte la langue lui-même et peut écrire certains mots dans une autre ; pour s’en tenir à la langue choisie, prenez Nemotron 3.5."
+    "parakeetLang": "Parakeet détecte la langue lui-même et peut écrire certains mots dans une autre ; pour s’en tenir à la langue choisie, prenez Nemotron 3.5.",
+    "interrupt": "Quand vous parlez par-dessus l’agent",
+    "interrupt_agent": "L’agent décide",
+    "interrupt_always": "Il se tait aussitôt",
+    "interrupt_never": "Il continue",
+    "interruptHint": "L’agent décide : sa voix baisse pendant qu’il choisit de se taire ou de continuer, et sans réponse dans le délai ci-dessous il se tait seul.",
+    "interruptMs": "Attendre l’agent, ms"
   },
   "mic": {
     "on": "Micro allumé",

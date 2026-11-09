@@ -2534,7 +2534,13 @@
     "ownParams": "自定义声音设置",
     "agentNamed": "已连接：{{name}}",
     "voiceLoading": "正在加载声音…",
-    "parakeetLang": "Parakeet 会自行判断语言，可能把部分词写成其他语言；如需固定为所选语言，请选择 Nemotron 3.5。"
+    "parakeetLang": "Parakeet 会自行判断语言，可能把部分词写成其他语言；如需固定为所选语言，请选择 Nemotron 3.5。",
+    "interrupt": "当你打断智能体讲话时",
+    "interrupt_agent": "由智能体决定",
+    "interrupt_always": "立即停下",
+    "interrupt_never": "继续讲",
+    "interruptHint": "由智能体决定：它考虑停下还是继续时声音会变小，若在下方时间内没有回应，它会自行停下。",
+    "interruptMs": "等待智能体（毫秒）"
   },
   "mic": {
     "on": "麦克风已开启",

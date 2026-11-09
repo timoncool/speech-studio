@@ -20,6 +20,7 @@ export type LiveEvent =
   | { kind: "voice"; loading: string | null; aloud: true }
   | { kind: "chosen"; aloud: true }
   | { kind: "asr"; engine: string; label: string; aloud: true }
+  | { kind: "duck"; db: number; aloud: true }
   | { kind: "hello"; id: number }
   | { kind: "lagged"; missed: number };
 
@@ -81,7 +82,7 @@ export class LivePlayer {
   /** This window's number on the server's aloud stream: of several open windows only the phrase's `player` sounds it. */
   private me: number | null = null;
 
-  private accepts(ev: Exclude<LiveEvent, { kind: "lagged" | "hello" | "voice" | "chosen" | "asr" }>): boolean {
+  private accepts(ev: Exclude<LiveEvent, { kind: "lagged" | "hello" | "voice" | "chosen" | "asr" | "duck" }>): boolean {
     if (this.pid !== null) return !ev.aloud && ev.project === this.pid;
     const player = "player" in ev ? ev.player : undefined;
     return ev.aloud === true && (player == null || player === this.me);
@@ -123,7 +124,20 @@ export class LivePlayer {
   /** How loud it plays, 0..1; the loudness `level` reports is taken before it, so a muted voice still moves the picture. */
   setVolume(volume: number): void {
     this.volume = volume;
-    if (this.gain) this.gain.gain.value = volume;
+    this.applyGain();
+  }
+
+  /** How much quieter than its volume it plays, in dB: the person speaks over the agent and it decides meanwhile. */
+  private duck = 1;
+
+  setDuck(db: number): void {
+    this.duck = 10 ** (db / 20);
+    this.applyGain();
+  }
+
+  private applyGain(): void {
+    if (!this.gain || !this.ctx) return;
+    this.gain.gain.setTargetAtTime(this.volume * this.duck, this.ctx.currentTime, 0.03);
   }
 
   /** The speaker it plays on, by device id; empty is the system's default. */
@@ -144,6 +158,7 @@ export class LivePlayer {
 
   handle(ev: LiveEvent): void {
     if (ev.kind === "hello") { this.me = ev.id; return; }
+    if (ev.kind === "duck") { if (this.pid === null) this.setDuck(ev.db); return; }
     if (ev.kind === "lagged" || ev.kind === "voice" || ev.kind === "chosen" || ev.kind === "asr" || !this.accepts(ev)) return;
     if (ev.kind === "restart" || ev.kind === "stop") { this.stop(); return; }
     if (ev.kind !== "chunk") return;
@@ -152,7 +167,7 @@ export class LivePlayer {
       this.out = this.ctx.createAnalyser();
       this.out.fftSize = 1024;
       this.gain = this.ctx.createGain();
-      this.gain.gain.value = this.volume;
+      this.gain.gain.value = this.volume * this.duck;
       this.out.connect(this.gain).connect(this.ctx.destination);
       if (this.sink) void this.applyOutput().catch((e: unknown) => console.error("[ERROR] aloud speaker:", e));
     }

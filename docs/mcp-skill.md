@@ -117,12 +117,15 @@ connected and the address to paste.
   running conversation at once); `voice_listen` (after the last `heard`) waits
   for their next phrase; answer with `say_start` / `say_text` as you write; listen again. A line with `echo: true` is
   the studio's own voice heard back through the microphone: do not answer it.
+  When the person speaks over the studio (two words or more, not a backchannel or a cough), `voice_floor` tells it as
+  an event. By the setting `live_interrupt` (`agent` by default) the studio goes on about 18 dB quieter and you
+  decide: `say_stop` gives them the floor, `say_continue` goes on; with no word from you within `live_interrupt_ms`
+  (1200 ms) it stops by itself and the event says `auto`. `always` stops it at once, `never` never does.
   How the person speaks, counted by the studio from the recogniser's word timings: `voice_metrics` (from, to: line
   numbers of `voice_listen`) gives words a minute, the pauses of 500 ms and 1000 ms, filler words with where they
   were (a lower bound: recognition drops 'эээ' and 'um'), how soon they answered the studio and their speech and
   silence; `voice_lines` gives their lines with each word's time, to quote them. Quote these numbers, never count
-  yourself. When the person speaks over
-  the studio, its speech stops by itself. You may turn the microphone down, never up: `voice_listen_mute` mutes it,
+  yourself. You may turn the microphone down, never up: `voice_listen_mute` mutes it,
   `voice_listen_stop` ends the conversation. A phrase the person types in Live (`voice_listen_type` puts one in) comes
   from `voice_listen` like a spoken one. `say_silence` stops everything said aloud, in every session. The person's
   microphone test in Live: `voice_record_level` while it runs, `mic_test_stop`, `mic_test_audio` for what it heard.

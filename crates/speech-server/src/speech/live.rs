@@ -116,6 +116,16 @@ fn cut_airing(project: &str) {
     air.until = latest.filter(|u| *u > now);
 }
 
+/// When the sound said aloud ends: None when nothing sounds now.
+pub fn airing_until() -> Option<Instant> {
+    airing().until.filter(|u| *u > Instant::now())
+}
+
+/// The window plays what is said aloud `db` quieter than its volume (0: as loud as set).
+pub fn duck(db: f64) {
+    let _ = channel().send(json!({ "kind": "duck", "db": db, "aloud": true }));
+}
+
 /// The blocks said aloud lately with when each sounded, the earliest first.
 pub fn aired_blocks() -> Vec<Aired> {
     let mut blocks = airing().blocks.clone();

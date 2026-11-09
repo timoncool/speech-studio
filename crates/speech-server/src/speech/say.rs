@@ -113,12 +113,8 @@ pub fn interrupt(workspace: &std::path::Path, queue: &jobs::JobQueue) -> bool {
         }
     }
     let speaking = !open.is_empty();
-    let now = std::time::Instant::now();
-    INTERRUPTED.lock().unwrap_or_else(|p| p.into_inner()).retain(|_, at| at.elapsed().as_secs() < INTERRUPTED_SECS);
     for sid in open.iter() {
-        if let Ok(project) = crate::speech::load(workspace, sid) {
-            INTERRUPTED.lock().unwrap_or_else(|p| p.into_inner()).extend(project.blocks().filter(|b| b.takes.is_empty()).map(|b| (b.id.clone(), now)));
-        }
+        mark_cut_off(workspace, sid);
         crate::speech::jobs::unqueue(sid, None);
         crate::speech::live::silence(sid);
     }
@@ -131,6 +127,33 @@ pub fn interrupt(workspace: &std::path::Path, queue: &jobs::JobQueue) -> bool {
         }
     });
     speaking
+}
+
+/// The phrases of session `sid` cut off now: those not voiced yet and the one whose sound is still playing.
+fn mark_cut_off(workspace: &std::path::Path, sid: &str) {
+    let now = std::time::Instant::now();
+    let sounding: std::collections::HashSet<String> = super::live::aired_blocks().into_iter().filter(|a| a.project == sid && a.to > now).map(|a| a.block).collect();
+    let mut cut = INTERRUPTED.lock().unwrap_or_else(|p| p.into_inner());
+    cut.retain(|_, at| at.elapsed().as_secs() < INTERRUPTED_SECS);
+    match crate::speech::load(workspace, sid) {
+        Ok(project) => cut.extend(project.blocks().filter(|b| b.takes.is_empty() || sounding.contains(&b.id)).map(|b| (b.id.clone(), now))),
+        Err(e) => tracing::warn!("say: the phrases cut off in {sid} are not marked: {e}"),
+    }
+}
+
+/// Whether the studio is saying something aloud now or has phrases on their way to be said.
+fn speaking() -> bool {
+    if super::live::airing_until().is_some() {
+        return true;
+    }
+    let aired: std::collections::HashSet<String> = super::live::aired_blocks().into_iter().map(|a| a.block).collect();
+    let cut = INTERRUPTED.lock().unwrap_or_else(|p| p.into_inner());
+    SAID.lock().unwrap_or_else(|p| p.into_inner()).iter().any(|(at, _, block, _)| at.elapsed().as_secs() < ECHO_SECS && !aired.contains(block) && !cut.contains_key(block))
+}
+
+/// Whether `sid` is a session said aloud, open or lately ended.
+pub(super) fn is_session(sid: &str) -> bool {
+    sessions().contains_key(sid) || SAID.lock().unwrap_or_else(|p| p.into_inner()).iter().any(|(_, s, _, _)| s == sid)
 }
 
 fn sessions() -> std::sync::MutexGuard<'static, HashMap<String, Session>> {
@@ -410,13 +433,16 @@ pub async fn stop_all(State(st): State<AppState>, headers: HeaderMap) -> Json<Va
     if !crate::app::agent::by_agent(&headers) {
         *HUSHED_AT.lock().unwrap_or_else(|p| p.into_inner()) = Some(heard_count());
     }
+    super::floor::agent_decides("stop");
     Json(json!({ "stopped": interrupt(&st.workspace, &st.jobs) }))
 }
 
 /// DELETE /speech/say/{session} — stop now: what is queued is dropped, the phrase being voiced is cancelled, the window
-/// stops its sound.
+/// stops its sound; the person speaking over the studio is told as stopped.
 pub async fn stop(State(st): State<AppState>, AxPath(sid): AxPath<String>) -> Response {
+    super::floor::agent_decides("stop");
     sessions().remove(&sid);
+    mark_cut_off(&st.workspace, &sid);
     crate::speech::jobs::unqueue(&sid, None);
     if let Some((job, crate::jobs::JobKind::Synth)) = st.jobs.active_for(&sid).await {
         let _ = st.jobs.cancel(&job).await;
@@ -440,7 +466,7 @@ pub async fn state(State(st): State<AppState>, AxPath(sid): AxPath<String>, axum
         .skip(skip)
         .map(|b| {
             let take = b.takes.iter().find(|t| Some(t.n) == b.active);
-            json!({ "id": b.id, "text": b.text, "state": if take.is_some() { "said" } else if INTERRUPTED.lock().unwrap_or_else(|p| p.into_inner()).contains_key(&b.id) { "interrupted" } else if b.error.is_some() { "failed" } else { "waiting" }, "error": b.error.as_ref().map(|e| e.text.clone()), "first_ms": take.and_then(|t| t.first_ms), "heard_ms": take.and_then(|t| t.heard_ms), "seconds": take.map(|t| t.duration) })
+            json!({ "id": b.id, "text": b.text, "state": if INTERRUPTED.lock().unwrap_or_else(|p| p.into_inner()).contains_key(&b.id) { "interrupted" } else if take.is_some() { "said" } else if b.error.is_some() { "failed" } else { "waiting" }, "error": b.error.as_ref().map(|e| e.text.clone()), "first_ms": take.and_then(|t| t.first_ms), "heard_ms": take.and_then(|t| t.heard_ms), "seconds": take.map(|t| t.duration) })
         })
         .collect();
     Json(json!({ "session": sid, "open": pending.is_some(), "waiting_text": pending.unwrap_or_default(), "phrases": phrases })).into_response()
@@ -492,7 +518,7 @@ pub async fn listen_start(State(st): State<AppState>, headers: HeaderMap, body: 
                 Err(e) => return refuse(StatusCode::INTERNAL_SERVER_ERROR, "internal", e.to_string()),
             }
         }
-        watch_interruptions(st.workspace, st.jobs);
+        watch_interruptions(st.workspace, st.models_root, st.jobs);
         crate::voice_gate::arm(gate_on);
         let (asr, lang) = crate::listening::recognition::engine().unwrap_or_default();
         return Json(json!({ "pid": pid, "live": true, "joined": true, "asr": asr, "lang": lang, "gate": gate_on })).into_response();
@@ -506,7 +532,7 @@ pub async fn listen_start(State(st): State<AppState>, headers: HeaderMap, body: 
         return started;
     }
     *HUSHED_AT.lock().unwrap_or_else(|p| p.into_inner()) = None;
-    watch_interruptions(st.workspace, st.jobs);
+    watch_interruptions(st.workspace, st.models_root, st.jobs);
     crate::voice_gate::arm(gate_on);
     started
 }
@@ -522,14 +548,16 @@ fn floor_grew(base: Option<usize>, words: usize) -> bool {
     words >= FLOOR_WORDS_STRONG || matches!(base, Some(b) if words > b)
 }
 
-fn watch_interruptions(workspace: std::path::PathBuf, queue: jobs::JobQueue) {
+/// While a Live conversation runs, tells each time the person takes the floor over the studio's speech (`floor`): the
+/// setting says whether the studio stops at once, the agent decides with the studio quieter meanwhile, or nobody stops it.
+fn watch_interruptions(workspace: std::path::PathBuf, models_root: std::path::PathBuf, queue: jobs::JobQueue) {
     if LISTENING.swap(true, std::sync::atomic::Ordering::Relaxed) {
         return;
     }
     tokio::spawn(async move {
-        // the word count a floor-taking phrase was first seen at this turn, and whether the studio was already cut off
+        // the word count a floor-taking phrase was first seen at this turn, and whether this turn was told already
         let mut base: Option<usize> = None;
-        let mut cut = false;
+        let mut told = false;
         while LISTENING.load(std::sync::atomic::Ordering::Relaxed) {
             let state = crate::listening::recognition::state();
             let partial = state["partial"]["text"].as_str().unwrap_or_default().to_string();
@@ -537,11 +565,27 @@ fn watch_interruptions(workspace: std::path::PathBuf, queue: jobs::JobQueue) {
             let began = state["partial"]["start"].as_f64().and_then(crate::listening::recognition::heard_at).unwrap_or(now);
             if takes_the_floor(&partial) && !is_echo(&partial, began, now) {
                 let words = crate::audio::qc::normalize(&partial).len();
-                // cut the studio off only once the person is really speaking over it: a cough is a short static partial
-                // that never grows, so it no longer stops the agent mid-answer
-                if !cut && floor_grew(base, words) {
-                    interrupt(&workspace, &queue);
-                    cut = true;
+                // a turn only once the person is really speaking over the studio: a cough is a short static partial
+                // that never grows
+                if !told && floor_grew(base, words) {
+                    told = true;
+                    if speaking() {
+                        let mode = super::floor::mode(&models_root);
+                        let n = super::floor::raise(&partial, words, state["partial"]["start"].as_f64(), mode);
+                        match mode {
+                            super::floor::Mode::Always => {
+                                interrupt(&workspace, &queue);
+                            }
+                            super::floor::Mode::Agent => {
+                                let (w, q) = (workspace.clone(), queue.clone());
+                                let wait = std::time::Duration::from_millis(super::floor::wait_ms(&models_root));
+                                super::floor::hold(n, wait, speaking, move || {
+                                    interrupt(&w, &q);
+                                });
+                            }
+                            super::floor::Mode::Never => {}
+                        }
+                    }
                 }
                 if base.is_none() {
                     base = Some(words);
@@ -549,7 +593,7 @@ fn watch_interruptions(workspace: std::path::PathBuf, queue: jobs::JobQueue) {
             } else {
                 // silence, a backchannel or a brief noise: the turn is over, arm again for the next one
                 base = None;
-                cut = false;
+                told = false;
             }
             tokio::time::sleep(std::time::Duration::from_millis(120)).await;
         }
@@ -850,6 +894,32 @@ mod tests {
         crate::listening::recognition::conversation_for_test(zero, &[(1.0, 2.0, "дальше", false, true)]);
         assert!(!hushed(), "the person's next phrase lets the agent speak");
         crate::listening::recognition::end_for_test();
+    }
+
+    /// Scenario 1: a stop cuts off the phrase whose sound still plays (voiced already) and the ones not voiced yet; the
+    /// phrase heard to its end stays said.
+    #[test]
+    fn a_stop_marks_the_phrase_still_sounding_as_interrupted() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut project = sp::from_text("talk", "", "n");
+        project.chapters[0].blocks = ["Первая фраза.", "Вторая фраза.", "Третья фраза."].iter().map(|t| sp::Block { id: sp::new_id(), text: t.to_string(), ..Default::default() }).collect();
+        let ids: Vec<String> = project.blocks().map(|b| b.id.clone()).collect();
+        assert_eq!(ids.len(), 3, "{ids:?}");
+        for id in &ids[..2] {
+            let b = project.block_mut(id).unwrap();
+            b.takes.push(sp::Take { n: 1, ..Default::default() });
+            b.active = Some(1);
+        }
+        let sid = sp::new_id();
+        crate::speech::save(dir.path(), &sid, &project).unwrap();
+        let now = Instant::now();
+        super::super::live::air_for_test(&sid, &ids[0], now - Duration::from_secs(9), now - Duration::from_secs(4));
+        super::super::live::air_for_test(&sid, &ids[1], now - Duration::from_secs(4), now + Duration::from_secs(6));
+        mark_cut_off(dir.path(), &sid);
+        let cut = INTERRUPTED.lock().unwrap();
+        assert!(!cut.contains_key(&ids[0]), "heard to its end");
+        assert!(cut.contains_key(&ids[1]), "its sound was still playing");
+        assert!(cut.contains_key(&ids[2]), "not voiced yet");
     }
 
     #[test]

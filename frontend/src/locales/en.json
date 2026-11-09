@@ -2534,7 +2534,13 @@
     "ownParams": "Own voice settings",
     "agentNamed": "Connected: {{name}}",
     "voiceLoading": "Loading the voice…",
-    "parakeetLang": "Parakeet picks the language itself and may write some words in another one; to keep to the language set here, choose Nemotron 3.5."
+    "parakeetLang": "Parakeet picks the language itself and may write some words in another one; to keep to the language set here, choose Nemotron 3.5.",
+    "interrupt": "When you speak over the agent",
+    "interrupt_agent": "The agent decides",
+    "interrupt_always": "It stops at once",
+    "interrupt_never": "It goes on",
+    "interruptHint": "The agent decides: its voice drops while it chooses to stop or go on, and with no answer in the wait below it stops by itself.",
+    "interruptMs": "Wait for the agent, ms"
   },
   "mic": {
     "on": "Microphone on",
