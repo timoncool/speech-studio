@@ -19,6 +19,8 @@ release notes on GitHub are taken from the release's section.
 
 ### Changed
 
+- **Voicing no longer starts into a known failure**: with a cloud engine that has no key or model, an engine that is not downloaded, or a graphics card the engine cannot run on, the window says so before anything starts and opens the settings that mend it; a block of pauses alone is skipped instead of failing; a voice pack download that broke off goes on from where it stopped.
+- **Higgs on a slow card is no longer cut off as hung**: a phrase waits for the engine as long as that engine takes on this computer, the server is started again once when it ends before a phrase's first sound, and a clone from a short reference or one at 44.1/48 kHz is no longer refused by the codec.
 - **An update of a component is shown as an update** — when a new version replaces an engine you already have, the start screen says «Components update» and names what is updated and why, instead of «First start».
 - **In Live the agent decides when you speak over it** — the studio turns its voice down and the agent stops or goes on (`voice_floor`, `say_continue`); with no word from it within 1.2 s the studio stops by itself. The setting "When you speak over the agent" in Live's voice tab chooses the agent, an immediate stop or none. A phrase cut off while it played is shown as interrupted.
 
