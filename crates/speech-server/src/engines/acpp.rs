@@ -235,16 +235,23 @@ pub struct Higgs {
     build: Build,
 }
 
-/// `src` as Higgs's codec takes a reference (`media::ref_for_higgs`), made beside it once and again when it changes.
-fn higgs_reference(src: &Path) -> Result<PathBuf, String> {
-    let stem = src.file_stem().and_then(|s| s.to_str()).unwrap_or("ref");
-    let dst = src.with_file_name(format!("{stem}.higgs24k.wav"));
-    let modified = |p: &Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();
-    if dst.is_file() && modified(&dst) >= modified(src) {
-        return Ok(dst);
+/// `src` as Higgs's codec takes a reference (`media::ref_for_higgs`), kept in the studio's own cache under `cache`, by
+/// the source's path, size and time: never beside the source (a library folder, a project, a neighbour's file).
+fn higgs_reference(cache: &Path, src: &Path) -> Result<PathBuf, String> {
+    let meta = std::fs::metadata(src).map_err(|e| format!("{}: {e}", src.display()))?;
+    let stamp = meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_nanos());
+    let key = blake3::hash(format!("{}|{}|{stamp}", src.display(), meta.len()).as_bytes()).to_hex()[..16].to_string();
+    std::fs::create_dir_all(cache).map_err(|e| format!("{}: {e}", cache.display()))?;
+    let dst = cache.join(format!("{key}.wav"));
+    if !dst.is_file() {
+        crate::audio::media::ref_for_higgs(src, &dst)?;
     }
-    crate::audio::media::ref_for_higgs(src, &dst)?;
     Ok(dst)
+}
+
+/// Where the references prepared for Higgs are kept.
+fn higgs_cache(repo_root: &Path) -> PathBuf {
+    repo_root.join("temp").join("higgs-refs")
 }
 
 impl Higgs {
@@ -283,7 +290,7 @@ impl Higgs {
     /// once more; one that ended later is told with what its log says.
     pub fn speak(&self, text: &str, reference: Option<&Path>, reference_text: Option<&str>, options: Map<String, Value>, piece: &mut dyn FnMut(&[f32])) -> Result<Vec<f32>, String> {
         self.cancel.store(false, Ordering::SeqCst);
-        let reference = reference.map(higgs_reference).transpose()?;
+        let reference = reference.map(|r| higgs_reference(&higgs_cache(&self.repo_root), r)).transpose()?;
         let req = SpeechRequest {
             model: HIGGS.to_string(),
             input: text.to_string(),
@@ -421,5 +428,26 @@ mod tests {
         });
         eprintln!("cancelled at the third piece: {:?} after {:.1} s", cancelled.as_ref().map(Vec::len), started.elapsed().as_secs_f64());
         assert!(prepared.is_ok() && again.is_ok());
+    }
+
+    /// A reference prepared for Higgs is kept in the studio's cache, by the source's path, size and time: nothing new
+    /// appears beside the source (a voice library stays the same set of voices), and a changed source is prepared anew.
+    #[test]
+    fn a_reference_for_higgs_is_kept_in_the_cache_not_beside_its_source() {
+        let root = tempfile::tempdir().unwrap();
+        let voices = root.path().join("voices");
+        std::fs::create_dir_all(&voices).unwrap();
+        let tone: Vec<f32> = (0..44_100 * 2).map(|i| 0.2 * (i as f32 * 0.03).sin()).collect();
+        crate::audio::wavio::write_mono_f32(&voices.join("Анна.wav"), &tone, 44_100).unwrap();
+        let before: Vec<String> = crate::voices::list(&voices).0.into_iter().map(|v| v.name).collect();
+        let cache = super::higgs_cache(root.path());
+        let first = super::higgs_reference(&cache, &voices.join("Анна.wav")).unwrap();
+        assert!(first.starts_with(&cache));
+        assert_eq!(super::higgs_reference(&cache, &voices.join("Анна.wav")).unwrap(), first, "kept, not made again");
+        assert_eq!(std::fs::read_dir(&voices).unwrap().count(), 1, "nothing beside the voice");
+        assert_eq!(crate::voices::list(&voices).0.into_iter().map(|v| v.name).collect::<Vec<_>>(), before);
+        let (x, sr) = crate::audio::wavio::read_mono_f32(&first).unwrap();
+        assert_eq!(sr, 24_000);
+        assert_eq!(x.len() as u64 % crate::audio::media::HIGGS_HOP, 0);
     }
 }
