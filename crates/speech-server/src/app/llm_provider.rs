@@ -65,6 +65,7 @@ pub struct LlmOpen<'a> {
     pub llama_bin: &'a Path,
     pub mt_model: &'a Path,
     pub mmproj: &'a Path,
+    pub repo_root: &'a Path,
     pub models_root: &'a Path,
 }
 
@@ -86,7 +87,7 @@ fn start_gemma(o: &LlmOpen, with_mmproj: bool) -> Result<LlmProvider, String> {
     }
     let mut opts = opts
         .with_ubatch(crate::engines::models::sel_num(o.models_root, "llama_ubatch").map(|f| f as u32))
-        .with_log_file(llama_log_path(o.models_root));
+        .with_log_file(llama_log_path(o.repo_root));
     if with_mmproj {
         opts = opts.with_mmproj(o.mmproj);
     }
@@ -165,9 +166,9 @@ pub fn open(o: &LlmOpen, mode: LlmMode) -> Result<LlmProvider, String> {
     }
 }
 
-/// Лог llama-server рядом с данными приложения: <корень>/logs/llama-server.log (models_root = <корень>/models).
-pub fn llama_log_path(models_root: &Path) -> std::path::PathBuf {
-    models_root.parent().unwrap_or(models_root).join("logs").join("llama-server.log")
+/// Лог llama-server рядом с логами студии: <корень>/logs/llama-server.log.
+pub fn llama_log_path(repo_root: &Path) -> std::path::PathBuf {
+    repo_root.join("logs").join("llama-server.log")
 }
 
 #[cfg(test)]
@@ -182,7 +183,7 @@ mod tests {
 
     fn open_in(root: &Path, mode: LlmMode) -> Result<LlmProvider, String> {
         let missing = root.join("missing.gguf");
-        open(&LlmOpen { llama_bin: &missing, mt_model: &missing, mmproj: &missing, models_root: root }, mode)
+        open(&LlmOpen { llama_bin: &missing, mt_model: &missing, mmproj: &missing, repo_root: root, models_root: root }, mode)
     }
 
     fn error<T>(result: Result<T, String>) -> String {

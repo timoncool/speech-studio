@@ -29,7 +29,7 @@ fn llm(p: &LlmPaths, progress: &dyn Fn(Value)) -> Result<crate::app::llm::LlmPro
         crate::engines::tts_host::unload();
     }
     let (mt_model, mmproj) = crate::engines::models::resolve_mt(&p.models_root, &crate::engines::models::load_selection(&p.models_root));
-    let open = crate::app::llm::LlmOpen { llama_bin: &p.llama_bin, mt_model: &mt_model, mmproj: &mmproj, models_root: &p.models_root };
+    let open = crate::app::llm::LlmOpen { llama_bin: &p.llama_bin, mt_model: &mt_model, mmproj: &mmproj, repo_root: &p.repo_root, models_root: &p.models_root };
     crate::app::llm::open(&open, crate::app::llm::LlmMode::Text)
 }
 

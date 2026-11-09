@@ -92,7 +92,7 @@ pub fn start(repo_root: &Path, models_root: &Path, lang: &str, engine: &str) -> 
         stop: stop.clone(),
         worker: None,
     });
-    run(choice, models_root, lang, stop, 0.0);
+    run(choice, repo_root, models_root, lang, stop, 0.0);
     Ok(())
 }
 
@@ -114,7 +114,7 @@ pub fn switch(repo_root: &Path, models_root: &Path, engine: &str) -> Result<Stri
         l.partial = None;
         l.engine = label.clone();
     });
-    run(choice, models_root, &lang, stop, at);
+    run(choice, repo_root, models_root, &lang, stop, at);
     Ok(label)
 }
 
@@ -124,14 +124,15 @@ pub fn engine() -> Option<(String, String)> {
 }
 
 /// Recognises what the recorder hears from now on, its phrases placed `at` seconds into the recording.
-fn run(choice: crate::engines::models::AsrChoice, models_root: &Path, lang: &str, stop: Arc<AtomicBool>, at: f64) {
+fn run(choice: crate::engines::models::AsrChoice, repo_root: &Path, models_root: &Path, lang: &str, stop: Arc<AtomicBool>, at: f64) {
+    let repo_root = repo_root.to_path_buf();
     let models_root = models_root.to_path_buf();
     let (to, from) = channel::<Vec<f32>>();
     crate::voices::record::tap(Some(to));
     std::env::set_var("DUB_ASR_BACKEND", crate::engines::models::stage_backend(&models_root, "asr_backend"));
     let lang = if lang == "auto" { String::new() } else { lang.to_string() };
     let worker = std::thread::spawn(move || {
-        if let Err(e) = listen(choice, &models_root, &lang, from, &stop, &crate::voices::record::rate, at) {
+        if let Err(e) = listen(choice, &repo_root, &models_root, &lang, from, &stop, &crate::voices::record::rate, at) {
             tracing::error!("[ERROR] live recognition: {e}");
             with(|l| l.error = Some(e));
         }
@@ -423,7 +424,10 @@ pub fn finish() -> Result<Vec<Heard>, String> {
     }
 }
 
-fn listen(choice: crate::engines::models::AsrChoice, models_root: &Path, lang: &str, from: Receiver<Vec<f32>>, stop: &AtomicBool, rate: &dyn Fn() -> u32, at: f64) -> Result<(), String> {
+fn listen(
+    choice: crate::engines::models::AsrChoice,
+    repo_root: &Path,
+    models_root: &Path, lang: &str, from: Receiver<Vec<f32>>, stop: &AtomicBool, rate: &dyn Fn() -> u32, at: f64) -> Result<(), String> {
     let label = choice.label();
     let lang = if lang == "auto" { "" } else { lang };
     // Nemotron 3.5 is a streaming model: a phrase is recognised as it is spoken instead of again from its start
@@ -462,7 +466,9 @@ fn listen(choice: crate::engines::models::AsrChoice, models_root: &Path, lang: &
         }
         w.finalize().map_err(|e| e.to_string())?;
         let heard = asr.transcribe(&wav, if lang.is_empty() { "auto" } else { lang }).map_err(|e| e.localize())?;
-        let words: Vec<HeardWord> = heard.iter().flat_map(|s| s.words.iter()).map(|w| (w.word.trim().to_string(), w.start, w.end)).filter(|w| !w.0.is_empty()).collect();
+        // Parakeet times words in 80 ms frames: the last one may end up to a frame past the audio it was given
+        let long = piece.len() as f64 / 16_000.0;
+        let words: Vec<HeardWord> = heard.iter().flat_map(|s| s.words.iter()).map(|w| (w.word.trim().to_string(), w.start.min(long), w.end.min(long))).filter(|w| !w.0.is_empty()).collect();
         Ok((dub_asr::join_text(heard.iter().map(|s| s.text.as_str())), words))
     };
     let intake = std::cell::RefCell::new(Intake::new(heard_at(at).ok_or_else(|| t!("listen-live-not-running"))?, at));
@@ -534,7 +540,6 @@ fn listen(choice: crate::engines::models::AsrChoice, models_root: &Path, lang: &
                 let piece = &audio[z.saturating_sub((TURN_HEARS_SECS * 16_000.0) as usize)..z.min(audio.len())];
                 let wav = work.path().join("turn.wav");
                 write_16k(&wav, piece)?;
-                let repo_root = models_root.parent().unwrap_or(models_root);
                 crate::engines::acpp::turn_finished(repo_root, models_root, &wav, TURN_THRESHOLD).map(|(finished, _)| finished)
             };
             let ends = turn_end.ends(secs, last, hear, &mut failed);
@@ -679,7 +684,7 @@ mod tests {
             seen
         });
         let stop = AtomicBool::new(false);
-        listen(choice, &models, &lang, from, &stop, &move || sr, 0.0).unwrap();
+        listen(choice, &root, &models, &lang, from, &stop, &move || sr, 0.0).unwrap();
         feeder.join().unwrap();
         let seen = partials.join().unwrap();
         for p in &seen {
