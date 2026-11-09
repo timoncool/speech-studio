@@ -1011,6 +1011,7 @@ listen-live-downloading = descargando el reconocedor; el reconocimiento empezar�
 say-hushed = la persona detuvo la voz en la ventana: espere su siguiente frase antes de seguir hablando
 live-metrics-bad-range = No es un número de línea: { $value }
 say-no-floor = Ahora nadie habla por encima del estudio: no hay nada tras lo que seguir
+echo-guard-no-owner = La protección contra el eco por tu voz necesita tu voz grabada (Ajustes, filtro de voz): hasta entonces el estudio evita oírse a sí mismo solo por el volumen y por sus propias palabras
 say-mic-off = el micrófono está apagado: la persona lo enciende en Live y entonces voice_listen la oye
 mic-only-person = solo la persona enciende el micrófono, con su botón en el estudio
 listen-gguf-missing = El modelo de reconocimiento «{ $engine }» no está descargado: descárgalo junto con el motor transcribe.cpp en Ajustes → Modelos.

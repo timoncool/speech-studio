@@ -2146,6 +2146,7 @@
     "myVoice": "My voice",
     "enrolled": "Your voice is set up",
     "notEnrolled": "Not set up yet",
+    "stale": "Your voice was recorded by an older version together with the silence around it, and the gate did not recognise you. Record it again: until then the gate lets everyone through.",
     "enrollPrompt": "Say out loud: “This is my voice, I'm setting up Speech Studio.”",
     "enroll": "Record my voice",
     "reEnroll": "Record again",
@@ -2540,7 +2541,13 @@
     "interrupt_always": "It stops at once",
     "interrupt_never": "It goes on",
     "interruptHint": "The agent decides: its voice drops while it chooses to stop or go on, and with no answer in the wait below it stops by itself.",
-    "interruptMs": "Wait for the agent, ms"
+    "interruptMs": "Wait for the agent, ms",
+    "echoGuard": "Echo protection",
+    "echoGuard_duplex": "By loudness",
+    "echoGuard_gate": "By your voice",
+    "echoGuard_text": "By words only",
+    "echoGuardHint": "Keeps the agent from hearing itself from the speakers. With headphones any choice works; by your voice needs your voice recorded in the voice gate.",
+    "echoGuardNoOwner": "Record your voice in Settings, voice gate: until then the protection works by loudness."
   },
   "mic": {
     "on": "Microphone on",

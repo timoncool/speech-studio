@@ -313,6 +313,7 @@ pub(super) async fn voice_gate_get(State(st): State<AppState>) -> Response {
         "wake_threshold": cfg.wake_threshold,
         "autostart": cfg.autostart,
         "enrolled": crate::voice_gate::enrolled(&st.models_root),
+        "stale": crate::voice_gate::stale(&st.models_root),
         "wake_words": crate::voice_gate::wake_words(),
     }))
     .into_response()

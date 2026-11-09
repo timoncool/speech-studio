@@ -52,8 +52,47 @@ pub const WAIT_MS: std::ops::RangeInclusive<u64> = 200..=10_000;
 /// How far down the studio's voice goes while the agent decides: the person hears they were heard and goes on.
 pub const DUCK_DB: f64 = -18.0;
 
+/// How Live keeps the studio from hearing itself: the owner's voice gate on top of the two below (gate), the microphone
+/// not heard while the studio's sound is louder than it (duplex) on top of the text check, or the text check alone
+/// (text: a line heard while a phrase of the studio sounded and saying it is marked echo).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Guard {
+    Gate,
+    Duplex,
+    Text,
+}
+
+impl Guard {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Guard::Gate => "gate",
+            Guard::Duplex => "duplex",
+            Guard::Text => "text",
+        }
+    }
+
+    fn parse(s: &str) -> Option<Self> {
+        match s {
+            "gate" => Some(Guard::Gate),
+            "duplex" => Some(Guard::Duplex),
+            "text" => Some(Guard::Text),
+            _ => None,
+        }
+    }
+}
+
+pub const GUARD_KEY: &str = "live_echo_guard";
+/// The owner's voice gate is not the default: on recorded conversations it has not yet shown it lets the owner's
+/// phrases through often enough.
+pub const DEFAULT_GUARD: Guard = Guard::Duplex;
+
+pub fn guard(models_root: &Path) -> Guard {
+    chosen(models_root, GUARD_KEY).as_deref().and_then(Guard::parse).unwrap_or(DEFAULT_GUARD)
+}
+
 pub fn is_value(key: &str, value: &str) -> Option<bool> {
     match key {
+        GUARD_KEY => Some(Guard::parse(value).is_some()),
         MODE_KEY => Some(Mode::parse(value).is_some()),
         WAIT_KEY => Some(value.parse::<u64>().is_ok_and(|ms| WAIT_MS.contains(&ms))),
         _ => None,
@@ -75,7 +114,7 @@ pub fn wait_ms(models_root: &Path) -> u64 {
 /// The settings as the window shows them: the defaults where the person chose none; nothing is written.
 pub fn with_defaults(mut sel: Value) -> Value {
     if let Some(obj) = sel.as_object_mut() {
-        for (k, v) in [(MODE_KEY, DEFAULT_MODE.as_str().to_string()), (WAIT_KEY, DEFAULT_WAIT_MS.to_string())] {
+        for (k, v) in [(MODE_KEY, DEFAULT_MODE.as_str().to_string()), (WAIT_KEY, DEFAULT_WAIT_MS.to_string()), (GUARD_KEY, DEFAULT_GUARD.as_str().to_string())] {
             if obj.get(k).and_then(Value::as_str).is_none_or(|x| x.trim().is_empty()) {
                 obj.insert(k.into(), v.into());
             }

@@ -116,7 +116,9 @@ connected and the address to paste.
   the conversation the person started (mic_off: ask them to press Live; its `engine` changes the recogniser of the
   running conversation at once); `voice_listen` (after the last `heard`) waits
   for their next phrase; answer with `say_start` / `say_text` as you write; listen again. A line with `echo: true` is
-  the studio's own voice heard back through the microphone: do not answer it.
+  the studio's own voice heard back through the microphone: do not answer it. The setting `live_echo_guard` keeps the
+  studio from hearing itself: `duplex` (the default) does not hear the microphone while the studio's sound is louder
+  than it, `gate` adds the owner's voice gate, `text` only marks echo.
   When the person speaks over the studio (two words or more, not a backchannel or a cough), `voice_floor` tells it as
   an event. By the setting `live_interrupt` (`agent` by default) the studio goes on about 18 dB quieter and you
   decide: `say_stop` gives them the floor, `say_continue` goes on; with no word from you within `live_interrupt_ms`

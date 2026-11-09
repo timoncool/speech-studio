@@ -5,6 +5,7 @@ import { byPerson, personOnly } from "../../lib/person";
 import { named } from "../../lib/a11y";
 import { api, BASE, slot, type Selection } from "../../lib/api";
 import { SETTINGS_CHANGED, useChanged } from "../../lib/mcpBridge";
+import { voiceGateApi } from "../../lib/voiceGate";
 import { aloudPlayback, onLiveEvents } from "../../lib/livePlayback";
 import { talkApi } from "../../lib/talk";
 import { errorText } from "../../lib/voices";
@@ -156,6 +157,7 @@ function VoiceTab() {
 }
 
 const INTERRUPT = ["agent", "always", "never"] as const;
+const ECHO_GUARD = ["duplex", "gate", "text"] as const;
 
 /** Who stops the agent when the person speaks over it, and how long the agent has to decide. */
 function InterruptSetting() {
@@ -164,9 +166,11 @@ function InterruptSetting() {
   const [draft, setDraft] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [reread, setReread] = useState(0);
+  const [enrolled, setEnrolled] = useState<boolean | null>(null);
   useChanged(SETTINGS_CHANGED, () => setReread((n) => n + 1));
   useEffect(() => {
     api.capabilities().then((c) => setSel(c.selection ?? {}), (e: unknown) => setProblem(errorText(e)));
+    voiceGateApi.get().then((g) => setEnrolled(g.enrolled), (e: unknown) => setProblem(errorText(e)));
   }, [reread]);
   const save = (key: string, value: string) => {
     api.setSelection(key, value)
@@ -176,6 +180,7 @@ function InterruptSetting() {
   if (!sel) return problem ? <p role="alert" className="text-[11px] text-[var(--color-warn)]">{problem}</p> : null;
   const mode = slot(sel, "live_interrupt") ?? "";
   const ms = draft ?? slot(sel, "live_interrupt_ms") ?? "";
+  const guard = slot(sel, "live_echo_guard") ?? "";
   const field = "w-full bg-[var(--color-surface-2)] border border-[var(--color-border)] rounded-md px-2 py-1.5 text-[12px]";
   const label = "block space-y-1.5 text-[11px] text-[var(--color-muted)]";
   return (
@@ -193,6 +198,13 @@ function InterruptSetting() {
             onKeyDown={(e) => { if (e.key === "Enter" && draft !== null) save("live_interrupt_ms", draft); }} className={field} />
         </label>
       )}
+      <label className={label}>
+        <span className="flex items-center gap-1">{t("talk.echoGuard")} <Hint text={t("talk.echoGuardHint")} /></span>
+        <select value={guard} onChange={(e) => save("live_echo_guard", e.target.value)} className={field}>
+          {ECHO_GUARD.map((g) => <option key={g} value={g}>{t(`talk.echoGuard_${g}`)}</option>)}
+        </select>
+      </label>
+      {guard === "gate" && enrolled === false && <p className="text-[11px] text-[var(--color-warn)]">{t("talk.echoGuardNoOwner")}</p>}
       {problem && <p role="alert" className="text-[11px] text-[var(--color-warn)]">{problem}</p>}
     </div>
   );

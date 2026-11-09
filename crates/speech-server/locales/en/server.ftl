@@ -1017,6 +1017,7 @@ listen-live-downloading = Downloading the recogniser; live recognition starts wh
 say-hushed = The person stopped the speech in the window: wait for their next phrase before saying more
 live-metrics-bad-range = Not a line number: { $value }
 say-no-floor = Nobody is speaking over the studio now: there is nothing to go on after
+echo-guard-no-owner = The echo protection by your voice needs your voice recorded (Settings, voice gate): until then the studio keeps from hearing itself by loudness and by its own words only
 say-mic-off = The microphone is off: the person turns it on in Live, then voice_listen hears them
 mic-only-person = Only the person turns the microphone on, with its button in the studio
 listen-gguf-missing = The recognition model "{ $engine }" is not downloaded: get it and the transcribe.cpp engine in Settings → Models.

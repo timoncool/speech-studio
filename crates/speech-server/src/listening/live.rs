@@ -48,6 +48,8 @@ struct Live {
     /// The words of the lines whose recogniser timed them (text, start, end in the recording); a line without an entry
     /// has no word timings.
     words: std::collections::HashMap<usize, Vec<HeardWord>>,
+    /// Seconds of the microphone the half-duplex took for the studio's own sound and held back.
+    duplex_secs: f64,
     /// The moment the recording's second 0 was.
     zero: std::time::Instant,
     /// The recogniser that hears now, as the window names it, and the language asked of it.
@@ -81,7 +83,7 @@ pub fn start(repo_root: &Path, models_root: &Path, lang: &str, engine: &str) -> 
         typed: Default::default(),
         foreign: Default::default(),
         echo: Default::default(),
-        words: Default::default(),
+        words: Default::default(), duplex_secs: 0.0,
         zero: std::time::Instant::now(),
         engine: choice.label(),
         lang: lang.to_string(),
@@ -143,6 +145,44 @@ fn heard_as(mut chunk: Vec<f32>) -> Vec<f32> {
     chunk
 }
 
+/// While the studio speaks, the microphone is heard only when it is louder than the studio's own sound coming back
+/// could be: this far under the sound sent to the window.
+pub const DUPLEX_DB: f32 = -18.0;
+/// The studio's sound comes back from the room this long after it was played.
+pub const DUPLEX_TAIL: Duration = Duration::from_millis(200);
+/// Once the person is heard over the studio, the microphone stays open this long, so their quieter sounds between
+/// louder ones are not cut out of the phrase.
+pub const DUPLEX_HOLD: Duration = Duration::from_millis(400);
+
+/// The half-duplex of a conversation: whether the microphone is heard while the studio speaks.
+#[derive(Default)]
+pub struct Duplex {
+    open_until: Option<std::time::Instant>,
+}
+
+impl Duplex {
+    /// Whether a piece of the microphone as loud as `mic` (RMS) is the person, the studio's sound being `playback`
+    /// (RMS, None: silent) then.
+    pub fn passes(&mut self, mic: f32, playback: Option<f32>, now: std::time::Instant) -> bool {
+        let Some(p) = playback.filter(|p| *p > 0.0) else {
+            return true;
+        };
+        if mic >= p * 10f32.powf(DUPLEX_DB / 20.0) {
+            self.open_until = Some(now + DUPLEX_HOLD);
+            return true;
+        }
+        self.open_until.is_some_and(|u| now < u)
+    }
+}
+
+/// A piece of the microphone the half-duplex took for the studio's own sound: heard as silence, and counted.
+fn held_back(mut chunk: Vec<f32>, sr: u32) -> Vec<f32> {
+    let secs = chunk.len() as f64 / sr.max(1) as f64;
+    with(|l| l.duplex_secs += secs);
+    chunk.fill(0.0);
+    chunk
+}
+
 /// Whether the running session's microphone is muted; None with no session.
 pub fn muted() -> Option<bool> {
     with(|l| l.muted)
@@ -172,6 +212,7 @@ pub fn state() -> Value {
             "partial": l.partial.as_ref().map(|(a, text)| json!({ "start": a, "text": text })),
             "error": l.error,
             "muted": l.muted,
+            "duplex_secs": (l.duplex_secs * 10.0).round() / 10.0,
         }),
         None => json!({ "running": false, "lines": [], "partial": null, "error": null, "muted": false }),
     }
@@ -197,7 +238,7 @@ pub static TEST_SLOT: Mutex<()> = Mutex::new(());
 /// A conversation that heard `lines` (start, end, text, typed, the owner's voice), its second 0 being `zero`, for tests.
 #[cfg(test)]
 pub fn conversation_for_test(zero: std::time::Instant, lines: &[(f64, f64, &str, bool, bool)]) {
-    let mut l = Live { lines: Vec::new(), partial: None, error: None, muted: false, typed: Default::default(), foreign: Default::default(), echo: Default::default(), words: Default::default(), zero, engine: String::new(), lang: "ru".into(), stop: Arc::new(AtomicBool::new(false)), worker: None };
+    let mut l = Live { lines: Vec::new(), partial: None, error: None, muted: false, typed: Default::default(), foreign: Default::default(), echo: Default::default(), words: Default::default(), duplex_secs: 0.0, zero, engine: String::new(), lang: "ru".into(), stop: Arc::new(AtomicBool::new(false)), worker: None };
     for (n, (a, z, text, typed, owner)) in lines.iter().enumerate() {
         if *typed {
             l.typed.insert(n);
@@ -283,14 +324,40 @@ fn listen(choice: crate::engines::models::AsrChoice, models_root: &Path, lang: &
         let words: Vec<HeardWord> = heard.iter().flat_map(|s| s.words.iter()).map(|w| (w.word.trim().to_string(), w.start, w.end)).filter(|w| !w.0.is_empty()).collect();
         Ok((dub_asr::join_text(heard.iter().map(|s| s.text.as_str())), words))
     };
+    let mut duplex = Duplex::default();
+    // the guard is read again now and then, so a change in the settings reaches a conversation under way
+    let mut guard: Option<(std::time::Instant, crate::speech::floor_settings::Guard)> = None;
+    let mut take = |chunk: Vec<f32>| -> Vec<f32> {
+        let now = std::time::Instant::now();
+        let mode = match guard {
+            Some((at, g)) if now.duration_since(at) < Duration::from_secs(1) => g,
+            _ => {
+                let g = crate::speech::floor_settings::guard(models_root);
+                guard = Some((now, g));
+                g
+            }
+        };
+        let chunk = heard_as(chunk);
+        if mode == crate::speech::floor_settings::Guard::Text {
+            return chunk;
+        }
+        let sr = rate().max(1);
+        let began = now.checked_sub(Duration::from_secs_f64(chunk.len() as f64 / sr as f64)).unwrap_or(now);
+        let playback = crate::speech::playback_level(began, now, DUPLEX_TAIL);
+        if duplex.passes(crate::speech::rms(&chunk), playback, now) {
+            chunk
+        } else {
+            held_back(chunk, sr)
+        }
+    };
     while !ended {
         match from.recv_timeout(Duration::from_millis(300)) {
-            Ok(chunk) => pending.extend(heard_as(chunk)),
+            Ok(chunk) => pending.extend(take(chunk)),
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => ended = true,
         }
         while let Ok(chunk) = from.try_recv() {
-            pending.extend(heard_as(chunk));
+            pending.extend(take(chunk));
         }
         ended |= stop.load(Ordering::Relaxed);
         let sr = rate().max(1);
@@ -422,7 +489,7 @@ mod tests {
         let choice = crate::app::recognition::choice(&root, &models, &lang, "test").unwrap();
         let streams = matches!(&choice, crate::engines::models::AsrChoice::Ggml { model, .. } | crate::engines::models::AsrChoice::Server { model, .. } if model.id == "nemotron");
         std::env::set_var("DUB_ASR_BACKEND", crate::engines::models::stage_backend(&models, "asr_backend"));
-        *live().lock().unwrap() = Some(Live { lines: Vec::new(), partial: None, error: None, muted: false, typed: Default::default(), foreign: Default::default(), echo: Default::default(), words: Default::default(), zero: std::time::Instant::now(), engine: String::new(), lang: lang.clone(), stop: Arc::new(AtomicBool::new(false)), worker: None });
+        *live().lock().unwrap() = Some(Live { lines: Vec::new(), partial: None, error: None, muted: false, typed: Default::default(), foreign: Default::default(), echo: Default::default(), words: Default::default(), duplex_secs: 0.0, zero: std::time::Instant::now(), engine: String::new(), lang: lang.clone(), stop: Arc::new(AtomicBool::new(false)), worker: None });
         let (to, from) = channel::<Vec<f32>>();
         let feeder = std::thread::spawn(move || {
             for chunk in x.chunks((sr / 10) as usize) {
@@ -471,5 +538,24 @@ mod tests {
         assert_eq!(y.len(), 16_000);
         assert!((y[100] - x[300]).abs() < 1e-3);
         assert_eq!(to_16k(&x[..10], 16_000).len(), 10);
+    }
+
+    /// Scenarios 10 and 11 of TZ-LIVE-TRAINER: while the studio speaks its sound coming back is held back, the person
+    /// speaking over it is heard at once, quieter sounds of theirs right after too; with headphones (no sound coming
+    /// back) a quiet voice is heard at the same setting.
+    #[test]
+    fn the_half_duplex_holds_back_the_studio_and_lets_the_person_through() {
+        let t0 = std::time::Instant::now();
+        let at = |ms: u64| t0 + Duration::from_millis(ms);
+        let mut d = Duplex::default();
+        let studio = Some(0.1);
+        assert!(!d.passes(0.008, studio, at(0)), "the studio heard back through the speakers");
+        assert!(!d.passes(0.012, studio, at(100)), "still under its sound by 18 dB");
+        assert!(d.passes(0.05, studio, at(200)), "the person speaking over it");
+        assert!(d.passes(0.004, studio, at(450)), "their quieter sound right after is theirs");
+        assert!(!d.passes(0.004, studio, at(700)), "once they stopped, the studio's sound is held back again");
+        assert!(d.passes(0.004, None, at(800)), "the studio is silent: the microphone is heard");
+        let mut headphones = Duplex::default();
+        assert!(headphones.passes(0.02, studio, at(0)), "a quiet voice over headphones: nothing of the studio's comes back");
     }
 }

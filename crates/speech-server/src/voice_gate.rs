@@ -147,12 +147,48 @@ pub fn save_config(models_root: &Path, cfg: &Config) -> Result<(), String> {
     std::fs::write(&path, serde_json::to_vec_pretty(cfg).map_err(|e| e.to_string())?).map_err(|e| format!("{}: {e}", path.display()))
 }
 
-/// The owner's enrolled voice print (192-d, L2-normalized), or None if no one has enrolled.
+/// The owner's voice print as it is kept: taken from the speech of the enrolment recording only, and how much of it.
+#[derive(serde::Serialize, serde::Deserialize)]
+struct Print {
+    print: Vec<f32>,
+    speech_secs: f64,
+}
+
+/// What the gate holds of the owner's voice.
+enum Enrolment {
+    None,
+    /// A print an earlier version took from the whole recording, silence included: it does not recognise the owner.
+    Stale,
+    Ready(Vec<f32>),
+}
+
+fn enrolment(models_root: &Path) -> Enrolment {
+    let Ok(body) = std::fs::read(gate_dir(models_root).join("owner.json")) else {
+        return Enrolment::None;
+    };
+    if let Ok(p) = serde_json::from_slice::<Print>(&body) {
+        if p.print.len() == EMB_DIM {
+            return Enrolment::Ready(p.print);
+        }
+    }
+    if serde_json::from_slice::<Vec<f32>>(&body).is_ok_and(|v| v.len() == EMB_DIM) {
+        return Enrolment::Stale;
+    }
+    tracing::warn!("voice gate: {} is not a voice print", gate_dir(models_root).join("owner.json").display());
+    Enrolment::None
+}
+
+/// The owner's enrolled voice print (192-d, L2-normalized), or None if no one has enrolled or the print is stale.
 pub fn owner_print(models_root: &Path) -> Option<Vec<f32>> {
-    std::fs::read(gate_dir(models_root).join("owner.json"))
-        .ok()
-        .and_then(|b| serde_json::from_slice::<Vec<f32>>(&b).ok())
-        .filter(|v| v.len() == EMB_DIM)
+    match enrolment(models_root) {
+        Enrolment::Ready(p) => Some(p),
+        _ => None,
+    }
+}
+
+/// Whether the print kept is an earlier version's, taken with the recording's silence: the owner enrols again.
+pub fn stale(models_root: &Path) -> bool {
+    matches!(enrolment(models_root), Enrolment::Stale)
 }
 
 /// Whether the owner has enrolled a voice.
@@ -179,14 +215,33 @@ fn with_embedder<T>(models_root: &Path, gpu: bool, f: impl FnOnce(&mut Embedder)
     f(slot.as_mut().expect("just loaded"))
 }
 
-/// Enrol the owner from 16 kHz mono samples in [-1, 1]: keep their voice print. Returns the seconds used.
+/// Enrol the owner from 16 kHz mono samples in [-1, 1]: keep the voice print of their speech, the silence and noise
+/// around it left out (a print taken with them matches no phrase of the owner's). Returns the seconds of speech used.
 pub fn enroll(models_root: &Path, gpu: bool, samples: &[f32]) -> Result<f64, String> {
-    let print = with_embedder(models_root, gpu, |e| e.embed(samples))?;
+    let probs = crate::engines::vad::probabilities(models_root, samples)?;
+    let spans = crate::engines::vad::speech(&probs, samples.len(), &crate::engines::vad::VadConfig::default());
+    let speech = speech_of(samples, &spans);
+    let speech_secs = speech.len() as f64 / SR as f64;
+    if speech_secs < 1.0 {
+        return Err(t!("voice-gate-too-short"));
+    }
+    let print = with_embedder(models_root, gpu, |e| e.embed(&speech))?;
     let dir = gate_dir(models_root);
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     let path = dir.join("owner.json");
-    std::fs::write(&path, serde_json::to_vec(&print).map_err(|e| e.to_string())?).map_err(|e| format!("{}: {e}", path.display()))?;
-    Ok(samples.len() as f64 / SR as f64)
+    std::fs::write(&path, serde_json::to_vec(&Print { print, speech_secs }).map_err(|e| e.to_string())?).map_err(|e| format!("{}: {e}", path.display()))?;
+    Ok(speech_secs)
+}
+
+/// The samples of `spans` (seconds) put one after another.
+fn speech_of(samples: &[f32], spans: &[(f64, f64)]) -> Vec<f32> {
+    spans
+        .iter()
+        .flat_map(|(a, z)| {
+            let (a, z) = (((a * SR as f64) as usize).min(samples.len()), ((z * SR as f64) as usize).min(samples.len()));
+            samples[a..z.max(a)].iter().copied()
+        })
+        .collect()
 }
 
 /// The cosine of this speech against the enrolled owner; None if no one is enrolled.
@@ -270,6 +325,15 @@ pub fn arm(on: bool) {
     AWAKE.store(false, Ordering::Relaxed);
 }
 
+/// Live keeps the studio from hearing itself by the owner's voice (`live_echo_guard` gate): the gate checks the owner's
+/// voice in the conversation though it is not turned on for starting one.
+static OWNER_GUARD: AtomicBool = AtomicBool::new(false);
+
+/// The owner's voice keeps the studio from hearing itself in the conversation being armed, or no longer.
+pub fn guard_owner(on: bool) {
+    OWNER_GUARD.store(on, Ordering::Relaxed);
+}
+
 /// Whether a gated Live conversation is under way.
 pub fn is_armed() -> bool {
     ARMED.load(Ordering::Relaxed)
@@ -297,7 +361,7 @@ pub fn gate_line(models_root: &Path, samples: &[f32]) -> Option<bool> {
         return None;
     }
     let cfg = config(models_root);
-    let owner_gate = cfg.enabled && enrolled(models_root);
+    let owner_gate = (cfg.enabled || OWNER_GUARD.load(Ordering::Relaxed)) && enrolled(models_root);
     let wake = cfg.wake_word.as_deref().map(str::trim).filter(|w| !w.is_empty());
     if !owner_gate && wake.is_none() {
         return None;
@@ -351,6 +415,26 @@ mod tests {
         assert_eq!(cosine(&[], &[]), 0.0);
     }
 
+    /// A print an earlier version took with the recording's silence recognised no phrase of the owner (98 % of their
+    /// lines under the 0.61 they had set): it is told as stale and never used, a print of the speech alone is.
+    #[test]
+    fn a_print_taken_with_the_silence_is_stale_and_one_of_the_speech_is_used() {
+        let dir = tempfile::tempdir().unwrap();
+        let gate = dir.path().join("voice-gate");
+        std::fs::create_dir_all(&gate).unwrap();
+        assert!(!enrolled(dir.path()) && !stale(dir.path()));
+        std::fs::write(gate.join("owner.json"), serde_json::to_vec(&vec![0.1f32; EMB_DIM]).unwrap()).unwrap();
+        assert!(stale(dir.path()));
+        assert!(!enrolled(dir.path()), "the gate does not use it");
+        std::fs::write(gate.join("owner.json"), serde_json::to_vec(&Print { print: vec![0.1; EMB_DIM], speech_secs: 5.9 }).unwrap()).unwrap();
+        assert!(enrolled(dir.path()) && !stale(dir.path()));
+        let x: Vec<f32> = (0..32_000).map(|i| i as f32).collect();
+        let speech = speech_of(&x, &[(0.5, 1.0), (1.5, 1.75)]);
+        assert_eq!(speech.len(), 8_000 + 4_000);
+        assert_eq!(speech[0], 8_000.0);
+        assert_eq!(speech[8_000], 24_000.0);
+    }
+
     fn tone(hz: f32, seconds: usize) -> Vec<f32> {
         let n = SR as usize * seconds;
         (0..n).map(|i| 0.3 * (2.0 * std::f32::consts::PI * hz * i as f32 / SR as f32).sin()).collect()
@@ -368,5 +452,105 @@ mod tests {
         assert!((cosine(&a, &a) - 1.0).abs() < 1e-5, "a voice matches itself");
         let b = e.embed(&tone(660.0, 3)).expect("embed b");
         assert!(cosine(&a, &b) < 0.999, "a different signal is not identical: {}", cosine(&a, &b));
+    }
+
+    /// The gate measured on Live conversations as they were recorded: each line of the recordings scored against the
+    /// owner's voice print, labelled the studio's when its words are a phrase the studio said (the say sessions' blocks),
+    /// the owner's otherwise; and how loud the studio's phrases came back through the microphone against their own
+    /// sound, for the half-duplex. GATE_ROOT: a studio root (its models, voice print and workspace); GATE_LIVE: the
+    /// Listening projects of the recordings, comma separated; GATE_SAID: the say sessions' projects. Runs on the CPU.
+    #[test]
+    #[ignore = "needs a studio root with recorded Live conversations"]
+    fn the_gate_measured_on_recorded_conversations() {
+        let root = PathBuf::from(std::env::var("GATE_ROOT").expect("GATE_ROOT"));
+        let models = root.join("models");
+        let workspace = root.join("workspace");
+        crate::set_ort_dylib_env(&root, &root).unwrap();
+        // the speech of a sound: its 30 ms frames no quieter than a twentieth of its loudest
+        let speech_of = |x: &[f32]| -> Vec<f32> {
+            let loudest = x.chunks(480).map(crate::speech::rms).fold(0.0f32, f32::max);
+            x.chunks(480).filter(|f| crate::speech::rms(f) >= loudest * 0.05).flatten().copied().collect()
+        };
+        let tmp = tempfile::tempdir().unwrap();
+        let mut said: Vec<(Vec<String>, Option<f32>)> = Vec::new();
+        for pid in std::env::var("GATE_SAID").unwrap_or_default().split(',').filter(|p| !p.is_empty()) {
+            let p: serde_json::Value = serde_json::from_slice(&std::fs::read(workspace.join(pid).join("project.json")).unwrap()).unwrap();
+            for ch in p["chapters"].as_array().unwrap() {
+                for b in ch["blocks"].as_array().unwrap() {
+                    let take = b["takes"].as_array().and_then(|t| t.iter().find(|t| t["n"] == b["active"])).and_then(|t| t["file"].as_str());
+                    let level = take.and_then(|f| {
+                        let k = tmp.path().join(format!("{f}.wav"));
+                        crate::audio::media::to_16k_mono(&workspace.join(pid).join("takes").join(f), &k).ok()?;
+                        Some(crate::speech::rms(&speech_of(&crate::audio::wavio::read_mono_f32(&k).ok()?.0)))
+                    });
+                    said.push((crate::audio::qc::normalize(b["text"].as_str().unwrap_or_default()), level));
+                }
+            }
+        }
+        let studio_said = |words: &[String]| -> Option<Option<f32>> {
+            if words.is_empty() {
+                return None;
+            }
+            said.iter().find(|s| words.iter().filter(|w| s.0.contains(w)).count() * 3 >= words.len() * 2).map(|s| s.1)
+        };
+        let body = std::fs::read(models.join("voice-gate").join("owner.json")).unwrap();
+        let owner: Vec<f32> = serde_json::from_slice::<Print>(&body).map(|p| p.print).or_else(|_| serde_json::from_slice::<Vec<f32>>(&body)).expect("an enrolled voice print");
+        let mut e = Embedder::load(&model_path(&models), false).unwrap();
+        // the enrolment recording again, its speech only: the print the gate would hold without the silence around it
+        let (test, test_sr) = crate::audio::wavio::read_mono_f32(&workspace.join(".mic-test.wav")).unwrap();
+        let test16 = crate::audio::wavio::to_16k(&test, test_sr);
+        let speech = speech_of(&test16);
+        let trimmed = e.embed(&speech).unwrap();
+        eprintln!("enrolment: {:.1} s recorded, {:.1} s of speech; stored print against the trimmed one {:.3}", test16.len() as f64 / 16_000.0, speech.len() as f64 / 16_000.0, cosine(&owner, &trimmed));
+        let mut rows: Vec<(bool, f64, f32, f32)> = Vec::new();
+        let (mut echo_db, mut person_rms): (Vec<f32>, Vec<f32>) = (Vec::new(), Vec::new());
+        for pid in std::env::var("GATE_LIVE").expect("GATE_LIVE").split(',').filter(|p| !p.is_empty()) {
+            let dir = workspace.join(pid);
+            let p: serde_json::Value = serde_json::from_slice(&std::fs::read(dir.join("project.json")).unwrap()).unwrap();
+            let (x, sr) = crate::audio::wavio::read_mono_f32(&dir.join("source.wav")).unwrap();
+            let x16 = crate::audio::wavio::to_16k(&x, sr);
+            for l in p["lines"].as_array().unwrap() {
+                let (a, z) = (l["start"].as_f64().unwrap(), l["end"].as_f64().unwrap());
+                let piece = &x16[((a * 16_000.0) as usize).min(x16.len())..((z * 16_000.0) as usize).min(x16.len())];
+                if piece.len() < 8_000 {
+                    continue;
+                }
+                let print = e.embed(piece).unwrap();
+                let text = l["text"].as_str().unwrap_or_default();
+                let matched = studio_said(&crate::audio::qc::normalize(text));
+                let heard = crate::speech::rms(&speech_of(piece));
+                match matched {
+                    Some(Some(sent)) if sent > 0.0 => echo_db.push(20.0 * (heard / sent).log10()),
+                    None => person_rms.push(heard),
+                    _ => {}
+                }
+                let (stored, again) = (cosine(&owner, &print), cosine(&trimmed, &print));
+                eprintln!("{} {:>5.2}s stored {stored:.3} trimmed {again:.3} | {text}", if matched.is_some() { "STUDIO" } else { "OWNER " }, z - a);
+                rows.push((matched.is_some(), z - a, stored, again));
+            }
+        }
+        let owners: Vec<&(bool, f64, f32, f32)> = rows.iter().filter(|r| !r.0).collect();
+        let studio: Vec<&(bool, f64, f32, f32)> = rows.iter().filter(|r| r.0).collect();
+        eprintln!("lines: {} of the owner, {} of the studio", owners.len(), studio.len());
+        for t in [0.30f32, 0.35, 0.40, 0.45, 0.50, 0.55, 0.61] {
+            let rejected = |pick: fn(&(bool, f64, f32, f32)) -> f32| owners.iter().filter(|r| pick(r) < t).count() as f64 * 100.0 / owners.len().max(1) as f64;
+            let passed = |pick: fn(&(bool, f64, f32, f32)) -> f32| studio.iter().filter(|r| pick(r) >= t).count() as f64 * 100.0 / studio.len().max(1) as f64;
+            eprintln!(
+                "threshold {t:.2}: stored print - owner rejected {:.1} %, studio passed {:.1} % | trimmed print - owner rejected {:.1} %, studio passed {:.1} %",
+                rejected(|r| r.2), passed(|r| r.2), rejected(|r| r.3), passed(|r| r.3)
+            );
+        }
+        let pct = |v: &mut Vec<f32>, q: f64| -> f32 {
+            v.sort_by(f32::total_cmp);
+            v.get(((v.len().max(1) - 1) as f64 * q).round() as usize).copied().unwrap_or(f32::NAN)
+        };
+        let sent: Vec<f32> = said.iter().filter_map(|s| s.1).collect();
+        let mut sent_sorted = sent.clone();
+        let median_sent = pct(&mut sent_sorted, 0.5);
+        let mut person_db: Vec<f32> = person_rms.iter().map(|r| 20.0 * (r / median_sent).log10()).collect();
+        eprintln!(
+            "the studio heard back, dB under its own sound: n {} - median {:.1}, 90 % {:.1}, loudest {:.1} | the person, dB against the studio's median sound (rms {median_sent:.3}): n {} - quietest {:.1}, 10 % {:.1}, median {:.1}",
+            echo_db.len(), pct(&mut echo_db, 0.5), pct(&mut echo_db, 0.9), pct(&mut echo_db, 1.0), person_db.len(), pct(&mut person_db, 0.0), pct(&mut person_db, 0.1), pct(&mut person_db, 0.5)
+        );
     }
 }

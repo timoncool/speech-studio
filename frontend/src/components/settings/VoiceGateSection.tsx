@@ -264,6 +264,9 @@ export default function VoiceGateSection() {
                   <span className="block text-[11px] leading-snug text-[var(--color-muted)]">
                     {state.enrolled ? t("voiceGate.enrolled") : t("voiceGate.notEnrolled")}
                   </span>
+                  {state.stale && !state.enrolled && (
+                    <span role="alert" className="block text-[11px] leading-snug text-[var(--color-warn)]">{t("voiceGate.stale")}</span>
+                  )}
                   {heard && !recording && (
                     <span className="block text-[11px] leading-snug text-[var(--color-good)]">{t("voiceGate.heard", { text: heard })}</span>
                   )}

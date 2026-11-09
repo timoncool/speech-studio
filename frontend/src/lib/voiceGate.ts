@@ -15,6 +15,8 @@ export type VoiceGate = {
   autostart: boolean;
   /** Whether the owner has enrolled a voice. */
   enrolled: boolean;
+  /** The voice kept is an earlier version's, taken with the recording's silence: the gate does not use it. */
+  stale?: boolean;
   /** Example wake phrases for the field (hints only — any phrase in any language works). */
   wake_words: string[];
   /** Set only in the reply to a save: the wake-word recogniser is being downloaded in the background. */

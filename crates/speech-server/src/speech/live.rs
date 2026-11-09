@@ -86,20 +86,43 @@ struct Airing {
     blocks: Vec<Aired>,
     /// Where the sound the window has queued ends.
     until: Option<Instant>,
+    /// How loud each piece sent to the window is (RMS of its samples) and when it sounds.
+    levels: std::collections::VecDeque<(Instant, Instant, f32)>,
 }
+
+/// How long the loudness of the sound said aloud is kept.
+const LEVEL_SECS: u64 = 30;
 
 fn airing() -> std::sync::MutexGuard<'static, Airing> {
     static AIR: OnceLock<Mutex<Airing>> = OnceLock::new();
-    AIR.get_or_init(|| Mutex::new(Airing { blocks: Vec::new(), until: None })).lock().unwrap_or_else(|p| p.into_inner())
+    AIR.get_or_init(|| Mutex::new(Airing { blocks: Vec::new(), until: None, levels: Default::default() })).lock().unwrap_or_else(|p| p.into_inner())
+}
+
+/// Root mean square of `samples`.
+pub fn rms(samples: &[f32]) -> f32 {
+    if samples.is_empty() {
+        return 0.0;
+    }
+    (samples.iter().map(|s| s * s).sum::<f32>() / samples.len() as f32).sqrt()
+}
+
+/// How loud the sound said aloud is from `from` to `to` (the loudest of its pieces then), `tail` longer after each
+/// piece: a room sends the sound back a moment late. None when nothing sounded then.
+pub fn playback_level(from: Instant, to: Instant, tail: std::time::Duration) -> Option<f32> {
+    airing().levels.iter().filter(|(a, z, _)| *a <= to && *z + tail >= from).map(|l| l.2).reduce(f32::max)
 }
 
 /// `secs` more of `block`'s sound sent to the window to play now.
-fn aired(project: &str, block: &str, secs: f64) {
+fn aired(project: &str, block: &str, secs: f64, level: f32) {
     let now = Instant::now();
     let mut air = airing();
     let from = air.until.filter(|u| *u > now).unwrap_or(now);
     let to = from + std::time::Duration::from_secs_f64(secs.max(0.0));
     air.until = Some(to);
+    while air.levels.front().is_some_and(|l| now.saturating_duration_since(l.1).as_secs() >= LEVEL_SECS) {
+        air.levels.pop_front();
+    }
+    air.levels.push_back((from, to, level));
     air.blocks.retain(|a| now.saturating_duration_since(a.to).as_secs() < AIRED_SECS);
     match air.blocks.iter_mut().rev().find(|a| a.block == block) {
         Some(a) => a.to = to,
@@ -261,7 +284,7 @@ impl Phrase {
             return;
         }
         if self.is_aloud() && player().is_some() {
-            aired(&self.project, &self.block, samples.len() as f64 / sr.max(1) as f64);
+            aired(&self.project, &self.block, samples.len() as f64 / sr.max(1) as f64, rms(samples));
         }
         let bytes: Vec<u8> = samples.iter().flat_map(|s| s.to_le_bytes()).collect();
         self.send("chunk", json!({ "sr": sr, "data": base64::engine::general_purpose::STANDARD.encode(bytes) }));
@@ -333,6 +356,16 @@ pub async fn events(axum::extract::Query(q): axum::extract::Query<std::collectio
 mod tests {
     use super::*;
 
+    /// The window's one queue of sound is shared: the tests that queue sound into it take turns.
+    static AIR_TEST: Mutex<()> = Mutex::new(());
+
+    /// Waits until the window's queue of sound has played out.
+    fn quiet_window() {
+        while airing_until().is_some() {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+    }
+
     #[test]
     fn the_first_open_window_plays_what_is_said_aloud() {
         let first = Player::join();
@@ -346,22 +379,38 @@ mod tests {
     /// before it; a phrase ready in time, the session's first and one whose own text came late wait nothing of the queue.
     #[test]
     fn the_silence_before_a_phrase_that_was_not_ready_is_measured() {
+        let _air = AIR_TEST.lock().unwrap_or_else(|p| p.into_inner());
+        quiet_window();
         let p = "p-queue-wait";
         crate::app::arrived("qw-1");
-        aired(p, "qw-1", 0.05);
+        aired(p, "qw-1", 0.05, 0.1);
         assert_eq!(queue_wait_ms("qw-1"), None, "the session's first phrase");
         crate::app::arrived("qw-2");
-        aired(p, "qw-2", 0.05);
+        aired(p, "qw-2", 0.05, 0.1);
         assert_eq!(queue_wait_ms("qw-2"), Some(0), "queued behind the first while it still played");
         crate::app::arrived("qw-3");
         std::thread::sleep(std::time::Duration::from_millis(250));
-        aired(p, "qw-3", 0.05);
+        aired(p, "qw-3", 0.05, 0.1);
         let wait = queue_wait_ms("qw-3").unwrap();
         assert!((120..=260).contains(&wait), "ready only well after the phrase before it ended: {wait}");
         std::thread::sleep(std::time::Duration::from_millis(200));
         crate::app::arrived("qw-4");
-        aired(p, "qw-4", 0.05);
+        aired(p, "qw-4", 0.05, 0.1);
         assert!(queue_wait_ms("qw-4").unwrap() < 50, "its text came late, not the engine: {:?}", queue_wait_ms("qw-4"));
+    }
+
+    #[test]
+    fn the_studio_s_sound_is_loud_while_it_plays_and_a_moment_after() {
+        let _air = AIR_TEST.lock().unwrap_or_else(|p| p.into_inner());
+        quiet_window();
+        let p = "p-level";
+        aired(p, "lv-1", 0.3, 0.2);
+        let now = Instant::now();
+        let tail = std::time::Duration::from_millis(200);
+        assert_eq!(playback_level(now, now + std::time::Duration::from_millis(100), tail), Some(0.2));
+        assert!(playback_level(now + std::time::Duration::from_millis(450), now + std::time::Duration::from_millis(480), tail).is_some(), "within the tail");
+        assert_eq!(playback_level(now + std::time::Duration::from_millis(700), now + std::time::Duration::from_millis(800), tail), None, "after the tail");
+        assert!((rms(&[0.5, -0.5]) - 0.5).abs() < 1e-6);
     }
 
     #[tokio::test]

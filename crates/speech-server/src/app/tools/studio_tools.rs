@@ -367,7 +367,7 @@ pub(super) fn tools() -> Vec<Tool> {
         },
         Tool {
             name: "voice_listen_start",
-            description: "Join the spoken conversation the person started with Live's microphone button: each phrase they end with a pause is recognised for voice_listen, and their speaking over the studio is a voice_floor event (by the setting live_interrupt: you decide, the studio stops at once, or never). Only the person turns the microphone on, with their own button in the window; no tool and no ui_* click does. When it is off this answers mic_off: ask the person to press Live, then call this again. engine changes the recogniser of the running conversation at once, the microphone recording on (the setting asr_engine is only the default for new recordings); the answer names the recogniser that hears now (asr), as mic_state does. Pair it with say_start: listen, answer with say_text as you write, listen again.",
+            description: "Join the spoken conversation the person started with Live's microphone button: each phrase they end with a pause is recognised for voice_listen, and their speaking over the studio is a voice_floor event (by the setting live_interrupt: you decide, the studio stops at once, or never). Only the person turns the microphone on, with their own button in the window; no tool and no ui_* click does. When it is off this answers mic_off: ask the person to press Live, then call this again. engine changes the recogniser of the running conversation at once, the microphone recording on (the setting asr_engine is only the default for new recordings); the answer names the recogniser that hears now (asr), as mic_state does, and echo_guard: how the studio keeps from hearing itself (mode of the setting live_echo_guard, owner_gate whether the owner's voice gate takes part, problem when it cannot). Pair it with say_start: listen, answer with say_text as you write, listen again.",
             schema: || object(json!({ "lang": { "type": "string" }, "device": { "type": "string", "description": "a microphone of voice_record_devices; none: the default one" }, "engine": { "type": "string", "enum": ["parakeet", "nemotron", "whisper"], "description": "the recogniser; none: the one in the settings" } }), &[]),
             call: |args| post("/speech/listen".into(), args.clone()),
         },
@@ -664,7 +664,7 @@ pub(super) fn tools() -> Vec<Tool> {
         // ---------------------------------------------------------------- the voice gate (Live keys on the owner's voice)
         Tool {
             name: "voice_gate",
-            description: "The voice gate's settings and state: whether it is on, the cosine threshold, the wake word (or none), whether to start on login, whether the owner has enrolled a voice, and the wake words on offer.",
+            description: "The voice gate's settings and state: whether it is on, the cosine threshold, the wake word (or none), whether to start on login, whether the owner has enrolled a voice, stale (a print an earlier version took with the recording's silence, which recognises no phrase of the owner: the gate does not use it until they enrol again), and the wake words on offer.",
             schema: nothing,
             call: |_| get("/voice-gate".into()),
         },

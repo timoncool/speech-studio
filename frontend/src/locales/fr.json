@@ -2146,6 +2146,7 @@
     "myVoice": "Ma voix",
     "enrolled": "Votre voix est configurée",
     "notEnrolled": "Pas encore configurée",
+    "stale": "Une version précédente a enregistré votre voix avec le silence autour, et le filtre ne vous reconnaissait pas. Enregistrez-la à nouveau : d’ici là, le filtre laisse passer tout le monde.",
     "enrollPrompt": "Dites à voix haute : « C'est ma voix, je configure Speech Studio. »",
     "enroll": "Enregistrer ma voix",
     "reEnroll": "Réenregistrer",
@@ -2540,7 +2541,13 @@
     "interrupt_always": "Il se tait aussitôt",
     "interrupt_never": "Il continue",
     "interruptHint": "L’agent décide : sa voix baisse pendant qu’il choisit de se taire ou de continuer, et sans réponse dans le délai ci-dessous il se tait seul.",
-    "interruptMs": "Attendre l’agent, ms"
+    "interruptMs": "Attendre l’agent, ms",
+    "echoGuard": "Protection contre l’écho",
+    "echoGuard_duplex": "Par le volume",
+    "echoGuard_gate": "Par votre voix",
+    "echoGuard_text": "Par les mots seulement",
+    "echoGuardHint": "Empêche l’agent de s’entendre dans les haut-parleurs. Avec un casque, tout choix convient ; « par votre voix » demande votre voix enregistrée dans le filtre vocal.",
+    "echoGuardNoOwner": "Enregistrez votre voix dans Réglages, filtre vocal : d’ici là, la protection fonctionne par le volume."
   },
   "mic": {
     "on": "Micro allumé",

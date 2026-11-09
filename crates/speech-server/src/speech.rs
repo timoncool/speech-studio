@@ -29,6 +29,7 @@ mod storage;
 mod validation;
 pub(crate) use crate::platform::workspace::project_file as project_path;
 pub(crate) use preparation::voice_tag;
+pub(crate) use live::{playback_level, rms};
 pub(crate) use say::is_echo;
 pub(crate) use storage::{edit, load, save};
 pub(crate) use validation::validate;
@@ -61,7 +62,7 @@ pub(crate) mod talk {
 }
 
 pub(crate) mod floor_settings {
-    pub(crate) use super::floor::{is_value, with_defaults};
+    pub(crate) use super::floor::{guard, is_value, with_defaults, Guard};
 }
 
 pub(crate) mod stream {

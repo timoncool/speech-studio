@@ -2146,6 +2146,7 @@
     "myVoice": "Minha voz",
     "enrolled": "Sua voz está configurada",
     "notEnrolled": "Ainda não configurada",
+    "stale": "Uma versão anterior gravou sua voz junto com o silêncio ao redor, e o filtro não reconhecia você. Grave de novo: até lá o filtro deixa todos passarem.",
     "enrollPrompt": "Diga em voz alta: «Esta é a minha voz, estou configurando o Speech Studio.»",
     "enroll": "Gravar minha voz",
     "reEnroll": "Gravar de novo",
@@ -2540,7 +2541,13 @@
     "interrupt_always": "Ele para na hora",
     "interrupt_never": "Ele continua",
     "interruptHint": "O agente decide: a voz dele abaixa enquanto escolhe parar ou continuar e, sem resposta no tempo abaixo, ele para sozinho.",
-    "interruptMs": "Esperar o agente, ms"
+    "interruptMs": "Esperar o agente, ms",
+    "echoGuard": "Proteção contra eco",
+    "echoGuard_duplex": "Pelo volume",
+    "echoGuard_gate": "Pela sua voz",
+    "echoGuard_text": "Só pelas palavras",
+    "echoGuardHint": "Impede que o agente ouça a si mesmo pelos alto-falantes. Com fones, qualquer opção serve; “pela sua voz” precisa da sua voz gravada no filtro de voz.",
+    "echoGuardNoOwner": "Grave sua voz em Configurações, filtro de voz: até lá a proteção funciona pelo volume."
   },
   "mic": {
     "on": "Microfone ligado",

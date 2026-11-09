@@ -201,6 +201,7 @@ pub fn is_selection_key(key: &str) -> bool {
             | "tts_idle_unload_min" // через сколько минут простоя выгружать модель озвучки (0 — никогда)
             | "live_interrupt"  // кто обрывает речь студии, когда человек говорит поверх: always | agent | never
             | "live_interrupt_ms" // сколько ждать решения агента, мс, прежде чем студия замолчит сама
+            | "live_echo_guard" // как Live не слышит саму студию: gate | duplex | text
             | "qwen_tts_quant"  // квант Qwen3-TTS CustomVoice: Q4_K_M или Q8_0
             | "cloud_ok_speech" | "cloud_ok_listening" | "cloud_ok_director" | "cloud_ok_assistant" // разрешил ли человек отправлять стадию в облако
             | "clone_terms_ok" // принял ли человек условия клонирования голоса
