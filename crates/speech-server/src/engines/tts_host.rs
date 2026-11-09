@@ -590,6 +590,8 @@ pub struct Synth {
     pub temperature: f64,
     pub defects: Vec<&'static str>,
     pub seconds: f64,
+    /// The take's own defect when every attempt had one and this is the least damaged of them.
+    pub flawed: Option<&'static str>,
 }
 
 pub struct Request<'a> {
@@ -838,10 +840,10 @@ pub fn synth(engine: &Tts, req: &Request) -> Result<Synth, String> {
             tracing::info!("voicing: {} ended the take with a click, its last 30 ms are faded out", engine.name());
         }
         if aloud {
-            return Ok(Synth { samples, sr, seed, temperature, defects, seconds });
+            return Ok(Synth { samples, sr, seed, temperature, defects, seconds, flawed: None });
         }
         match defect(&samples, sr, chars, pace_lang(req.text, req.lang), pace_of(p.speed)) {
-            None => return Ok(Synth { samples, sr, seed, temperature, defects, seconds }),
+            None => return Ok(Synth { samples, sr, seed, temperature, defects, seconds, flawed: None }),
             Some(kind) => {
                 // each rejected take is named in the log with what it was measured by: a guard that turns takes away
                 // without a trace cannot be told from a broken engine
@@ -859,7 +861,7 @@ pub fn synth(engine: &Tts, req: &Request) -> Result<Synth, String> {
                 // damaged one is given with its defects named, instead of leaving the block without a voice
                 if let Some(rank) = usable_rank(kind) {
                     if kept.as_ref().is_none_or(|(r, _)| rank < *r) {
-                        kept = Some((rank, Synth { samples, sr, seed, temperature, defects: Vec::new(), seconds }));
+                        kept = Some((rank, Synth { samples, sr, seed, temperature, defects: Vec::new(), seconds, flawed: Some(kind) }));
                     }
                 }
             }

@@ -388,6 +388,24 @@ mod tests {
         assert!(diff < 1e-3, "{diff}");
     }
 
+    /// Sound over the threshold the whole window has no quiet place: the cut falls in it, and the gain on its two
+    /// sides stays within half a decibel of the gain over the sound limited whole.
+    #[test]
+    fn a_cut_in_sound_over_the_threshold_leaves_no_audible_step() {
+        let x: Vec<f32> = (0..SR as usize * 30).map(|i| 1.4 * (i as f32 * 2.0 * std::f32::consts::PI * 180.0 / SR as f32).sin() * (0.8 + 0.2 * (i as f32 / SR as f32 * 3.0).sin())).collect();
+        let segment = SR as usize * 6;
+        let ends = piece_ends(&x, SR, 0.985, segment);
+        assert!(ends.len() >= 3, "{ends:?}");
+        let mut whole = x.clone();
+        let mut pieces = x.clone();
+        limit_segmented(&mut whole, SR, 0.985, &SPEECH, usize::MAX);
+        limit_segmented(&mut pieces, SR, 0.985, &SPEECH, segment);
+        let db = |a: f32, b: f32| 20.0 * (a.abs().max(1e-9) / b.abs().max(1e-9)).log10();
+        let step = x.iter().zip(whole.iter().zip(&pieces)).filter(|(v, _)| v.abs() > 0.1).map(|(_, (w, p))| db(*p, *w).abs()).fold(0.0f32, f32::max);
+        eprintln!("cut in sound over the threshold: pieces end at {ends:?}, the largest gain difference {step:.3} dB");
+        assert!(step < 0.5, "{step} dB");
+    }
+
     /// The memory the limiter takes does not grow with the programme once it is longer than two pieces.
     #[test]
     fn the_limiter_s_memory_does_not_grow_with_the_programme() {

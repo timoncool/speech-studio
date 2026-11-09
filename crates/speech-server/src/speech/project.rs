@@ -38,6 +38,10 @@ pub struct Take {
     pub source: String,
     pub synth_secs: f64,
     pub retried: Vec<String>,
+    /// The defects of a take the voicing guard kept because every attempt had one (the least damaged): the take is
+    /// marked with them in `qc` whatever the project's checks are, for a person to listen to.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub flawed: Vec<String>,
     pub qc: Option<crate::audio::qc::Check>,
     /// Текст блока, по которому озвучен дубль: к нему можно вернуться вместе с дублем.
     pub text: String,

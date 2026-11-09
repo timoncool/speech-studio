@@ -60,7 +60,8 @@ fn ms(secs: f64) -> i64 {
 }
 
 fn round2(x: f64) -> f64 {
-    (x * 100.0).round() / 100.0
+    // an empty sum of floats is -0.0; adding zero writes it without its sign
+    (x * 100.0).round() / 100.0 + 0.0
 }
 
 fn median(xs: &[i64]) -> Option<i64> {
@@ -293,5 +294,14 @@ mod tests {
         let bad = HashMap::from([("from".to_string(), "x".to_string())]);
         assert_eq!(lines(Query(bad)).await.status(), StatusCode::BAD_REQUEST);
         crate::listening::recognition::end_for_test();
+    }
+
+    /// A conversation with no line of the person's says zero seconds of speech, not «-0.0» (an empty sum of floats).
+    #[test]
+    fn no_lines_is_zero_seconds_without_a_sign() {
+        let m = measure(&[], &[], &fillers());
+        assert_eq!(m["speech_secs"].to_string(), "0.0");
+        let typed = measure(&[json!({ "n": 1, "text": "привет", "typed": true })], &[], &fillers());
+        assert_eq!(typed["speech_secs"].to_string(), "0.0");
     }
 }

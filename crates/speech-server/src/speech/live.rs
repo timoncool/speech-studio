@@ -106,10 +106,12 @@ pub fn rms(samples: &[f32]) -> f32 {
     (samples.iter().map(|s| s * s).sum::<f32>() / samples.len() as f32).sqrt()
 }
 
-/// How loud the sound said aloud is from `from` to `to` (the loudest of its pieces then), `tail` longer after each
-/// piece: a room sends the sound back a moment late. None when nothing sounded then.
+/// How loud the sound said aloud is from `from` to `to` (the loudest of its pieces then, as the window plays it now:
+/// quieter while it is ducked), `tail` longer after each piece: a room sends the sound back a moment late. None when
+/// nothing sounded then.
 pub fn playback_level(from: Instant, to: Instant, tail: std::time::Duration) -> Option<f32> {
-    airing().levels.iter().filter(|(a, z, _)| *a <= to && *z + tail >= from).map(|l| l.2).reduce(f32::max)
+    let ducked = 10f32.powf(f32::from_bits(DUCKED_DB.load(Ordering::Relaxed)) / 20.0);
+    airing().levels.iter().filter(|(a, z, _)| *a <= to && *z + tail >= from).map(|l| l.2 * ducked).reduce(f32::max)
 }
 
 /// `secs` more of `block`'s sound sent to the window to play now.
@@ -159,8 +161,12 @@ pub fn airing_until() -> Option<Instant> {
 
 /// The window plays what is said aloud `db` quieter than its volume (0: as loud as set).
 pub fn duck(db: f64) {
+    DUCKED_DB.store((db as f32).to_bits(), Ordering::Relaxed);
     let _ = channel().send(json!({ "kind": "duck", "db": db, "aloud": true }));
 }
+
+/// How much quieter than sent the window plays what is said aloud now (`duck`), bits of an f32 in decibels.
+static DUCKED_DB: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 
 /// The blocks said aloud lately with when each sounded, the earliest first.
 pub fn aired_blocks() -> Vec<Aired> {
@@ -173,6 +179,18 @@ pub fn aired_blocks() -> Vec<Aired> {
 pub fn air_for_test(project: &str, block: &str, from: Instant, to: Instant) {
     let mut air = airing();
     air.blocks.push(Aired { project: project.into(), block: block.into(), from, to, wait_ms: None });
+}
+
+/// Sound as loud as `level` (RMS) said aloud from `from` to `to`, for tests.
+#[cfg(test)]
+pub fn level_for_test(from: Instant, to: Instant, level: f32) {
+    airing().levels.push_back((from, to, level));
+}
+
+/// The window plays as loud as set, for tests.
+#[cfg(test)]
+pub fn unduck_for_test() {
+    DUCKED_DB.store(0f32.to_bits(), Ordering::Relaxed);
 }
 
 /// The windows that play what is said aloud, by connection, in the order they opened: only the first plays it, so a
@@ -203,6 +221,17 @@ impl Drop for Player {
 /// The window that plays what is said aloud now.
 fn player() -> Option<u64> {
     players().lock().unwrap_or_else(|p| p.into_inner()).first().copied()
+}
+
+/// Whether a window is there to play what is said aloud.
+pub fn has_player() -> bool {
+    player().is_some()
+}
+
+/// A window playing aloud while the guard lives, for tests.
+#[cfg(test)]
+pub fn player_for_test() -> impl Drop {
+    Player::join()
 }
 
 fn is_aloud(project: &str) -> bool {
@@ -352,22 +381,26 @@ pub async fn events(axum::extract::Query(q): axum::extract::Query<std::collectio
     Sse::new(stream).keep_alive(KeepAlive::default()).into_response()
 }
 
+/// The window's one queue of sound and its windows are shared: the tests that queue sound into it, open windows or
+/// read whether the studio speaks take turns.
+#[cfg(test)]
+pub static AIR_TEST: Mutex<()> = Mutex::new(());
+
+/// Waits until the window's queue of sound has played out.
+#[cfg(test)]
+pub fn quiet_window() {
+    while airing_until().is_some() {
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// The window's one queue of sound is shared: the tests that queue sound into it take turns.
-    static AIR_TEST: Mutex<()> = Mutex::new(());
-
-    /// Waits until the window's queue of sound has played out.
-    fn quiet_window() {
-        while airing_until().is_some() {
-            std::thread::sleep(std::time::Duration::from_millis(20));
-        }
-    }
-
     #[test]
     fn the_first_open_window_plays_what_is_said_aloud() {
+        let _air = AIR_TEST.lock().unwrap_or_else(|p| p.into_inner());
         let first = Player::join();
         let second = Player::join();
         assert_eq!(player(), Some(first.0));

@@ -169,6 +169,11 @@ pub fn raise(partial: &str, words: usize, at: Option<f64>, mode: Mode) -> u64 {
     n
 }
 
+/// A new conversation starts with no events: the ones of the conversation before belong to it.
+pub fn new_conversation() {
+    floors().clear();
+}
+
 /// The event waiting for the agent's word, if one does.
 pub fn pending() -> Option<u64> {
     floors().iter().rev().find(|f| f.decided.is_none()).map(|f| f.n)
@@ -187,13 +192,20 @@ pub fn decide(n: u64, how: &'static str, auto: bool) -> bool {
     }
 }
 
-/// The agent decides the waiting event: the studio's voice comes back up, and `how` is told. None with no event waiting.
+/// The agent decides every waiting event: the studio's voice comes back up, and `how` is told. Answers the latest one
+/// decided; None with no event waiting. A word of the agent's answers all of them, so an earlier one's wait does not
+/// cut the studio off after the agent went on.
 pub fn agent_decides(how: &'static str) -> Option<u64> {
-    let n = pending()?;
-    decide(n, how, false).then(|| {
+    let now = Instant::now();
+    let decided = floors().iter_mut().filter(|f| f.decided.is_none()).fold(None, |_, f| {
+        f.decided = Some((how, now));
+        f.auto = false;
+        Some(f.n)
+    });
+    if decided.is_some() {
         super::live::duck(0.0);
-        n
-    })
+    }
+    decided
 }
 
 /// While event `n` waits for the agent the studio is quieter; once `wait` passes with no word, `cut` stops it (or,
@@ -324,6 +336,41 @@ mod tests {
         let n = raise("да-да, продолжай, только короче", 5, None, Mode::Agent);
         assert_eq!(agent_decides("continue"), Some(n));
         assert_eq!(events(n - 1).await["events"][0]["decided"], "continue");
+    }
+
+    /// The person spoke over the studio twice before the agent's word: «go on» answers both, and the earlier one's wait
+    /// does not cut the studio off afterwards.
+    #[tokio::test]
+    async fn the_agent_s_word_answers_every_waiting_event() {
+        let _slot = TEST_SLOT.lock().await;
+        clear_for_test();
+        let cut = Arc::new(AtomicBool::new(false));
+        let first = raise("подожди", 1, None, Mode::Agent);
+        let c = cut.clone();
+        hold(first, Duration::from_millis(150), || true, move || c.store(true, Ordering::Relaxed));
+        let second = raise("подожди, а сколько это стоит", 5, None, Mode::Agent);
+        let c = cut.clone();
+        hold(second, Duration::from_millis(150), || true, move || c.store(true, Ordering::Relaxed));
+        assert_eq!(agent_decides("continue"), Some(second));
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        assert!(!cut.load(Ordering::Relaxed), "the agent went on: nothing cuts the studio off");
+        let got = events(0).await;
+        assert_eq!(got["events"][0]["decided"], "continue", "{got}");
+        assert_eq!(got["events"][1]["decided"], "continue", "{got}");
+        assert_eq!(got["pending"], Value::Null);
+    }
+
+    /// A new conversation does not show the events of the one before.
+    #[tokio::test]
+    async fn a_new_conversation_starts_with_no_events() {
+        let _slot = TEST_SLOT.lock().await;
+        clear_for_test();
+        raise("стоп стоп стоп стоп", 4, None, Mode::Always);
+        new_conversation();
+        let got = events(0).await;
+        assert_eq!(got["events"], json!([]), "{got}");
+        assert_eq!(got["heard"], 0);
+        assert_eq!(raise("а теперь вот что", 4, None, Mode::Always), 1, "numbers start again");
     }
 
     #[test]

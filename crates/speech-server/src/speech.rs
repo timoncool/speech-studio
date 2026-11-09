@@ -35,6 +35,10 @@ pub(crate) use storage::{edit, load, save};
 pub(crate) use validation::validate;
 
 #[cfg(test)]
+pub(crate) use floor::TEST_SLOT as FLOOR_SLOT;
+#[cfg(test)]
+pub(crate) use live::{level_for_test, unduck_for_test};
+#[cfg(test)]
 pub(crate) use project::{from_text, SpeechProject};
 
 pub(crate) use director::{casting_rules, podcast_rules};

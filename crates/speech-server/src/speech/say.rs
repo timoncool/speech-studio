@@ -136,19 +136,38 @@ fn mark_cut_off(workspace: &std::path::Path, sid: &str) {
     let mut cut = INTERRUPTED.lock().unwrap_or_else(|p| p.into_inner());
     cut.retain(|_, at| at.elapsed().as_secs() < INTERRUPTED_SECS);
     match crate::speech::load(workspace, sid) {
-        Ok(project) => cut.extend(project.blocks().filter(|b| b.takes.is_empty() || sounding.contains(&b.id)).map(|b| (b.id.clone(), now))),
+        Ok(project) => cut.extend(project.blocks().filter(|b| (b.takes.is_empty() && b.error.is_none()) || sounding.contains(&b.id)).map(|b| (b.id.clone(), now))),
         Err(e) => tracing::warn!("say: the phrases cut off in {sid} are not marked: {e}"),
     }
 }
 
-/// Whether the studio is saying something aloud now or has phrases on their way to be said.
-fn speaking() -> bool {
+/// Whether the studio is saying something aloud now or has phrases on their way to be said: said lately, not played
+/// yet, not cut off, and still to sound — voiced and a window there to play it, or being voiced (no take and no error
+/// yet, its session open or its voicing under way). A phrase that failed has nothing to sound.
+fn speaking(workspace: &std::path::Path) -> bool {
     if super::live::airing_until().is_some() {
         return true;
     }
+    if !super::live::has_player() {
+        return false;
+    }
     let aired: std::collections::HashSet<String> = super::live::aired_blocks().into_iter().map(|a| a.block).collect();
-    let cut = INTERRUPTED.lock().unwrap_or_else(|p| p.into_inner());
-    SAID.lock().unwrap_or_else(|p| p.into_inner()).iter().any(|(at, _, block, _)| at.elapsed().as_secs() < ECHO_SECS && !aired.contains(block) && !cut.contains_key(block))
+    let on_way: Vec<(String, String)> = {
+        let cut = INTERRUPTED.lock().unwrap_or_else(|p| p.into_inner());
+        SAID.lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .iter()
+            .filter(|(at, _, block, _)| at.elapsed().as_secs() < ECHO_SECS && !aired.contains(block) && !cut.contains_key(block))
+            .map(|(_, sid, block, _)| (sid.clone(), block.clone()))
+            .collect()
+    };
+    let mut projects: HashMap<String, Option<sp::SpeechProject>> = HashMap::new();
+    on_way.iter().any(|(sid, block)| {
+        let project = projects.entry(sid.clone()).or_insert_with(|| crate::speech::load(workspace, sid).ok());
+        project.as_ref().and_then(|p| p.blocks().find(|b| &b.id == block)).is_some_and(|b| {
+            b.error.is_none() && (!b.takes.is_empty() || sessions().contains_key(sid) || crate::speech::jobs::voicing(sid))
+        })
+    })
 }
 
 /// Whether `sid` is a session said aloud, open or lately ended.
@@ -467,7 +486,7 @@ pub async fn state(State(st): State<AppState>, AxPath(sid): AxPath<String>, axum
         .skip(skip)
         .map(|b| {
             let take = b.takes.iter().find(|t| Some(t.n) == b.active);
-            json!({ "id": b.id, "text": b.text, "state": if INTERRUPTED.lock().unwrap_or_else(|p| p.into_inner()).contains_key(&b.id) { "interrupted" } else if take.is_some() { "said" } else if b.error.is_some() { "failed" } else { "waiting" }, "error": b.error.as_ref().map(|e| e.text.clone()), "first_ms": take.and_then(|t| t.first_ms), "heard_ms": take.and_then(|t| t.heard_ms), "queue_wait_ms": super::live::queue_wait_ms(&b.id), "seconds": take.map(|t| t.duration) })
+            json!({ "id": b.id, "text": b.text, "state": phrase_state(b), "error": b.error.as_ref().map(|e| e.text.clone()), "first_ms": take.and_then(|t| t.first_ms), "heard_ms": take.and_then(|t| t.heard_ms), "queue_wait_ms": super::live::queue_wait_ms(&b.id), "seconds": take.map(|t| t.duration) })
         })
         .collect();
     let waits: Vec<u64> = phrases.iter().filter_map(|p| p["queue_wait_ms"].as_u64()).collect();
@@ -476,6 +495,20 @@ pub async fn state(State(st): State<AppState>, AxPath(sid): AxPath<String>, axum
         "queue_wait_ms": waits.iter().max(), "gaps_over_ms": GAP_MS, "gaps_over": waits.iter().filter(|w| **w > GAP_MS).count(),
     }))
     .into_response()
+}
+
+/// What became of a phrase: failed (nothing of it sounds, a stop or not), interrupted, said or waiting.
+fn phrase_state(b: &sp::Block) -> &'static str {
+    let take = b.takes.iter().find(|t| Some(t.n) == b.active);
+    if take.is_none() && b.error.is_some() {
+        "failed"
+    } else if INTERRUPTED.lock().unwrap_or_else(|p| p.into_inner()).contains_key(&b.id) {
+        "interrupted"
+    } else if take.is_some() {
+        "said"
+    } else {
+        "waiting"
+    }
 }
 
 /// A silence between two phrases longer than this is heard as the studio stopping mid-thought.
@@ -550,6 +583,7 @@ pub async fn listen_start(State(st): State<AppState>, headers: HeaderMap, body: 
         return started;
     }
     *HUSHED_AT.lock().unwrap_or_else(|p| p.into_inner()) = None;
+    super::floor::new_conversation();
     watch_interruptions(st.workspace, st.models_root, st.jobs);
     crate::voice_gate::arm(gate_on);
     started
@@ -587,7 +621,7 @@ fn watch_interruptions(workspace: std::path::PathBuf, models_root: std::path::Pa
                 // that never grows
                 if !told && floor_grew(base, words) {
                     told = true;
-                    if speaking() {
+                    if speaking(&workspace) {
                         let mode = super::floor::mode(&models_root);
                         let n = super::floor::raise(&partial, words, state["partial"]["start"].as_f64(), mode);
                         match mode {
@@ -597,7 +631,8 @@ fn watch_interruptions(workspace: std::path::PathBuf, models_root: std::path::Pa
                             super::floor::Mode::Agent => {
                                 let (w, q) = (workspace.clone(), queue.clone());
                                 let wait = std::time::Duration::from_millis(super::floor::wait_ms(&models_root));
-                                super::floor::hold(n, wait, speaking, move || {
+                                let ws = workspace.clone();
+                                super::floor::hold(n, wait, move || speaking(&ws), move || {
                                     interrupt(&w, &q);
                                 });
                             }
@@ -939,6 +974,51 @@ mod tests {
         assert!(!cut.contains_key(&ids[0]), "heard to its end");
         assert!(cut.contains_key(&ids[1]), "its sound was still playing");
         assert!(cut.contains_key(&ids[2]), "not voiced yet");
+    }
+
+    /// A phrase whose voicing failed has nothing to sound: a stop does not mark it interrupted, and it is told failed.
+    #[test]
+    fn a_failed_phrase_stays_failed_after_a_stop() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut project = sp::from_text("talk", "", "n");
+        let failed = sp::Block { id: sp::new_id(), text: "Не вышло.".into(), error: Some(sp::BlockError { key: "k".into(), text: "engine fell".into() }), ..Default::default() };
+        let waiting = sp::Block { id: sp::new_id(), text: "Ещё не озвучена.".into(), ..Default::default() };
+        project.chapters[0].blocks = vec![failed.clone(), waiting.clone()];
+        let sid = sp::new_id();
+        crate::speech::save(dir.path(), &sid, &project).unwrap();
+        mark_cut_off(dir.path(), &sid);
+        assert!(!INTERRUPTED.lock().unwrap().contains_key(&failed.id), "nothing of it sounds or will");
+        assert!(INTERRUPTED.lock().unwrap().contains_key(&waiting.id));
+        INTERRUPTED.lock().unwrap().insert(failed.id.clone(), Instant::now());
+        assert_eq!(phrase_state(&failed), "failed", "failed is told before interrupted");
+        assert_eq!(phrase_state(&waiting), "interrupted");
+    }
+
+    /// The studio is not «speaking» because of a phrase that failed or that no window is there to play: no false turn,
+    /// ducking or automatic stop in the silence.
+    #[test]
+    fn a_failed_phrase_or_no_window_is_not_speech_on_its_way() {
+        let _air = super::super::live::AIR_TEST.lock().unwrap_or_else(|p| p.into_inner());
+        super::super::live::quiet_window();
+        let dir = tempfile::tempdir().unwrap();
+        let mut project = sp::from_text("talk", "", "n");
+        let failed = sp::Block { id: sp::new_id(), text: "Не вышло.".into(), error: Some(sp::BlockError { key: "k".into(), text: "engine fell".into() }), ..Default::default() };
+        project.chapters[0].blocks = vec![failed.clone()];
+        let sid = sp::new_id();
+        crate::speech::save(dir.path(), &sid, &project).unwrap();
+        SAID.lock().unwrap().push((Instant::now(), sid.clone(), failed.id.clone(), failed.text.clone()));
+        let window = super::super::live::player_for_test();
+        assert!(!speaking(dir.path()), "a failed phrase is not on its way");
+        let mut voiced = sp::Block { id: sp::new_id(), text: "Готова.".into(), ..Default::default() };
+        voiced.takes.push(sp::Take { n: 1, ..Default::default() });
+        voiced.active = Some(1);
+        project.chapters[0].blocks.push(voiced.clone());
+        crate::speech::save(dir.path(), &sid, &project).unwrap();
+        SAID.lock().unwrap().push((Instant::now(), sid.clone(), voiced.id.clone(), voiced.text.clone()));
+        assert!(speaking(dir.path()), "a voiced phrase the window has not played yet is on its way");
+        drop(window);
+        assert!(!speaking(dir.path()), "no window to play it");
+        SAID.lock().unwrap().retain(|(_, s, _, _)| *s != sid);
     }
 
     #[test]

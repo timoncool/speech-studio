@@ -417,7 +417,7 @@ fn synth_block_with(p: &SpeechPaths, pid: &str, project: &SpeechProject, b: &Blo
         own => own,
     };
     let mut ignored = stx::Ignored::default();
-    let (mut secs, mut retried) = (0.0, Vec::<String>::new());
+    let (mut secs, mut retried, mut flawed) = (0.0, Vec::<String>::new(), Vec::<String>::new());
     let fresh = seed_for(&b.id, n);
     let mut params = take_params(project.params_of(b), n);
     if let Some(seed) = REPEAT_SEED.with(|s| s.get()) {
@@ -487,6 +487,7 @@ fn synth_block_with(p: &SpeechPaths, pid: &str, project: &SpeechProject, b: &Blo
                         }
                         secs += s.seconds;
                         retried.extend(s.defects.iter().map(|d| d.to_string()));
+                        flawed.extend(s.flawed.map(str::to_string).filter(|d| !flawed.contains(d)));
                         let mut samples = resample_to(s.samples, s.sr);
                         if joined || joins_next {
                             samples = crate::audio::trim::trim_edges(&samples, SR).0;
@@ -556,6 +557,8 @@ fn synth_block_with(p: &SpeechPaths, pid: &str, project: &SpeechProject, b: &Blo
         fit_over: fitted.over,
         first_ms: live.first_ms(),
         heard_ms: live.heard_ms(),
+        qc: marked(None, &flawed),
+        flawed,
         ..Default::default()
     };
     time_aloud(&live, &take);
@@ -756,6 +759,11 @@ pub fn unqueue(pid: &str, n: Option<u64>) -> usize {
     before - list.len()
 }
 
+/// Whether project `pid` is being voiced now.
+pub fn voicing(pid: &str) -> bool {
+    QUEUE.lock().is_ok_and(|q| q.contains_key(pid))
+}
+
 thread_local! {
     /// Сид повтора «с теми же параметрами» для текущей задачи.
     static REPEAT_SEED: std::cell::Cell<Option<u64>> = const { std::cell::Cell::new(None) };
@@ -855,6 +863,21 @@ fn voice_norm(project: &SpeechProject, voice: Option<&str>) -> crate::audio::fla
         secs_per_syllable: crate::audio::flags::median(rate_v, 5).or_else(|| crate::audio::flags::median(rate_all, 5)),
         lufs: crate::audio::flags::median(lufs_v, 5),
     }
+}
+
+/// A take's check with the defects the voicing guard kept it with: they are issues of the take whatever the project
+/// checks, so the block shows them for a person to listen to.
+fn marked(qc: Option<crate::audio::qc::Check>, flawed: &[String]) -> Option<crate::audio::qc::Check> {
+    if flawed.is_empty() {
+        return qc;
+    }
+    let mut check = qc.unwrap_or(crate::audio::qc::Check { passed: true, ..Default::default() });
+    for d in flawed {
+        if !check.issues.contains(d) {
+            check.issues.push(d.clone());
+        }
+    }
+    Some(check)
 }
 
 /// The take's sound measured and the flags of `want` it raises (Dub Studio's synthesis defect first), over the part of
@@ -1019,7 +1042,7 @@ fn check_takes(p: &SpeechPaths, pid: &str, made: &BTreeMap<String, Vec<u32>>, re
             let block = fresh.block_mut(id)?;
             for (n, c) in &checks {
                 if let Some(t) = block.takes.iter_mut().find(|t| t.n == *n) {
-                    t.qc = Some(c.clone());
+                    t.qc = marked(Some(c.clone()), &t.flawed);
                 }
             }
             let best = checks.iter().min_by(|a, b| rank(&a.1).partial_cmp(&rank(&b.1)).unwrap_or(std::cmp::Ordering::Equal))?;
@@ -2007,25 +2030,38 @@ pub fn export(p: &SpeechPaths, pid: &str, opts: &ExportOpts, progress: &dyn Fn(V
             lyrics: lrc(&part_timed),
         };
         progress(json!({ "type": "progress", "stage": "speech_export", "msg": t!("speech-export-encoding", n = (k + 1) as i64, total = bounds.len() as i64), "pct": 94 + (k * 5 / bounds.len()) as i64 }));
-        match opts.format.as_str() {
-            // FLAC and MP3 as the music studios write them: libFLAC 24-bit and LAME from audio-post, tags by lofty
-            "flac" | "mp3" if !(opts.format == "flac" && opts.quality.bits == Some(16)) => {
-                let fail = |e: String| format!("{}: {e}", target.display());
-                let mut file = std::fs::File::options().read(true).write(true).create(true).truncate(true).open(&target).map_err(|e| fail(e.to_string()))?;
-                if opts.format == "mp3" {
-                    let (rate, kbps) = if acx { (44_100, MP3_KBPS) } else { (opts.quality.rate.unwrap_or(48_000), opts.quality.kbps.unwrap_or(MP3_KBPS)) };
-                    let mut sink = std::io::BufWriter::new(&mut file);
-                    audio_post::encode::mp3_dual_mono(&mix[from..to], SR, rate, kbps, &mut sink).map_err(|e| fail(e.to_string()))?;
-                    std::io::Write::flush(&mut sink).map_err(|e| fail(e.to_string()))?;
-                } else {
-                    audio_post::encode::flac_dual_mono(&mix[from..to], SR, opts.quality.rate.unwrap_or(SR), &mut file).map_err(|e| fail(e.to_string()))?;
+        // the file is made beside its place and takes it only when it is whole: a failed encoding leaves the file
+        // exported before under this name as it was
+        let unfinished = exports.join(format!("{name}.part.{}", opts.format));
+        let encoded = (|| -> Result<(), String> {
+            match opts.format.as_str() {
+                // FLAC and MP3 as the music studios write them: libFLAC 24-bit and LAME from audio-post, tags by lofty
+                "flac" | "mp3" if !(opts.format == "flac" && opts.quality.bits == Some(16)) => {
+                    let fail = |e: String| format!("{}: {e}", target.display());
+                    let mut file = std::fs::File::options().read(true).write(true).create(true).truncate(true).open(&unfinished).map_err(|e| fail(e.to_string()))?;
+                    if opts.format == "mp3" {
+                        let (rate, kbps) = if acx { (44_100, MP3_KBPS) } else { (opts.quality.rate.unwrap_or(48_000), opts.quality.kbps.unwrap_or(MP3_KBPS)) };
+                        let mut sink = std::io::BufWriter::new(&mut file);
+                        audio_post::encode::mp3_dual_mono(&mix[from..to], SR, rate, kbps, &mut sink).map_err(|e| fail(e.to_string()))?;
+                        std::io::Write::flush(&mut sink).map_err(|e| fail(e.to_string()))
+                    } else {
+                        audio_post::encode::flac_dual_mono(&mix[from..to], SR, opts.quality.rate.unwrap_or(SR), &mut file).map_err(|e| fail(e.to_string()))
+                    }
+                }
+                _ => {
+                    let joined = work.path().join(format!("part-{k}.wav"));
+                    crate::audio::wavio::write_mono_f32(&joined, &mix[from..to], SR)?;
+                    crate::audio::media::encode_audio_meta(&joined, &unfinished, &opts.format, acx, &meta, &opts.quality)
                 }
             }
-            _ => {
-                let joined = work.path().join(format!("part-{k}.wav"));
-                crate::audio::wavio::write_mono_f32(&joined, &mix[from..to], SR)?;
-                crate::audio::media::encode_audio_meta(&joined, &target, &opts.format, acx, &meta, &opts.quality)?;
+        })();
+        if let Err(e) = encoded.and_then(|()| std::fs::rename(&unfinished, &target).map_err(|e| format!("{}: {e}", target.display()))) {
+            if unfinished.exists() {
+                if let Err(gone) = std::fs::remove_file(&unfinished) {
+                    tracing::error!("[ERROR] the unfinished export {} is left: {gone}", unfinished.display());
+                }
             }
+            return Err(e);
         }
         if crate::audio::tagging::taggable(&target) {
             let cover = meta.cover.as_ref().and_then(|c| std::fs::read(c).ok().map(|bytes| (if c.extension().is_some_and(|e| e.eq_ignore_ascii_case("png")) { "image/png" } else { "image/jpeg" }.to_string(), bytes)));
@@ -2426,6 +2462,51 @@ mod tests {
         let started = std::time::Instant::now();
         let made = export(&p, &pid, &opts, &|_| {}).unwrap();
         eprintln!("exported in {:.0} s: skipped {}, duration {}, file {}", started.elapsed().as_secs_f64(), made["skipped"], made["duration"], made["file"]);
+    }
+
+    /// A take the voicing guard kept with a defect (every attempt had one) is marked with it whatever the project
+    /// checks: with no checks on, and after a check that did not raise it.
+    #[test]
+    fn a_take_kept_with_a_defect_is_marked_for_a_person_to_listen() {
+        assert_eq!(marked(None, &[]), None);
+        let alone = marked(None, &["runaway".to_string()]).expect("marked with no checks on");
+        assert_eq!(alone.issues, ["runaway"]);
+        assert!(!alone.ok());
+        let clean = crate::audio::qc::Check { passed: true, ..Default::default() };
+        assert_eq!(marked(Some(clean), &["clipping".to_string()]).unwrap().issues, ["clipping"]);
+        let raised = crate::audio::qc::Check { passed: true, issues: vec!["clipping".into()], ..Default::default() };
+        assert_eq!(marked(Some(raised), &["clipping".to_string()]).unwrap().issues, ["clipping"], "named once");
+    }
+
+    /// An export that fails while it encodes leaves the file exported before under the same name as it was, and no
+    /// piece of its own.
+    #[test]
+    fn a_failed_export_keeps_the_file_exported_before() {
+        let work = tempfile::tempdir().unwrap();
+        let p = SpeechPaths { repo_root: work.path().into(), workspace: work.path().join("ws"), voices_dir: work.path().join("voices"), models_root: work.path().join("models") };
+        let mut project = sp::from_text("Книга", "Первая фраза книги.\n\nВторая фраза книги.", "n");
+        let pid = sp::new_id();
+        let keys = keys(&p, &project);
+        let dir = takes_dir(&p, &pid);
+        std::fs::create_dir_all(&dir).unwrap();
+        let tone: Vec<f32> = (0..SR as usize).map(|i| 0.1 * (i as f32 * 0.05).sin()).collect();
+        for b in project.chapters.iter_mut().flat_map(|c| c.blocks.iter_mut()) {
+            let file = format!("{}-1.flac", b.id);
+            crate::audio::wavio::write_mono_f32(&dir.join(&file), &tone, SR).unwrap();
+            let bytes = std::fs::metadata(dir.join(&file)).unwrap().len();
+            b.takes.push(Take { n: 1, file, key: keys[&b.id].clone(), bytes, duration: 1.0, ..Default::default() });
+            b.active = Some(1);
+        }
+        crate::speech::save(&p.workspace, &pid, &project).unwrap();
+        let opts = ExportOpts { format: "mp3".into(), chapter: None, per_block: false, part_minutes: None, per_chapter: false, stems: false, allow_duration: false, allow_unvoiced: false, quality: Default::default() };
+        let made = export(&p, &pid, &opts, &|_| {}).unwrap();
+        let path = PathBuf::from(made["path"].as_str().unwrap());
+        let before = std::fs::read(&path).unwrap();
+        let broken = ExportOpts { quality: crate::audio::media::Quality { rate: Some(22_050), ..Default::default() }, ..opts };
+        assert!(export(&p, &pid, &broken, &|_| {}).is_err(), "MP3 has no 22.05 kHz: the writer fails");
+        assert!(std::fs::read(&path).unwrap() == before, "the file exported before is as it was");
+        let left: Vec<_> = std::fs::read_dir(path.parent().unwrap()).unwrap().filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().into_owned()).filter(|n| n.contains(".part.")).collect();
+        assert!(left.is_empty(), "{left:?}");
     }
 
     /// A renamed library voice stays the project's voice and its takes stay voiced; before, the project kept the old

@@ -146,7 +146,7 @@ fn heard_as(mut chunk: Vec<f32>) -> Vec<f32> {
 }
 
 /// While the studio speaks, the microphone is heard only when it is louder than the studio's own sound coming back
-/// could be: this far under the sound sent to the window.
+/// could be: this far under the sound sent to the window before the echo is measured, and at most this far once it is.
 pub const DUPLEX_DB: f32 = -18.0;
 /// The studio's sound comes back from the room this long after it was played.
 pub const DUPLEX_TAIL: Duration = Duration::from_millis(200);
@@ -154,26 +154,43 @@ pub const DUPLEX_TAIL: Duration = Duration::from_millis(200);
 /// louder ones are not cut out of the phrase.
 pub const DUPLEX_HOLD: Duration = Duration::from_millis(400);
 
-/// The half-duplex of a conversation: whether the microphone is heard while the studio speaks.
+/// The half-duplex of a conversation: whether the microphone is heard while the studio speaks. It measures how loud
+/// the studio's voice comes back against the sound sent (`echo_db`) from the pieces it holds back, so the window's
+/// volume, the room and the microphone's gain are in it.
 #[derive(Default)]
 pub struct Duplex {
     open_until: Option<std::time::Instant>,
+    echo_db: Option<f32>,
 }
 
 impl Duplex {
     /// Whether a piece of the microphone as loud as `mic` (RMS) is the person, the studio's sound being `playback`
-    /// (RMS, None: silent) then.
+    /// (RMS, None: silent) then. The person is heard `ECHO_MARGIN_DB` over the echo measured, never needing more than
+    /// `DUPLEX_DB`, which is also where it starts before it has heard the room.
     pub fn passes(&mut self, mic: f32, playback: Option<f32>, now: std::time::Instant) -> bool {
         let Some(p) = playback.filter(|p| *p > 0.0) else {
             return true;
         };
-        if mic >= p * 10f32.powf(DUPLEX_DB / 20.0) {
+        let ratio = 20.0 * (mic.max(1e-9) / p).log10();
+        let threshold = self.echo_db.map_or(DUPLEX_DB, |e| (e + ECHO_MARGIN_DB).min(DUPLEX_DB));
+        if ratio >= threshold {
             self.open_until = Some(now + DUPLEX_HOLD);
             return true;
         }
-        self.open_until.is_some_and(|u| now < u)
+        let open = self.open_until.is_some_and(|u| now < u);
+        if !open && mic > 0.0 {
+            self.echo_db = Some(self.echo_db.map_or(ratio, |e| e + ECHO_LEARN * (ratio - e)));
+        }
+        open
     }
 }
+
+/// The person is heard this much over the studio's voice coming back: on the recordings of 08.11 the echo spreads
+/// around its median and the person is a median 30 dB over it; with 12 dB, 9 % of the person's 100 ms frames are held
+/// back (44 % at the fixed −18 dB).
+pub const ECHO_MARGIN_DB: f32 = 12.0;
+/// How fast the measured echo follows each piece held back.
+const ECHO_LEARN: f32 = 0.1;
 
 /// A piece of the microphone the half-duplex took for the studio's own sound: heard as silence, and counted.
 fn held_back(mut chunk: Vec<f32>, sr: u32) -> Vec<f32> {
@@ -181,6 +198,64 @@ fn held_back(mut chunk: Vec<f32>, sr: u32) -> Vec<f32> {
     with(|l| l.duplex_secs += secs);
     chunk.fill(0.0);
     chunk
+}
+
+/// The microphone's pieces as the half-duplex hears them, on the recording's clock, and where in the recording
+/// (seconds) it held pieces back.
+struct Intake {
+    duplex: Duplex,
+    held: Vec<(f64, f64)>,
+    zero: std::time::Instant,
+    at: f64,
+    taken: usize,
+}
+
+impl Intake {
+    /// The microphone from its sample taken at `zero`, `at` seconds into the recording.
+    fn new(zero: std::time::Instant, at: f64) -> Self {
+        Intake { duplex: Duplex::default(), held: Vec::new(), zero, at, taken: 0 }
+    }
+
+    /// `chunk` as heard: the studio's own sound coming back held back when `guarded`. The piece is placed on the
+    /// recording's clock by the samples taken before it, not by when the loop gets to it: the pieces pile up while the
+    /// loop recognises a phrase.
+    fn take(&mut self, chunk: Vec<f32>, sr: u32, guarded: bool) -> Vec<f32> {
+        let sr = sr.max(1);
+        let from = self.taken as f64 / sr as f64;
+        self.taken += chunk.len();
+        let to = self.taken as f64 / sr as f64;
+        if !guarded {
+            return chunk;
+        }
+        let (began, ended) = (self.zero + Duration::from_secs_f64(from), self.zero + Duration::from_secs_f64(to));
+        let playback = crate::speech::playback_level(began, ended, DUPLEX_TAIL);
+        if self.duplex.passes(crate::speech::rms(&chunk), playback, ended) {
+            return chunk;
+        }
+        let (a, z) = (self.at + from, self.at + to);
+        match self.held.last_mut() {
+            Some(last) if (last.1 - a).abs() < 1e-9 => last.1 = z,
+            _ => self.held.push((a, z)),
+        }
+        held_back(chunk, sr)
+    }
+
+    /// The samples of 16 kHz `audio` starting `start` seconds into the recording that were heard, not held back.
+    fn heard_part(&self, audio: &[f32], start: f64) -> Vec<f32> {
+        let end = start + audio.len() as f64 / 16_000.0;
+        let spans: Vec<(usize, usize)> = self
+            .held
+            .iter()
+            .filter(|(a, z)| *z > start && *a < end)
+            .map(|(a, z)| ((((a - start) * 16_000.0).round().max(0.0)) as usize, (((z - start) * 16_000.0).round() as usize).min(audio.len())))
+            .collect();
+        audio.iter().enumerate().filter(|(i, _)| !spans.iter().any(|(a, z)| i >= a && i < z)).map(|(_, s)| *s).collect()
+    }
+
+    /// Forgets what was held back before `secs` of the recording: those samples are recognised already.
+    fn forget_before(&mut self, secs: f64) {
+        self.held.retain(|(_, z)| *z > secs);
+    }
 }
 
 /// Whether the running session's microphone is muted; None with no session.
@@ -324,7 +399,7 @@ fn listen(choice: crate::engines::models::AsrChoice, models_root: &Path, lang: &
         let words: Vec<HeardWord> = heard.iter().flat_map(|s| s.words.iter()).map(|w| (w.word.trim().to_string(), w.start, w.end)).filter(|w| !w.0.is_empty()).collect();
         Ok((dub_asr::join_text(heard.iter().map(|s| s.text.as_str())), words))
     };
-    let mut duplex = Duplex::default();
+    let intake = std::cell::RefCell::new(Intake::new(heard_at(at).ok_or_else(|| t!("listen-live-not-running"))?, at));
     // the guard is read again now and then, so a change in the settings reaches a conversation under way
     let mut guard: Option<(std::time::Instant, crate::speech::floor_settings::Guard)> = None;
     let mut take = |chunk: Vec<f32>| -> Vec<f32> {
@@ -337,18 +412,7 @@ fn listen(choice: crate::engines::models::AsrChoice, models_root: &Path, lang: &
                 g
             }
         };
-        let chunk = heard_as(chunk);
-        if mode == crate::speech::floor_settings::Guard::Text {
-            return chunk;
-        }
-        let sr = rate().max(1);
-        let began = now.checked_sub(Duration::from_secs_f64(chunk.len() as f64 / sr as f64)).unwrap_or(now);
-        let playback = crate::speech::playback_level(began, now, DUPLEX_TAIL);
-        if duplex.passes(crate::speech::rms(&chunk), playback, now) {
-            chunk
-        } else {
-            held_back(chunk, sr)
-        }
+        intake.borrow_mut().take(heard_as(chunk), rate(), mode != crate::speech::floor_settings::Guard::Text)
     };
     while !ended {
         match from.recv_timeout(Duration::from_millis(300)) {
@@ -375,6 +439,7 @@ fn listen(choice: crate::engines::models::AsrChoice, models_root: &Path, lang: &
                 let drop = pending.len().saturating_sub(keep);
                 pending.drain(..drop);
                 offset += drop as f64 / sr as f64;
+                intake.borrow_mut().forget_before(offset);
                 streamed = streamed.saturating_sub(drop * 16_000 / sr as usize);
             }
             continue;
@@ -439,7 +504,7 @@ fn listen(choice: crate::engines::models::AsrChoice, models_root: &Path, lang: &
             let line = (((offset + a) * 100.0).round() / 100.0, ((offset + z) * 100.0).round() / 100.0, text);
             // under an armed voice gate, judge whether this phrase reaches the agent (owner's voice and, if a wake
             // word is set, that it has woken the conversation), from the phrase's own 16 kHz audio
-            let owner = crate::voice_gate::gate_line(models_root, &audio[from_a.min(to_z)..to_z]);
+            let owner = crate::voice_gate::gate_line(models_root, &intake.borrow().heard_part(&audio[from_a.min(to_z)..to_z], offset + from_a.min(to_z) as f64 / 16_000.0));
             with(|l| {
                 let n = l.lines.len();
                 let (from, to) = (l.zero + Duration::from_secs_f64(line.0.max(0.0)), l.zero + Duration::from_secs_f64(line.1.max(0.0)));
@@ -459,6 +524,7 @@ fn listen(choice: crate::engines::models::AsrChoice, models_root: &Path, lang: &
         let used = ((z * sr as f64) as usize).min(pending.len());
         pending.drain(..used);
         offset += used as f64 / sr as f64;
+        intake.borrow_mut().forget_before(offset);
     }
     Ok(())
 }
@@ -557,5 +623,141 @@ mod tests {
         assert!(d.passes(0.004, None, at(800)), "the studio is silent: the microphone is heard");
         let mut headphones = Duplex::default();
         assert!(headphones.passes(0.02, studio, at(0)), "a quiet voice over headphones: nothing of the studio's comes back");
+    }
+
+    /// The microphone's pieces pile up while the loop recognises a phrase; a piece recorded while the studio spoke is
+    /// held back when the loop gets to it later, and one recorded in silence passes though the studio speaks then: a
+    /// piece is placed by the recording's clock, not by when it is taken.
+    #[test]
+    fn a_piece_taken_late_is_judged_by_when_it_was_recorded() {
+        let _slot = crate::speech::FLOOR_SLOT.blocking_lock();
+        crate::speech::unduck_for_test();
+        let zero = std::time::Instant::now() - Duration::from_secs(20);
+        crate::speech::level_for_test(zero + Duration::from_secs(1), zero + Duration::from_secs(2), 0.1);
+        let mut intake = Intake::new(zero, 0.0);
+        let echo = vec![0.008f32; 1_600];
+        let heard: Vec<bool> = (0..20).map(|_| intake.take(echo.clone(), 16_000, true).iter().any(|s| *s != 0.0)).collect();
+        assert!(heard[..9].iter().all(|h| *h), "recorded in silence: {heard:?}");
+        assert!(heard[11..19].iter().all(|h| !*h), "recorded while the studio spoke: {heard:?}");
+    }
+
+    /// The studio's voice comes back from the room at its own level (on the recordings of 08.11 a median of −48 dB
+    /// against the sound sent; −58 dB with the window at 0.3); once the half-duplex has heard it, a person speaking
+    /// 30 dB under the sound sent is heard over it, though under the −18 dB it starts from — the window's volume and
+    /// the microphone's gain are in what it measured.
+    #[test]
+    fn a_quiet_person_is_heard_over_the_echo_the_half_duplex_measured() {
+        let t0 = std::time::Instant::now();
+        let at = |ms: u64| t0 + Duration::from_millis(ms);
+        let studio = Some(0.1f32);
+        let level = |db: f32| 0.1 * 10f32.powf(db / 20.0);
+        let mut d = Duplex::default();
+        for k in 0..30 {
+            assert!(!d.passes(level(-48.0 + (k % 5) as f32), studio, at(k * 100)), "the studio's voice coming back");
+        }
+        assert!(d.passes(level(-30.0), studio, at(3_000)), "a quiet person over it");
+        assert!(!d.passes(level(-45.0), studio, at(3_500)), "its echo is still held back after the hold");
+        let mut fresh = Duplex::default();
+        assert!(!fresh.passes(level(-20.0), studio, at(0)), "before it has heard the room it starts from −18 dB");
+    }
+
+    /// The owner's voice gate hears the phrase's speech only: the pieces the half-duplex held back (silence put in
+    /// their place) are left out, as silence was left out of the owner's print.
+    #[test]
+    fn the_voice_gate_gets_the_phrase_without_what_was_held_back() {
+        let _slot = crate::speech::FLOOR_SLOT.blocking_lock();
+        crate::speech::unduck_for_test();
+        let zero = std::time::Instant::now() - Duration::from_secs(40);
+        crate::speech::level_for_test(zero + Duration::from_secs(31), zero + Duration::from_secs(32), 0.1);
+        let mut intake = Intake::new(zero + Duration::from_secs(30), 30.0);
+        let mut audio: Vec<f32> = Vec::new();
+        for k in 0..30 {
+            audio.extend(intake.take(vec![if k < 8 || k >= 25 { 0.3 } else { 0.008 }; 1_600], 16_000, true));
+        }
+        let silenced = audio.iter().filter(|s| **s == 0.0).count();
+        assert!(silenced >= 16_000, "the studio's second was held back: {silenced} samples");
+        let heard = intake.heard_part(&audio, 30.0);
+        assert_eq!(heard.len(), audio.len() - silenced, "every held back sample is left out, nothing else");
+        assert!(heard.iter().all(|s| *s != 0.0));
+    }
+
+    /// The half-duplex measured on Live conversations as they were recorded (no model runs): 100 ms frames of the
+    /// person's speech and of the studio's voice coming back, each against the level of the studio's sound sent to the
+    /// window (its take's speech); what share of the person's frames a rule holds back and what share of the echo it
+    /// lets through, the window at full volume and at 0.3. GATE_ROOT: a studio root; GATE_LIVE: the Listening projects
+    /// of the recordings, comma separated; GATE_SAID: the say sessions' projects.
+    #[test]
+    #[ignore = "needs a studio root with recorded Live conversations"]
+    fn the_half_duplex_measured_on_recorded_conversations() {
+        let root = std::path::PathBuf::from(std::env::var("GATE_ROOT").expect("GATE_ROOT"));
+        let workspace = root.join("workspace");
+        let db = |x: f32| 20.0 * x.max(1e-9).log10();
+        let speech_frames = |x: &[f32]| -> Vec<f32> {
+            let rms: Vec<f32> = x.chunks(1_600).map(crate::speech::rms).collect();
+            let loudest = rms.iter().copied().fold(0.0f32, f32::max);
+            rms.into_iter().filter(|r| *r >= loudest * 0.05).collect()
+        };
+        let tmp = tempfile::tempdir().unwrap();
+        let mut said: Vec<(Vec<String>, f32)> = Vec::new();
+        for pid in std::env::var("GATE_SAID").unwrap_or_default().split(',').filter(|p| !p.is_empty()) {
+            let p: Value = serde_json::from_slice(&std::fs::read(workspace.join(pid).join("project.json")).unwrap()).unwrap();
+            for b in p["chapters"].as_array().unwrap().iter().flat_map(|c| c["blocks"].as_array().unwrap()) {
+                let Some(f) = b["takes"].as_array().and_then(|t| t.iter().find(|t| t["n"] == b["active"])).and_then(|t| t["file"].as_str()) else { continue };
+                let k = tmp.path().join(format!("{f}.wav"));
+                crate::audio::media::to_16k_mono(&workspace.join(pid).join("takes").join(f), &k).unwrap();
+                let frames = speech_frames(&crate::audio::wavio::read_mono_f32(&k).unwrap().0);
+                let level = (frames.iter().map(|r| r * r).sum::<f32>() / frames.len().max(1) as f32).sqrt();
+                said.push((crate::audio::qc::normalize(b["text"].as_str().unwrap_or_default()), level));
+            }
+        }
+        let typical = {
+            let mut l: Vec<f32> = said.iter().map(|s| s.1).filter(|l| *l > 0.0).collect();
+            l.sort_by(f32::total_cmp);
+            l[l.len() / 2]
+        };
+        let (mut person, mut echo): (Vec<f32>, Vec<f32>) = (Vec::new(), Vec::new());
+        for pid in std::env::var("GATE_LIVE").expect("GATE_LIVE").split(',').filter(|p| !p.is_empty()) {
+            let dir = workspace.join(pid);
+            let p: Value = serde_json::from_slice(&std::fs::read(dir.join("project.json")).unwrap()).unwrap();
+            let (x, sr) = crate::audio::wavio::read_mono_f32(&dir.join("source.wav")).unwrap();
+            let x16 = to_16k(&x, sr);
+            for l in p["lines"].as_array().unwrap() {
+                let (a, z) = (l["start"].as_f64().unwrap(), l["end"].as_f64().unwrap());
+                let piece = &x16[((a * 16_000.0) as usize).min(x16.len())..((z * 16_000.0) as usize).min(x16.len())];
+                let words = crate::audio::qc::normalize(l["text"].as_str().unwrap_or_default());
+                let studio = (!words.is_empty()).then(|| said.iter().find(|s| words.iter().filter(|w| s.0.contains(w)).count() * 3 >= words.len() * 2)).flatten();
+                for f in speech_frames(piece) {
+                    match studio {
+                        Some(s) => echo.push(db(f) - db(s.1)),
+                        None => person.push(db(f) - db(typical)),
+                    }
+                }
+            }
+        }
+        let share = |xs: &[f32], f: &dyn Fn(f32) -> bool| 100.0 * xs.iter().filter(|x| f(**x)).count() as f64 / xs.len().max(1) as f64;
+        let median = |xs: &[f32]| {
+            let mut v = xs.to_vec();
+            v.sort_by(f32::total_cmp);
+            v.get(v.len() / 2).copied().unwrap_or(f32::NAN)
+        };
+        eprintln!("{} frames of the person's, {} of the studio's voice coming back; the studio's sound sent at {:.1} dBFS", person.len(), echo.len(), db(typical));
+        eprintln!("person against the sound sent: median {:.1} dB; echo: median {:.1} dB", median(&person), median(&echo));
+        let quantiles = |xs: &[f32]| {
+            let mut v = xs.to_vec();
+            v.sort_by(f32::total_cmp);
+            [5, 10, 25, 50, 75, 90, 95].map(|q| format!("p{q} {:.1}", v.get(v.len() * q / 100).copied().unwrap_or(f32::NAN))).join(", ")
+        };
+        eprintln!("person: {}", quantiles(&person));
+        eprintln!("echo: {}", quantiles(&echo));
+        for volume in [1.0f32, 0.3] {
+            let v = db(volume);
+            let echo_v: Vec<f32> = echo.iter().map(|e| e + v).collect();
+            eprintln!("window volume {volume}: fixed {DUPLEX_DB} dB — person held back {:.1} %, echo let through {:.1} %", share(&person, &|p| p < DUPLEX_DB), share(&echo_v, &|e| e >= DUPLEX_DB));
+            let coupling = median(&echo_v);
+            for margin in [6.0f32, 8.0, 10.0, 12.0] {
+                let t = coupling + margin;
+                eprintln!("  measured echo {coupling:.1} dB + {margin} dB = {t:.1} dB — person held back {:.1} %, echo let through {:.1} %", share(&person, &|p| p < t), share(&echo_v, &|e| e >= t));
+            }
+        }
     }
 }
