@@ -1533,6 +1533,11 @@ pub fn quality(p: &SpeechPaths, project: &SpeechProject) -> Value {
             total += 1;
             let Some(take) = voiced(b, state, &key) else { continue };
             ready += 1;
+            // the person's ear outranks the check: a take they approved passes whatever it found
+            if b.review == "approved" {
+                passed += 1;
+                continue;
+            }
             match &take.qc {
                 Some(c) if c.text_checked && c.ok() => passed += 1,
                 // a defect the sound check found fails the take whether or not its words were checked

@@ -108,6 +108,7 @@ export default function ExportDialog({ pid, project, onChange, flush, onClose, o
               {Object.entries(counts).map(([state, n]) => <li key={state}>{t(`speech.state_${state as ExportProblem["state"]}`)}: {n}</li>)}
             </ul>
             {unvoiced.length > 0 && <button onClick={() => onVoiceMissing(unvoiced)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--color-accent)] text-[var(--color-on-accent)] text-[12px] font-semibold"><Sparkles size={13} />{t("speech.voiceTheMissing")}</button>}
+            {counts.failed > 0 && <p className="text-[12px] text-[var(--color-muted)]">{t("speech.exportApproveHint")}</p>}
             {tooLong && (
               <label className="flex items-center gap-2 text-[12px] cursor-pointer">
                 <input type="checkbox" checked={allowDuration} onChange={(e) => setAllowDuration(e.target.checked)} className="w-4 h-4 accent-[var(--color-accent)]" />{t("speech.allowDuration")} <Hint text={t("hint.allowDuration")} />

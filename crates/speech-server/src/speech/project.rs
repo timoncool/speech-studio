@@ -810,12 +810,15 @@ pub fn status(b: &Block, key: &str) -> &'static str {
     if says_nothing(&b.text) || b.hidden {
         return "skipped";
     }
-    if let Some(e) = &b.error {
-        if e.key == key {
-            return "failed";
-        }
+    let active = b.active.and_then(|n| b.takes.iter().find(|t| t.n == n));
+    // a take the person listened to and approved is the block's voice whatever the check or a later attempt came to
+    if b.review == "approved" && active.is_some_and(|t| t.key == key) {
+        return "ready";
     }
-    match b.active.and_then(|n| b.takes.iter().find(|t| t.n == n)) {
+    if b.error.as_ref().is_some_and(|e| e.key == key) {
+        return "failed";
+    }
+    match active {
         None if b.takes.is_empty() => "pending",
         None => "stale",
         Some(t) if t.key == key => "ready",
@@ -1028,6 +1031,11 @@ mod tests {
         assert_eq!(status(&b, "k2"), "stale");
         b.error = Some(BlockError { key: "k2".into(), text: "x".into() });
         assert_eq!(status(&b, "k2"), "failed");
+        b.error = Some(BlockError { key: "k1".into(), text: "the check heard other words".into() });
+        assert_eq!(status(&b, "k1"), "failed", "a take the check turned down keeps the block from export");
+        b.review = "approved".into();
+        assert_eq!(status(&b, "k1"), "ready", "until the person approves it by ear");
+        assert_eq!(status(&b, "k2"), "stale", "an approved block whose text changed since is voiced again");
         b.hidden = true;
         assert_eq!(status(&b, "k2"), "skipped");
     }
