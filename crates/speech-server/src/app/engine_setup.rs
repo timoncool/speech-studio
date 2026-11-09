@@ -13,10 +13,21 @@ use crate::engines::models;
 
 // ── Полный статус (для GET /setup/status) ────────────────────────────────────
 
+/// A component this release updates, with why.
+#[derive(Clone, Debug, Serialize)]
+pub struct ComponentUpdate {
+    pub id: String,
+    pub name: String,
+    pub reason: String,
+}
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SetupStatus {
     pub components: Vec<ComponentStatus>,
+    /// The required components this release replaces on a computer that has their earlier version, each with the
+    /// reason: with them and nothing else missing, the window shows an update, not a first start.
+    pub updates: Vec<ComponentUpdate>,
     /// Всё ли обязательное на месте (тогда фронт показывает обычный hero, а не «первый запуск»).
     pub ready: bool,
     /// Совокупный размер того, что ещё надо скачать (обязательное+рекомендованное, что missing и Download).
@@ -147,7 +158,14 @@ pub fn setup_status(repo_root: &Path) -> SetupStatus {
         .map(|c| c.size.saturating_sub(c.bytes_on_disk))
         .sum();
     let gpu = crate::engines::hw::gpu_report();
+    let updates = comps
+        .iter()
+        .filter(|c| c.requirement == Requirement::Required && c.delivery == Delivery::Download && !c.installed)
+        .filter(|c| manifest().iter().find(|m| m.id == c.id).is_some_and(|m| setup::has_earlier_version(repo_root, m)))
+        .map(|c| ComponentUpdate { id: c.id.clone(), name: c.name.clone(), reason: setup::update_reason(&c.id) })
+        .collect();
     SetupStatus {
+        updates,
         components: comps,
         ready,
         download_pending,

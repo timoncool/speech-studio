@@ -1214,3 +1214,5 @@ acpp-no-model = El modelo «{ $model }» del motor audio.cpp no está descargado
 acpp-error = motor audio.cpp: { $error }
 acpp-out-of-memory = Al motor audio.cpp le faltó memoria de vídeo: elige una cuantización de Higgs más ligera en Ajustes → Modelos, acorta el bloque o cierra los programas que usan la tarjeta ({ $error })
 acpp-no-device = Este equipo no tiene el dispositivo elegido para el motor audio.cpp: elige otro dispositivo para la locución o el reconocimiento en Ajustes → Modelos ({ $error })
+update-reason-transcribe-own-ggml = El reconocimiento ya no falla tras la locución con Qwen3-TTS: las bibliotecas del motor tienen nombres propios
+update-reason-newer = Una versión más reciente

@@ -1013,3 +1013,5 @@ acpp-no-model = 未下载 audio.cpp 引擎的模型「{ $model }」：请在 设
 acpp-error = audio.cpp 引擎：{ $error }
 acpp-out-of-memory = audio.cpp 引擎显存不足：请在 设置 → 模型 中选择更轻的 Higgs 量化、缩短段落，或关闭占用显卡的程序（{ $error }）
 acpp-no-device = 这台电脑没有为 audio.cpp 引擎选择的设备：请在 设置 → 模型 中为配音或识别选择其他设备（{ $error }）
+update-reason-transcribe-own-ggml = 用 Qwen3-TTS 配音后识别不再失败：引擎的库有了自己的名称
+update-reason-newer = 新版本

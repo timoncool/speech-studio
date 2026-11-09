@@ -3057,6 +3057,23 @@ fn remove_left_behind(repo_root: &Path, before: Option<ArchiveRecord>, written: 
     }
 }
 
+/// Whether an earlier version of the component is on disk: an archive of it recorded with another checksum than the
+/// pinned one, or one of its marker files there. Such a component is an update, not a first download.
+pub fn has_earlier_version(repo_root: &Path, c: &Component) -> bool {
+    c.files.iter().any(|f| f.extract != Extract::None && read_record(repo_root, f).is_some_and(|r| r.sha256 != f.sha256))
+        || c.markers.iter().any(|m| repo_root.join(m.rel).is_file())
+}
+
+/// Why this release updates the component, in the interface language: the release's own table of changes, and a plain
+/// «newer version» for a component the table does not name.
+pub fn update_reason(id: &str) -> String {
+    if dub_asr::tcpp::Build::ALL.iter().any(|b| b.dir() == id) {
+        t!("update-reason-transcribe-own-ggml")
+    } else {
+        t!("update-reason-newer")
+    }
+}
+
 /// `completed` runs after verification while the selected components are still claimed.
 pub(crate) fn fetch_components<T>(
     repo_root: &Path,

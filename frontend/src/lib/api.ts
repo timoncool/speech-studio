@@ -215,6 +215,8 @@ export type GpuReport = {
 };
 export type SetupStatus = {
   components: SetupComponent[]; ready: boolean;
+  /** The required components this release replaces on a computer that has their earlier version, with the reason. */
+  updates: { id: string; name: string; reason: string }[];
   downloadPending: number; driverOk: boolean; llamaBuild: string; llamaNote: string | null;
   modelsDir: string; freeBytes: number | null; gpu: GpuReport; active: DownloadJob | null;
 };

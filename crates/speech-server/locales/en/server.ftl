@@ -1220,3 +1220,5 @@ acpp-no-model = The model «{ $model }» of the audio.cpp engine is not download
 acpp-error = audio.cpp engine: { $error }
 acpp-out-of-memory = The audio.cpp engine ran out of video memory: choose a lighter Higgs quantization in Settings → Models, shorten the block or close programs that use the card ({ $error })
 acpp-no-device = This computer has no device the audio.cpp engine was set to: choose another device for voicing or recognition in Settings → Models ({ $error })
+update-reason-transcribe-own-ggml = Recognition no longer fails after voicing with Qwen3-TTS: the engine's libraries got names of their own
+update-reason-newer = A newer version

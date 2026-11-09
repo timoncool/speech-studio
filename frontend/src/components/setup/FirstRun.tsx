@@ -142,6 +142,7 @@ export default function FirstRun() {
     return n;
   });
   const comps = (status?.components ?? []).filter((c) => !isService(c.id) && !(c.delivery === "external" && c.installed));
+  const updating = !!status?.updates?.length;
   const gseen = new Set<string>();
   type SetupRow = { kind: "one"; c: SetupComponent } | { kind: "group"; group: string; members: SetupComponent[] };
   const rows: SetupRow[] = comps.flatMap((c): SetupRow[] => {   // одиночные компоненты + по одной группе квантов (на первом её члене)
@@ -157,10 +158,17 @@ export default function FirstRun() {
       <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: EASE }}
         className="w-full max-w-2xl">
         <div className="mono text-[11px] tracking-[0.2em] text-[var(--color-muted)] flex items-center gap-2">
-          <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)] shadow-[0_0_8px_var(--color-accent)]" />{t("setup.title")}
+          <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)] shadow-[0_0_8px_var(--color-accent)]" />{t(updating ? "setup.updateTitle" : "setup.title")}
         </div>
-        <h1 className="mt-4 text-2xl lg:text-[28px] leading-tight font-extrabold tracking-tight">{t("setup.title")}</h1>
-        <p className="mt-3 text-[14px] leading-relaxed text-[var(--color-muted)]">{t("setup.subtitle")}</p>
+        <h1 className="mt-4 text-2xl lg:text-[28px] leading-tight font-extrabold tracking-tight">{t(updating ? "setup.updateTitle" : "setup.title")}</h1>
+        <p className="mt-3 text-[14px] leading-relaxed text-[var(--color-muted)]">{t(updating ? "setup.updateSubtitle" : "setup.subtitle")}</p>
+        {updating && (
+          <ul aria-label={t("setup.updateList")} className="mt-3 space-y-1.5 rounded-lg border border-[var(--color-border)] px-3 py-2.5 text-[13px]">
+            {status?.updates.map((u) => (
+              <li key={u.id}><span className="font-semibold">{u.name}</span><span className="text-[var(--color-muted)]"> — {u.reason}</span></li>
+            ))}
+          </ul>
+        )}
 
         {err && (
           <div className="mt-4 rounded-lg border border-[var(--color-warn)]/40 bg-[color-mix(in_oklab,var(--color-warn)_10%,transparent)] px-3 py-2 text-[13px] text-[var(--color-warn)]">
