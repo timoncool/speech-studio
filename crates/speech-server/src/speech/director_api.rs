@@ -169,7 +169,7 @@ pub async fn enrich(State(st): State<AppState>, AxPath(pid): AxPath<String>, Jso
     let job: jobs::JobFn = Box::new(move |progress: jobs::ProgressFn| {
         let cb = |ev: Value| progress(ev);
         let project = crate::speech::load(&p.workspace, &pid2)?;
-        let wanted = |b: &&Block| !b.hidden && !b.text.trim().is_empty() && req.ids.as_ref().is_none_or(|ids| ids.contains(&b.id));
+        let wanted = |b: &&Block| !b.hidden && !crate::speech::project::says_nothing(&b.text) && req.ids.as_ref().is_none_or(|ids| ids.contains(&b.id));
         if req.mode.as_deref() == Some("punctuation") {
             let blocks: Vec<(String, String, String)> = project.blocks().filter(wanted).map(|b| (b.id.clone(), b.speaker.clone(), b.text.clone())).collect();
             step(&cb, t!("director-starting"), 2);

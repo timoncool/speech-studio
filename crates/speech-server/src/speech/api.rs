@@ -47,7 +47,7 @@ fn summary(p: &SpeechPaths, dir: &Path) -> Option<Value> {
     if kind == sp::KIND {
         let project: SpeechProject = serde_json::from_value(v).ok()?;
         let keys = speech_jobs::keys(p, &project);
-        let total = project.blocks().filter(|b| !b.hidden && !b.text.trim().is_empty()).count();
+        let total = project.blocks().filter(|b| !b.hidden && !sp::says_nothing(&b.text)).count();
         let ready = project.blocks().filter(|b| sp::status(b, keys.get(&b.id).map(String::as_str).unwrap_or("")) == "ready").count();
         card["name"] = json!(project.name);
         card["created"] = json!(project.created);
@@ -1209,10 +1209,7 @@ pub async fn from_book(State(st): State<AppState>, Json(req): Json<FromBook>) ->
             for choice in &req.chapters {
                 let Some(c) = book.chapters.get(choice.index) else { continue };
                 let text = choice.text.clone().unwrap_or_else(|| c.text.clone());
-                let blocks = sp::split_text_lines(&text, &narrator, req.dialogue.then_some(lines.as_str()))
-                    .into_iter()
-                    .map(|(speaker, text)| sp::Block { id: sp::new_id(), speaker, text, ..Default::default() })
-                    .collect();
+                let blocks = sp::blocks_of(&text, &narrator, req.dialogue.then_some(lines.as_str()));
                 project.chapters.push(sp::Chapter { id: sp::new_id(), title: choice.title.clone().unwrap_or_else(|| c.title.clone()), blocks });
             }
             let pid = sp::new_id();

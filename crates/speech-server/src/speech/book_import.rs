@@ -573,4 +573,24 @@ mod live {
         }
         assert!(!b.chapters.is_empty());
     }
+
+    /// A real book cut into blocks as the window imports it, every block without a word to say printed: `BOOK` — the
+    /// book's file.
+    #[test]
+    #[ignore]
+    fn a_real_book_s_blocks_without_words() {
+        let path = std::env::var("BOOK").expect("BOOK");
+        let b = super::parse(&path, &std::fs::read(&path).unwrap()).unwrap();
+        let (mut total, mut wordless) = (0, 0);
+        for c in &b.chapters {
+            for (speaker, text) in crate::speech::project::split_text_lines(&c.text, "n", None) {
+                total += 1;
+                if crate::audio::qc::normalize(&text).is_empty() {
+                    wordless += 1;
+                    eprintln!("[{}] {speaker}: {text:?}", c.title);
+                }
+            }
+        }
+        eprintln!("blocks {total}, without a word {wordless}");
+    }
 }

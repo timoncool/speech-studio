@@ -1356,7 +1356,7 @@ pub fn timeline(project: &SpeechProject) -> Vec<Value> {
     let mut placer = Placer::new(project, RATE);
     let mut furthest: Option<(&str, f64)> = None;
     let mut rows: Vec<Value> = Vec::new();
-    for b in project.blocks().filter(|b| !b.hidden && !b.text.trim().is_empty()) {
+    for b in project.blocks().filter(|b| !b.hidden && !sp::says_nothing(&b.text)) {
         let take = b.active.and_then(|n| b.takes.iter().find(|t| t.n == n));
         let lang = match project.lang_of(b) { "auto" => if crate::engines::stress::is_russian(&b.text, "auto") { "ru" } else { "en" }, own => own };
         let secs = take.map(|t| match t.cut {
@@ -1767,7 +1767,7 @@ pub fn export(p: &SpeechPaths, pid: &str, opts: &ExportOpts, progress: &dyn Fn(V
         .iter()
         .filter(|c| opts.chapter.as_ref().is_none_or(|id| &c.id == id))
         .flat_map(|c| c.blocks.iter())
-        .filter(|b| !b.hidden && !b.text.trim().is_empty() && !skip_unvoiced.contains(&b.id))
+        .filter(|b| !b.hidden && !sp::says_nothing(&b.text) && !skip_unvoiced.contains(&b.id))
         .collect();
     if blocks.is_empty() {
         return Err(t!("speech-export-empty"));
@@ -2366,6 +2366,57 @@ mod tests {
         assert_eq!(states, vec![("b".to_string(), "modified".to_string()), ("c".to_string(), "duration".to_string())], "a take of an old project has no size and is not compared");
         std::fs::remove_file(dir.join("a-1.flac")).unwrap();
         assert_eq!(export_check(&p, "pid", &project)[0]["state"], "missing");
+    }
+
+    /// A whole book exported as the window exports it with «skip the unvoiced»: `BOOK` — the book's file, `BOOK_WORK` —
+    /// an empty folder for its project, cut into blocks as 0.3.5 cut it (scene breaks are blocks); every block with
+    /// words gets a take as long as its text read at `BOOK_CHARS_PER_SEC` letters a second (14), times `BOOK_SCALE` (1).
+    /// `BOOK_FORMAT` — the export's format (mp3).
+    #[test]
+    #[ignore]
+    fn a_whole_book_exports_with_its_unvoiced_blocks_skipped() {
+        let book = std::env::var("BOOK").expect("BOOK");
+        let work = PathBuf::from(std::env::var("BOOK_WORK").expect("BOOK_WORK"));
+        let rate: f64 = std::env::var("BOOK_CHARS_PER_SEC").ok().and_then(|s| s.parse().ok()).unwrap_or(14.0);
+        let scale: f64 = std::env::var("BOOK_SCALE").ok().and_then(|s| s.parse().ok()).unwrap_or(1.0);
+        let format = std::env::var("BOOK_FORMAT").unwrap_or_else(|_| "mp3".into());
+        let p = SpeechPaths { repo_root: work.clone(), workspace: work.join("ws"), voices_dir: work.join("voices"), models_root: work.join("models") };
+        let parsed = crate::speech::book_import::parse(&book, &std::fs::read(&book).unwrap()).unwrap();
+        let mut project = SpeechProject { name: parsed.title.clone(), ..Default::default() };
+        for c in &parsed.chapters {
+            let blocks = sp::split_text_lines(&c.text, "n", None).into_iter().map(|(speaker, text)| Block { id: sp::new_id(), speaker, text, ..Default::default() }).collect();
+            project.chapters.push(sp::Chapter { id: sp::new_id(), title: c.title.clone(), blocks });
+        }
+        let pid = sp::new_id();
+        let keys = keys(&p, &project);
+        let dir = takes_dir(&p, &pid);
+        std::fs::create_dir_all(&dir).unwrap();
+        let (mut voiced, mut left, mut audio) = (0, 0, 0.0);
+        for b in project.chapters.iter_mut().flat_map(|c| c.blocks.iter_mut()) {
+            if crate::audio::qc::normalize(&b.text).is_empty() {
+                left += 1;
+                continue;
+            }
+            let secs = (b.text.chars().filter(|c| c.is_alphanumeric()).count() as f64 / rate * scale).max(0.2);
+            let tone: Vec<f32> = (0..(secs * SR as f64) as usize).map(|i| 0.1 * (i as f32 * 0.05).sin()).collect();
+            let file = format!("{}-1.flac", b.id);
+            crate::audio::wavio::write_mono_f32(&dir.join(&file), &tone, SR).unwrap();
+            let bytes = std::fs::metadata(dir.join(&file)).unwrap().len();
+            b.takes.push(Take { n: 1, file, key: keys[&b.id].clone(), bytes, duration: secs, ..Default::default() });
+            b.active = Some(1);
+            voiced += 1;
+            audio += secs;
+        }
+        crate::speech::save(&p.workspace, &pid, &project).unwrap();
+        let states: std::collections::BTreeMap<String, usize> = export_check(&p, &pid, &project).iter().fold(Default::default(), |mut m, x| {
+            *m.entry(x["state"].as_str().unwrap_or_default().to_string()).or_default() += 1;
+            m
+        });
+        eprintln!("blocks voiced {voiced}, left as imported {left}, takes {:.2} h; export check: {states:?}", audio / 3600.0);
+        let opts = ExportOpts { format, chapter: None, per_block: false, part_minutes: None, per_chapter: false, stems: false, allow_duration: false, allow_unvoiced: true, quality: Default::default() };
+        let started = std::time::Instant::now();
+        let made = export(&p, &pid, &opts, &|_| {}).unwrap();
+        eprintln!("exported in {:.0} s: skipped {}, duration {}, file {}", started.elapsed().as_secs_f64(), made["skipped"], made["duration"], made["file"]);
     }
 
     /// A renamed library voice stays the project's voice and its takes stay voiced; before, the project kept the old

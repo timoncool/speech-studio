@@ -89,11 +89,13 @@ pub fn rebuild(old: &SpeechProject, chapters: &[NewChapter], narrator: &str, lin
                         }
                         stats.kept += b - a;
                     }
+                    None if sp::says_nothing(para) => {
+                        if let Some(prev) = made.last_mut() {
+                            prev.pause_ms = Some(prev.pause_ms.unwrap_or(0).max(sp::SCENE_BREAK_MS));
+                        }
+                    }
                     None => {
-                        let fresh: Vec<Block> = sp::split_text_lines(para, narrator, lines)
-                            .into_iter()
-                            .map(|(speaker, text)| Block { id: sp::new_id(), speaker, text, ..Default::default() })
-                            .collect();
+                        let fresh: Vec<Block> = sp::blocks_of(para, narrator, lines);
                         stats.added += fresh.len();
                         made.extend(fresh);
                     }

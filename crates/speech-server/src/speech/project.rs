@@ -714,16 +714,12 @@ fn dialog_tags(text: &str) -> Option<std::collections::HashMap<&str, Option<(Str
     (tagged >= 2 && tagged * 2 >= lines.len() && speakers.len() <= 8).then_some(tags)
 }
 
-/// Новый проект из текста: одна глава, блоки по `split_text`.
+/// Новый проект из текста: одна глава, блоки по `blocks_of`.
 pub fn from_text(name: &str, text: &str, narrator: &str) -> SpeechProject {
-    let blocks = split_text(text, narrator)
-        .into_iter()
-        .map(|(speaker, text)| Block { id: new_id(), speaker, text, ..Default::default() })
-        .collect();
     SpeechProject {
         name: name.to_string(),
         created: now(),
-        chapters: vec![Chapter { id: new_id(), title: String::new(), blocks }],
+        chapters: vec![Chapter { id: new_id(), title: String::new(), blocks: blocks_of(text, narrator, None) }],
         ..Default::default()
     }
 }
@@ -765,7 +761,7 @@ pub fn continuation_source<'a>(project: &'a SpeechProject, b: &Block) -> Option<
     blocks[..at]
         .iter()
         .rev()
-        .filter(|x| !x.hidden && !x.text.trim().is_empty())
+        .filter(|x| !x.hidden && !says_nothing(&x.text))
         .find(|x| project.voice_of(x) == voice)
         .and_then(|x| x.active.and_then(|n| x.takes.iter().find(|t| t.n == n)).map(|t| (*x, t)))
 }
@@ -806,7 +802,7 @@ pub fn synth_key(project: &SpeechProject, b: &Block, voice_tag: &str, engine: &s
 }
 
 pub fn status(b: &Block, key: &str) -> &'static str {
-    if b.text.trim().is_empty() || b.hidden {
+    if says_nothing(&b.text) || b.hidden {
         return "skipped";
     }
     if let Some(e) = &b.error {
@@ -820,6 +816,31 @@ pub fn status(b: &Block, key: &str) -> &'static str {
         Some(t) if t.key == key => "ready",
         Some(_) => "stale",
     }
+}
+
+/// Whether a text has not a letter or a digit to say: empty, or a scene break such as `* * *` or `—`. Voicing makes
+/// nothing of it, so it is never waited for.
+pub fn says_nothing(text: &str) -> bool {
+    !text.chars().any(char::is_alphanumeric)
+}
+
+/// The pause after the block before a scene break (`* * *`), which is no block of its own.
+pub const SCENE_BREAK_MS: i64 = 1500;
+
+/// The blocks of a text as `split_text_lines` cuts it; a line with nothing to say is no block: the block before it
+/// keeps a scene's pause instead.
+pub fn blocks_of(text: &str, narrator: &str, lines: Option<&str>) -> Vec<Block> {
+    let mut out: Vec<Block> = Vec::new();
+    for (speaker, text) in split_text_lines(text, narrator, lines) {
+        if says_nothing(&text) {
+            if let Some(prev) = out.last_mut() {
+                prev.pause_ms = Some(prev.pause_ms.unwrap_or(0).max(SCENE_BREAK_MS));
+            }
+            continue;
+        }
+        out.push(Block { id: new_id(), speaker, text, ..Default::default() });
+    }
+    out
 }
 
 /// Проект для окна: сам проект и по каждому блоку его ключ и статус.
@@ -930,6 +951,23 @@ mod tests {
             ("Борис".to_string(), "Здравствуй. как дела?".to_string()),
             ("Анна".to_string(), "Хорошо.".to_string()),
         ]);
+    }
+
+    /// A book's scene breaks (`* * *`, 31 of 3196 blocks of the book of issue #24) became blocks voicing made nothing
+    /// of, and the book never got done: they are now a pause after the block before them, and such a block already in a
+    /// project is skipped, not waited for.
+    #[test]
+    fn a_scene_break_is_a_pause_not_a_block_to_voice() {
+        let blocks = blocks_of("Первая сцена кончилась.\n\n* * *\n\nВторая началась.\n\n—\n\nИ кончилась.", "Р", None);
+        let texts: Vec<&str> = blocks.iter().map(|b| b.text.as_str()).collect();
+        assert_eq!(texts, ["Первая сцена кончилась.", "Вторая началась.", "И кончилась."]);
+        assert_eq!(blocks[0].pause_ms, Some(SCENE_BREAK_MS));
+        assert_eq!(blocks[1].pause_ms, Some(SCENE_BREAK_MS));
+        assert_eq!(blocks[2].pause_ms, None);
+        assert!(blocks_of("* * *\n\nНачало.", "Р", None).len() == 1, "a break before any block is the chapter's own pause");
+        let old = Block { text: "* * *".into(), ..Default::default() };
+        assert_eq!(status(&old, "k"), "skipped");
+        assert_eq!(status(&Block { text: "1945".into(), ..Default::default() }, "k"), "pending", "a number is said");
     }
 
     #[test]
