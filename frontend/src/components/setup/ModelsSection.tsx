@@ -345,8 +345,20 @@ export default function ModelsSection({ part = "models" }: { part?: "models" | "
               </div>
             </>}
             {rowOf("supertonic3")}
+            {rowOf("audio8")}
             {variantPicker("Qwen3-TTS 1.7B", ["qwen3-tts", "qwen3-tts-q8_0"])}
-            {rowOf(voicingBuild("qwen3-tts-engine", "qwen3-tts"))}
+            {rowOf("qwen3-tts-engine")}
+            {(() => {
+              // Qwen's library and its GPU backend module are two components (audio.cpp builds are whole engines):
+              // the backend of the voicing device goes beside the engine. CPU needs none.
+              const device = selv("tts_backend");
+              const id = device === "cpu" ? null
+                : device === "vulkan" ? "qwen3-tts-vulkan"
+                : get("qwen3-tts-cuda") ? "qwen3-tts-cuda"
+                : status.gpu.cards.length > 0 ? "qwen3-tts-vulkan"
+                : null;
+              return id && get(id) ? rowOf(id) : null;
+            })()}
             {rowOf("qwen3-tts-ru-stress")}
             {rowOf(selv("qwen_tts_quant") === "Q8_0" ? "qwen3-tts-design-q8_0" : "qwen3-tts-design")}
           </>

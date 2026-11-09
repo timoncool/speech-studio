@@ -4,6 +4,17 @@ What changed, newest first. Dates are release dates; the app is versioned by its
 build. Every change a user can see is written here in the commit that makes it, and the
 release notes on GitHub are taken from the release's section.
 
+## Unreleased
+
+### Added
+
+- **Audio8 TTS Realistic-Air — a compact multilingual voice with zero-shot cloning** (Settings → Models → Voicing): a new voicing engine beside Higgs and Supertonic — the Audio8 Realistic-Air 0.6B model (Q8_0, 1.5 GB) on the audio.cpp server. It speaks 23 languages, Russian among them, with its own stress, clones a voice from a reference clip and its exact transcript, and answers a phrase at a time at 44.1 kHz. Download it in Models; Higgs stays the default.
+
+### Fixed
+
+- **Qwen3-TTS downloads whole from the Models screen**: the engine's build for the video card is shown beside the engine, so the engine no longer stays "not fully downloaded" after its files are there.
+- **The first start on a Mac no longer stops with an error** before the recognition runtime is downloaded.
+
 ## 0.4.0 — 2026-11-03
 
 ### Added

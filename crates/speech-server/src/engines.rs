@@ -4,6 +4,7 @@
 
 pub(crate) mod acpp;
 pub(crate) mod asr;
+pub(crate) mod audio8;
 pub(crate) mod denoise;
 pub(crate) mod hw;
 pub(crate) mod models;
@@ -125,6 +126,45 @@ pub fn higgs() -> Engine {
         presets: Vec::new(),
         needs_voice: false,
         ref_text_required: false,
+        ref_max_secs: None,
+        unavailable: None,
+    }
+}
+
+
+/// Языки файнтюна Audio8 Realistic-Air (карточка Edge0/Audio8-TTS-Realistic-Air: 23 языка, русский есть); прочее — авто.
+const AUDIO8_LANGS: &[&str] = &["ru", "en", "zh", "ja", "ko", "de", "fr", "es", "it", "pt", "pl", "nl", "ar", "fi", "hi", "id", "ms", "no", "sv", "th", "tr", "vi", "yue"];
+
+/// Audio8 TTS: компактный мультиязычный голос с zero-shot клоном по рефу и его тексту; без рефа говорит своим.
+/// Теги экспрессии не читает; параметры выборки — по карточке Realistic-Air (temperature 0.8, top_k 50, top_p 0.95).
+/// Русские ударения модель ставит сама: со знаком U+0301 после гласной она читает хуже, чем без разметки (проба на слух 09.11).
+pub fn audio8() -> Engine {
+    Engine {
+        id: crate::engines::audio8::ENGINE,
+        name: "Audio8 TTS",
+        languages: AUDIO8_LANGS,
+        params: vec![
+            ParamSpec { key: "temperature", kind: "float", min: 0.05, max: 2.0, step: 0.05, default: 0.8 },
+            ParamSpec { key: "top_k", kind: "int", min: 1.0, max: 500.0, step: 1.0, default: 50.0 },
+            ParamSpec { key: "top_p", kind: "float", min: 0.05, max: 1.0, step: 0.01, default: 0.95 },
+            ParamSpec { key: "max_tokens", kind: "int", min: 0.0, max: MAX_TOKENS_LIMIT as f64, step: 64.0, default: 0.0 },
+        ],
+        seed_modes: &["random", "fixed", "inc", "dec"],
+        tag_format: "",
+        tags: Vec::new(),
+        sentence_tags: &[],
+        glued_tags: &[],
+        clone: "ref_text",
+        continuation: false,
+        streaming: false,
+        deterministic_seed: true,
+        max_chars: 200,
+        reads: Reads { stress: false, yo: true, phonemes: false, accent: false },
+        direction: false,
+        direction_presets_only: false,
+        presets: Vec::new(),
+        needs_voice: false,
+        ref_text_required: true,
         ref_max_secs: None,
         unavailable: None,
     }
@@ -326,10 +366,10 @@ pub fn tag_texts(engine: &Engine) -> Vec<String> {
 }
 
 pub fn all() -> Vec<Engine> {
-    vec![higgs(), drama(), supertonic(), qwen(), qwen_stress(), openrouter(), catalog("google", "Google Gemini"), catalog("fal", "fal.ai"), catalog("runware", "Runware")]
+    vec![higgs(), audio8(), drama(), supertonic(), qwen(), qwen_stress(), openrouter(), catalog("google", "Google Gemini"), catalog("fal", "fal.ai"), catalog("runware", "Runware")]
 }
 
-/// Движки для окна: у Drama 3 и Supertonic — почему они здесь не пойдут (видеокарта или нескачанные файлы).
+/// Движки для окна: у Drama 3, Supertonic и Audio8 — почему они здесь не пойдут (видеокарта или нескачанные файлы).
 pub fn for_window(models_root: &std::path::Path) -> Vec<Engine> {
     let mut all = all();
     for e in all.iter_mut() {
@@ -337,6 +377,8 @@ pub fn for_window(models_root: &std::path::Path) -> Vec<Engine> {
             e.unavailable = crate::engines::models::drama_unavailable(models_root).or_else(|| (!crate::engines::models::drama_installed(models_root)).then(|| t!("render-drama-missing")));
         } else if e.id == crate::engines::supertonic::ENGINE && !crate::engines::supertonic::installed(models_root) {
             e.unavailable = Some(t!("render-supertonic-missing"));
+        } else if e.id == crate::engines::audio8::ENGINE && !crate::engines::audio8::installed(models_root) {
+            e.unavailable = Some(t!("render-audio8-missing"));
         } else if e.id == crate::engines::qwen_tts::ENGINE && !crate::engines::qwen_tts::installed(models_root, &crate::engines::models::qwen_quant(models_root), false, false) {
             e.unavailable = Some(t!("render-qwen-missing"));
         } else if e.id == crate::engines::qwen_tts::ENGINE_STRESS && !crate::engines::qwen_tts::installed(models_root, &crate::engines::models::qwen_quant(models_root), true, true) {

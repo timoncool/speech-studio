@@ -913,6 +913,10 @@ speech-export-encoding = 正在编码第 { $n } / { $total } 部分
 
 render-supertonic-missing = 已选择 Supertonic 3 但尚未下载：请在「模型」（配音）中下载，或选择其他引擎。
 render-supertonic-load-failed = Supertonic 3 加载失败：{ $error }
+render-audio8-missing = 已选择 Audio8 TTS 但尚未下载：请在「模型」（配音）中下载，或选择其他引擎。
+render-audio8-load-failed = Audio8 TTS 加载失败：{ $error }
+render-audio8-model-missing = Audio8 TTS 尚未下载（{ $path }）：请在"设置 → 模型 → 配音"中下载。
+setup-comp-audio8-purpose = 紧凑的多语言语音，支持零样本克隆；可选的配音引擎。
 speech-voice-not-preset = 声音“{ $voice }”来自声音库，而 { $engine } 只能使用自带的声音：请为项目、说话人或段落选择其中之一。
 speech-voice-preset-needed = 此引擎需要使用其自带的声音之一。
 setup-comp-supertonic3-purpose = Supertonic 3：十个现成声音、31 种语言的快速配音，不支持克隆

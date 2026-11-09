@@ -1114,6 +1114,10 @@ speech-export-encoding = Encodage de la partie { $n } sur { $total }
 
 render-supertonic-missing = Supertonic 3 est choisi mais pas téléchargé : téléchargez-le dans Modèles (voix) ou choisissez un autre moteur.
 render-supertonic-load-failed = Supertonic 3 ne s’est pas chargé : { $error }
+render-audio8-missing = Audio8 TTS est choisi mais pas téléchargé : téléchargez-le dans Modèles (voix) ou choisissez un autre moteur.
+render-audio8-load-failed = Audio8 TTS ne s’est pas chargé : { $error }
+render-audio8-model-missing = Audio8 TTS n’est pas téléchargé ({ $path }) : téléchargez-le dans Paramètres → Modèles → Voix.
+setup-comp-audio8-purpose = Voix multilingue compacte avec clonage zero-shot ; un moteur de voix alternatif.
 speech-voice-not-preset = La voix « { $voice } » vient de la bibliothèque, et { $engine } ne parle qu’avec ses propres voix : choisissez-en une pour le projet, le locuteur ou le bloc.
 speech-voice-preset-needed = Ce moteur a besoin d’une de ses propres voix.
 setup-comp-supertonic3-purpose = Supertonic 3 : voix rapide avec dix voix prêtes et 31 langues, sans clonage

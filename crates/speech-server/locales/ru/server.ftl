@@ -1141,6 +1141,10 @@ speech-export-encoding = Кодирую часть { $n } из { $total }
 
 render-supertonic-missing = Supertonic 3 выбран, но не скачан: скачайте его в «Модели» (озвучка) или выберите другой движок.
 render-supertonic-load-failed = Supertonic 3 не загрузился: { $error }
+render-audio8-missing = Audio8 TTS выбран, но не скачан: скачайте его в «Модели» (озвучка) или выберите другой движок.
+render-audio8-load-failed = Audio8 TTS не загрузился: { $error }
+render-audio8-model-missing = Audio8 TTS не скачан ({ $path }): скачайте его в «Настройки → Модели → Озвучка».
+setup-comp-audio8-purpose = Компактный мультиязычный голос с клонированием по образцу; альтернативный движок озвучки.
 speech-voice-not-preset = Голос «{ $voice }» — из библиотеки, а { $engine } говорит только своими голосами: выберите один из них для проекта, спикера или блока.
 speech-voice-preset-needed = Этому движку нужен один из его собственных голосов.
 setup-comp-supertonic3-purpose = Supertonic 3: быстрая озвучка десятью готовыми голосами на 31 языке, без клона

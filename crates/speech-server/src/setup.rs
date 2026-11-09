@@ -998,6 +998,21 @@ pub fn manifest() -> Vec<Component> {
             external_url: None,
         },
         Component {
+            id: "audio8",
+            name: "Audio8 TTS (Realistic-Air 0.6B, Q8_0)".into(),
+            purpose: t!("setup-comp-audio8-purpose"),
+            requirement: Requirement::Optional,
+            delivery: Delivery::Download,
+            size: 1_495_693_728,
+            files: &[
+                FileSpec { url: "https://huggingface.co/Hansda/Audio8-TTS-Realistic-Air-GGUF/resolve/10f8bcf54be8b20b53abaaa1a074a62b34089ab2/Audio8-TTS-Realistic-Air-Q8_0.gguf", dest_rel: "models/audio8/Audio8-TTS-Realistic-Air-Q8_0.gguf", size: 1_495_693_728, sha256: "b679845dbced6cbf6d4642c7260372dc2c422d96e0e568eaac860a778dd7702e", extract: Extract::None },
+            ],
+            markers: &[
+                Marker { rel: "models/audio8/Audio8-TTS-Realistic-Air-Q8_0.gguf", expect: 1_495_693_728 },
+            ],
+            external_url: None,
+        },
+        Component {
             id: "higgs-engine",
             name: t!("setup-comp-higgs-engine-name"),
             purpose: t!("setup-comp-higgs-engine-purpose"),
@@ -1775,7 +1790,7 @@ pub fn windows_downloads() -> Vec<Download> {
 }
 
 /// The components only audiocpp_server runs: its program and the models no other engine of the studio reads.
-const SERVER_ONLY: &[&str] = &["higgs-engine", "higgs", "higgs-q6_k", "higgs-q4_k_m", "supertonic3", "crisperwhisper-turbo"];
+const SERVER_ONLY: &[&str] = &["higgs-engine", "higgs", "higgs-q6_k", "higgs-q4_k_m", "supertonic3", "audio8", "crisperwhisper-turbo"];
 
 // ── Статус одного компонента ────────────────────────────────────────────────
 
@@ -1871,6 +1886,7 @@ fn vram_estimate(id: &str) -> u64 {
         "parakeet-ultra" => gb(1.1),
         "asr-gguf-nemotron" => gb(1.5),
         "supertonic3" => gb(0.6),
+        "audio8" => gb(1.5),
         "qwen3-tts" => gb(2.8),
         "qwen3-tts-q8_0" => gb(3.7),
         "qwen3-tts-ru-stress" => gb(0.1),

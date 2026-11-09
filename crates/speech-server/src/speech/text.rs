@@ -13,6 +13,7 @@ pub(super) fn adapter(engine: &str) -> Adapter {
         },
         crate::engines::qwen_tts::ENGINE_STRESS => Adapter::Plain { acute: true, own: &[] },
         crate::engines::qwen_tts::ENGINE => Adapter::Plain { acute: false, own: &[] },
+        crate::engines::audio8::ENGINE => Adapter::Plain { acute: false, own: &[] },
         _ => Adapter::Higgs,
     }
 }
@@ -62,5 +63,13 @@ mod tests {
             );
             assert!(!ignored.stress && ignored.unknown_tags.len() == 2, "{engine}: {ignored:?}");
         }
+    }
+
+    #[test]
+    fn audio8_is_given_the_text_without_stress_marks_or_tags() {
+        let (q, ignored) = for_engine("Он зашёл в з+амок <|emotion:happy|> [laughs] сразу.", "ru", crate::engines::audio8::ENGINE);
+        assert!(q.contains("замок"), "{q}");
+        assert!(!q.contains('+') && !q.contains('\u{301}') && !q.contains("<|") && !q.contains("[laughs]"), "{q}");
+        assert!(ignored.stress && ignored.unknown_tags.len() == 2, "{ignored:?}");
     }
 }

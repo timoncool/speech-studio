@@ -55,6 +55,8 @@ fn load(p: &SpeechPaths, engine: &str, voice: Option<&str>, lang: &str) -> Resul
         tts_host::supertonic(&p.repo_root, &p.models_root)?;
     } else if crate::engines::qwen_tts::is_engine(engine) {
         tts_host::qwen(&p.models_root, clones, engine == crate::engines::qwen_tts::ENGINE_STRESS)?;
+    } else if engine == crate::engines::audio8::ENGINE {
+        tts_host::audio8(&p.repo_root, &p.models_root)?;
     } else if engine == "higgs" {
         tts_host::higgs(&p.repo_root, &p.models_root)?;
     }
@@ -149,6 +151,8 @@ pub(crate) fn engine_tag(p: &SpeechPaths, project: &SpeechProject, engine: &str)
         crate::engines::models::DRAMA_TTS.to_string()
     } else if engine == crate::engines::supertonic::ENGINE {
         format!("{}:int8", crate::engines::supertonic::ENGINE)
+    } else if engine == crate::engines::audio8::ENGINE {
+        format!("{}:q8_0", crate::engines::audio8::ENGINE)
     } else if crate::engines::qwen_tts::is_engine(&engine) {
         format!("{}:{}", engine, crate::engines::models::qwen_quant(&p.models_root))
     } else {
@@ -403,6 +407,8 @@ fn synth_block_with(p: &SpeechPaths, pid: &str, project: &SpeechProject, b: &Blo
         tts_host::supertonic(&p.repo_root, &p.models_root)?
     } else if crate::engines::qwen_tts::is_engine(own) {
         tts_host::qwen(&p.models_root, preset.is_none(), own == crate::engines::qwen_tts::ENGINE_STRESS)?
+    } else if own == crate::engines::audio8::ENGINE {
+        tts_host::audio8(&p.repo_root, &p.models_root)?
     } else {
         tts_host::higgs(&p.repo_root, &p.models_root)?
     };
@@ -1134,7 +1140,8 @@ fn synth_scope(p: &SpeechPaths, pid: &str, scope: &Scope, progress: &dyn Fn(Valu
     let mut builds: Vec<&str> = Vec::new();
     let higgs = used.contains(&"higgs") && crate::engines::acpp::higgs_gguf(&p.models_root).is_file();
     let supertonic = used.contains(&crate::engines::supertonic::ENGINE) && crate::engines::supertonic::installed(&p.models_root);
-    if higgs || supertonic {
+    let audio8 = used.contains(&crate::engines::audio8::ENGINE) && crate::engines::audio8::installed(&p.models_root);
+    if higgs || supertonic || audio8 {
         let build = crate::engines::acpp::build_for(crate::engines::models::server_choice(&p.models_root, "tts_backend"))?;
         builds.push(crate::engines::acpp::component(build));
         builds.extend(crate::engines::acpp::runtime_component(build));

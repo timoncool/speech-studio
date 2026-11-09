@@ -28,6 +28,7 @@ pub enum Tts {
     Drama(Arc<drama::DramaEngine>),
     Supertonic(Arc<crate::engines::supertonic::Model>),
     Qwen(Arc<crate::engines::qwen_tts::Engine>),
+    Audio8(Arc<crate::engines::audio8::Model>),
 }
 
 impl Tts {
@@ -38,6 +39,7 @@ impl Tts {
             Tts::Drama(e) => e.cancel(),
             Tts::Supertonic(_) => {}
             Tts::Qwen(e) => e.cancel(),
+            Tts::Audio8(e) => e.cancel(),
         }
     }
 
@@ -47,6 +49,7 @@ impl Tts {
             Tts::Drama(_) => "Drama 3",
             Tts::Supertonic(_) => "Supertonic 3",
             Tts::Qwen(_) => "Qwen3-TTS",
+            Tts::Audio8(_) => "Audio8 TTS",
         }
     }
 
@@ -56,6 +59,7 @@ impl Tts {
             Tts::Drama(e) => Arc::strong_count(e) > 1,
             Tts::Supertonic(e) => Arc::strong_count(e) > 1,
             Tts::Qwen(e) => Arc::strong_count(e) > 1,
+            Tts::Audio8(e) => Arc::strong_count(e) > 1,
         }
     }
 }
@@ -219,6 +223,29 @@ pub fn supertonic(repo_root: &Path, models_root: &Path) -> Result<Tts, String> {
     *slot = Some((key, Tts::Supertonic(e.clone())));
     touch();
     Ok(Tts::Supertonic(e))
+}
+
+
+/// Audio8 TTS на сервере audio.cpp, на сборке устройства озвучки (`tts_backend`); другая модель озвучки выгружается.
+pub fn audio8(repo_root: &Path, models_root: &Path) -> Result<Tts, String> {
+    let build = crate::engines::acpp::build_for(crate::engines::models::server_choice(models_root, "tts_backend"))?;
+    let key = format!("{}:{}", crate::engines::audio8::ENGINE, crate::engines::models::build_name(build));
+    let mut slot = host();
+    if let Some((k, Tts::Audio8(e))) = slot.as_ref() {
+        if *k == key {
+            touch();
+            return Ok(Tts::Audio8(e.clone()));
+        }
+    }
+    *slot = None;
+    if !crate::engines::audio8::installed(models_root) {
+        return Err(t!("render-audio8-missing"));
+    }
+    let e = Arc::new(crate::engines::audio8::Model::load(repo_root, models_root).map_err(|e| t!("render-audio8-load-failed", error = e))?);
+    tracing::info!("voicing: Audio8 TTS on audiocpp_server {:?}", e.backend());
+    *slot = Some((key, Tts::Audio8(e.clone())));
+    touch();
+    Ok(Tts::Audio8(e))
 }
 
 
@@ -560,6 +587,18 @@ fn run_guarded(engine: &Tts, call: Call, timeout: Duration, live: Option<Arc<cra
         let mut streamed = false;
         let r = match (&eng, rw) {
             (Tts::Higgs(e), rw) => {
+                streamed = live.is_some();
+                let sr = e.sample_rate();
+                serde_json::from_str::<serde_json::Map<String, Value>>(&op).map_err(|e| e.to_string()).and_then(|opts| {
+                    e.speak(&t, rw.as_deref(), rt.as_deref(), opts, &mut |piece| {
+                        if let Some(phrase) = &live {
+                            phrase.chunk(piece, sr);
+                        }
+                    })
+                    .map(|samples| (samples, sr as i32))
+                })
+            }
+            (Tts::Audio8(e), rw) => {
                 streamed = live.is_some();
                 let sr = e.sample_rate();
                 serde_json::from_str::<serde_json::Map<String, Value>>(&op).map_err(|e| e.to_string()).and_then(|opts| {

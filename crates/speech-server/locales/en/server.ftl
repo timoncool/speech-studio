@@ -1120,6 +1120,10 @@ speech-export-encoding = Encoding part { $n } of { $total }
 
 render-supertonic-missing = Supertonic 3 is chosen but not downloaded: download it in Models (voicing) or choose another engine.
 render-supertonic-load-failed = Supertonic 3 did not load: { $error }
+render-audio8-missing = Audio8 TTS is chosen but not downloaded: download it in Models (voicing) or choose another engine.
+render-audio8-load-failed = Audio8 TTS did not load: { $error }
+render-audio8-model-missing = Audio8 TTS is not downloaded ({ $path }): download it in Settings → Models → Voicing.
+setup-comp-audio8-purpose = Compact multilingual voice with zero-shot cloning; an alternative voicing engine.
 speech-voice-not-preset = The voice “{ $voice }” is from the library, and { $engine } speaks only in its own voices: choose one of them for the project, the speaker or the block.
 speech-voice-preset-needed = This engine needs one of its own voices.
 setup-comp-supertonic3-purpose = Supertonic 3: fast voicing in ten ready voices and 31 languages, no cloning
