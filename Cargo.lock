@@ -206,7 +206,7 @@ checksum = "1254ebf6529f3763c491acfb5ab6e960809e3c75a38584cc664f8c5667fb7107"
 [[package]]
 name = "audio-post"
 version = "0.1.0"
-source = "git+https://github.com/timoncool/YuE2-Studio?rev=ce206f1ac5089daecead8d5cfccc60f533db78b3#ce206f1ac5089daecead8d5cfccc60f533db78b3"
+source = "git+https://github.com/timoncool/YuE2-Studio?rev=a9924fbe415443fc33a0016f8acb61af5444e470#a9924fbe415443fc33a0016f8acb61af5444e470"
 dependencies = [
  "anyhow",
  "audioadapter",

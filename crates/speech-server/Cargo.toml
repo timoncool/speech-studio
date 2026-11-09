@@ -71,7 +71,7 @@ sha2 = "0.11"
 # Studio Hub: anonymous statistics and the news feed (telemetry only after the first-run screen showed its choice).
 vs-providers = { git = "https://github.com/timoncool/videosos", rev = "03eabb3d4dbcaa345d81ce196e9c8b7ec7264c8a" }
 # FLAC (libFLAC) and MP3 (LAME) encoders and their tags, as the music studios write them
-audio-post = { git = "https://github.com/timoncool/YuE2-Studio", rev = "ce206f1ac5089daecead8d5cfccc60f533db78b3" }
+audio-post = { git = "https://github.com/timoncool/YuE2-Studio", rev = "a9924fbe415443fc33a0016f8acb61af5444e470" }
 lofty = "0.25.4"
 studio-hub-client = { git = "https://github.com/timoncool/studio-hub-client", rev = "365c2b757bfddd45fff67e7264b41f4f961a0032" }
 # чистка текста перед синтезом (tts_text.rs): теги звуков, разметка, метки спикеров.
