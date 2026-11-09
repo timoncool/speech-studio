@@ -547,13 +547,17 @@ pub async fn listen_start(State(st): State<AppState>, headers: HeaderMap, body: 
     // the echo guard `gate` keeps the studio from hearing itself by the owner's voice: the gate is armed for that too
     let guard = crate::speech::floor_settings::guard(&st.models_root);
     let owner_guard = guard == crate::speech::floor_settings::Guard::Gate;
-    let gate_on = gate_cfg.enabled || owner_guard || gate_cfg.wake_word.as_deref().map(str::trim).is_some_and(|w| !w.is_empty());
+    let gate_on = crate::voice_gate::live_gate_on(&st.models_root, owner_guard);
     let guarding = json!({
         "mode": guard.as_str(),
         "owner_gate": owner_guard && crate::voice_gate::enrolled(&st.models_root),
         "problem": (owner_guard && !crate::voice_gate::enrolled(&st.models_root)).then(|| t!("echo-guard-no-owner")),
     });
-    crate::voice_gate::guard_owner(owner_guard);
+    // a print of an earlier version is not used: the gate the person turned on lets every phrase through, and they hear so
+    let gate_problem = (gate_cfg.enabled && crate::voice_gate::stale(&st.models_root)).then(|| t!("voice-gate-stale"));
+    if gate_problem.is_some() {
+        tracing::warn!("voice gate: the owner's print is of an earlier version and is not used; every phrase passes");
+    }
     // the microphone is on already (the person turned it on): this conversation listens to it too, and a recogniser
     // named here hears its next phrase while the microphone goes on recording
     if let Some(pid) = crate::listening::recording().filter(|_| crate::listening::recognition::state()["running"] == true) {
@@ -569,10 +573,10 @@ pub async fn listen_start(State(st): State<AppState>, headers: HeaderMap, body: 
                 Err(e) => return refuse(StatusCode::INTERNAL_SERVER_ERROR, "internal", e.to_string()),
             }
         }
+        crate::voice_gate::arm_live(&st.models_root, owner_guard);
         watch_interruptions(st.workspace, st.models_root, st.jobs);
-        crate::voice_gate::arm(gate_on);
         let (asr, lang) = crate::listening::recognition::engine().unwrap_or_default();
-        return Json(json!({ "pid": pid, "live": true, "joined": true, "asr": asr, "lang": lang, "gate": gate_on, "echo_guard": guarding })).into_response();
+        return Json(json!({ "pid": pid, "live": true, "joined": true, "asr": asr, "lang": lang, "gate": gate_on, "gate_problem": gate_problem, "echo_guard": guarding })).into_response();
     }
     // the microphone is the person's: an agent listens to a conversation the person started and never turns it on
     if crate::app::agent::by_agent(&headers) {
@@ -584,9 +588,17 @@ pub async fn listen_start(State(st): State<AppState>, headers: HeaderMap, body: 
     }
     *HUSHED_AT.lock().unwrap_or_else(|p| p.into_inner()) = None;
     super::floor::new_conversation();
+    crate::voice_gate::arm_live(&st.models_root, owner_guard);
     watch_interruptions(st.workspace, st.models_root, st.jobs);
-    crate::voice_gate::arm(gate_on);
-    started
+    let Some(problem) = gate_problem else { return started };
+    let (parts, body) = started.into_parts();
+    match axum::body::to_bytes(body, usize::MAX).await.map_err(|e| e.to_string()).and_then(|b| serde_json::from_slice::<Value>(&b).map_err(|e| e.to_string())) {
+        Ok(mut answer) => {
+            answer["gate_problem"] = json!(problem);
+            (parts.status, Json(answer)).into_response()
+        }
+        Err(e) => refuse(StatusCode::INTERNAL_SERVER_ERROR, "internal", e),
+    }
 }
 
 /// A one-shot partial this long is already clearly a turn, not a cough or a stray word, and cuts the studio off at once.
@@ -735,7 +747,7 @@ pub async fn listen_next(axum::extract::Query(q): axum::extract::Query<HashMap<S
 /// An agent may turn it off too: only turning it on is the person's.
 pub async fn listen_stop(State(st): State<AppState>) -> Response {
     LISTENING.store(false, std::sync::atomic::Ordering::Relaxed);
-    crate::voice_gate::arm(false);
+    crate::voice_gate::disarm_live();
     crate::voice_gate::guard_owner(false);
     let stopped = crate::listening::http::record_stop(State(st)).await;
     if !stopped.status().is_success() {
@@ -883,7 +895,7 @@ mod tests {
     }
 
     /// Lines heard in a conversation whose second 0 was a minute ago, while the studio said a phrase from its 20th to
-    /// its 26th second (scenarios 4 and 9 of TZ-LIVE-TRAINER).
+    /// its 26th second.
     fn eight_phrases(now: Instant) -> Instant {
         let zero = now - Duration::from_secs(60);
         SAID.lock().unwrap().push((zero + Duration::from_secs(19), "s-eight".into(), "b-eight".into(), "Сегодня мы поговорим о том, как устроен голосовой тренажёр.".into()));
@@ -950,7 +962,7 @@ mod tests {
         crate::listening::recognition::end_for_test();
     }
 
-    /// Scenario 1: a stop cuts off the phrase whose sound still plays (voiced already) and the ones not voiced yet; the
+    /// A stop cuts off the phrase whose sound still plays (voiced already) and the ones not voiced yet; the
     /// phrase heard to its end stays said.
     #[test]
     fn a_stop_marks_the_phrase_still_sounding_as_interrupted() {

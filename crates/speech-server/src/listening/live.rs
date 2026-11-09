@@ -222,7 +222,8 @@ impl Intake {
         let from = self.taken as f64 / sr as f64;
         self.taken += chunk.len();
         let to = self.taken as f64 / sr as f64;
-        if !guarded {
+        // a muted microphone is silence already: nothing of the studio's is held back in it
+        if !guarded || chunk.iter().all(|s| *s == 0.0) {
             return chunk;
         }
         let (began, ended) = (self.zero + Duration::from_secs_f64(from), self.zero + Duration::from_secs_f64(to));
@@ -420,8 +421,12 @@ fn listen(choice: crate::engines::models::AsrChoice, models_root: &Path, lang: &
         let now = std::time::Instant::now();
         let mode = match guard {
             Some((at, g)) if now.duration_since(at) < Duration::from_secs(1) => g,
-            _ => {
+            before => {
                 let g = crate::speech::floor_settings::guard(models_root);
+                // the owner's-voice half of the guard follows a change of it as the half-duplex does
+                if before.is_some_and(|(_, was)| was != g) && crate::voice_gate::live() {
+                    crate::voice_gate::arm_live(models_root, g == crate::speech::floor_settings::Guard::Gate);
+                }
                 guard = Some((now, g));
                 g
             }
@@ -620,7 +625,7 @@ mod tests {
         assert_eq!(to_16k(&x[..10], 16_000).len(), 10);
     }
 
-    /// Scenarios 10 and 11 of TZ-LIVE-TRAINER: while the studio speaks its sound coming back is held back, the person
+    /// While the studio speaks its sound coming back is held back, the person
     /// speaking over it is heard at once, quieter sounds of theirs right after too; with headphones (no sound coming
     /// back) a quiet voice is heard at the same setting.
     #[test]
@@ -655,8 +660,7 @@ mod tests {
         assert!(heard[11..19].iter().all(|h| !*h), "recorded while the studio spoke: {heard:?}");
     }
 
-    /// The studio's voice comes back from the room at its own level (on the recordings of 08.11 a median of −48 dB
-    /// against the sound sent; −58 dB with the window at 0.3); once the half-duplex has heard it, a person speaking
+    /// The studio's voice comes back from the room at its own level, far under the sound sent; once the half-duplex has heard it, a person speaking
     /// 30 dB under the sound sent is heard over it, though under the −18 dB it starts from — the window's volume and
     /// the microphone's gain are in what it measured.
     #[test]
@@ -673,6 +677,20 @@ mod tests {
         assert!(!d.passes(level(-45.0), studio, at(3_500)), "its echo is still held back after the hold");
         let mut fresh = Duplex::default();
         assert!(!fresh.passes(level(-20.0), studio, at(0)), "before it has heard the room it starts from −18 dB");
+    }
+
+    /// A muted microphone is silence already: nothing of it is counted as the studio's sound held back.
+    #[test]
+    fn a_muted_microphone_is_not_counted_as_echo_held_back() {
+        let _slot = crate::speech::FLOOR_SLOT.blocking_lock();
+        crate::speech::unduck_for_test();
+        let zero = std::time::Instant::now() - Duration::from_secs(25);
+        crate::speech::level_for_test(zero, zero + Duration::from_secs(1), 0.1);
+        let mut intake = Intake::new(zero, 0.0);
+        for _ in 0..10 {
+            intake.take(vec![0.0; 1_600], 16_000, true);
+        }
+        assert!(intake.held.is_empty(), "{:?}", intake.held);
     }
 
     /// The owner's voice gate hears the phrase's speech only: the pieces the half-duplex held back (silence put in

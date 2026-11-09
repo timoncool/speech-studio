@@ -591,6 +591,9 @@ pub struct Synth {
 }
 
 pub struct Request<'a> {
+    /// How much the asked speed stretches speech (`pace_of`), 1 for an engine that reads no speed: the guard's limits
+    /// of a cut-off and a runaway take follow it.
+    pub pace: f64,
     pub text: &'a str,
     pub lang: &'a str,
     pub ref_wav: Option<&'a Path>,
@@ -846,7 +849,7 @@ pub fn synth(engine: &Tts, req: &Request) -> Result<Synth, String> {
         if aloud {
             return Ok(Synth { samples, sr, seed, temperature, defects, seconds, flawed: None });
         }
-        match defect(&samples, sr, chars, pace_lang(req.text, req.lang), pace_of(p.speed)) {
+        match defect(&samples, sr, chars, pace_lang(req.text, req.lang), req.pace) {
             None => return Ok(Synth { samples, sr, seed, temperature, defects, seconds, flawed: None }),
             Some(kind) => {
                 // each rejected take is named in the log with what it was measured by: a guard that turns takes away
@@ -857,8 +860,8 @@ pub fn synth(engine: &Tts, req: &Request) -> Result<Synth, String> {
                     engine.name(),
                     attempt + 1,
                     samples.len() as f64 / sr.max(1) as f64,
-                    chars as f64 * CUTOFF_PER_CHAR * pace_of(p.speed).min(1.0),
-                    runaway_secs(chars, pace_lang(req.text, req.lang)) * pace_of(p.speed).max(1.0),
+                    chars as f64 * CUTOFF_PER_CHAR * req.pace.min(1.0),
+                    runaway_secs(chars, pace_lang(req.text, req.lang)) * req.pace.max(1.0),
                 );
                 defects.push(kind);
                 // a take that has speech in it is kept as a candidate: when every attempt is turned away the least

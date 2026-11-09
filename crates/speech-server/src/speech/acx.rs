@@ -35,10 +35,7 @@ fn db(x: f64) -> f64 {
 }
 
 fn rms(x: &[f32]) -> f64 {
-    if x.is_empty() {
-        return 0.0;
-    }
-    (x.iter().map(|v| (*v as f64) * (*v as f64)).sum::<f64>() / x.len() as f64).sqrt()
+    super::live::rms(x) as f64
 }
 
 /// Окна по 50 мс: тихие ли они.

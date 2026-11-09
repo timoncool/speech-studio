@@ -1012,6 +1012,7 @@ say-hushed = a pessoa parou a fala na janela: espere a próxima frase dela antes
 live-metrics-bad-range = Não é um número de linha: { $value }
 say-no-floor = Agora ninguém fala por cima do estúdio: não há depois do quê continuar
 echo-guard-no-owner = A proteção contra eco pela sua voz precisa da sua voz gravada (Configurações, filtro de voz): até lá o estúdio evita ouvir a si mesmo só pelo volume e pelas próprias palavras
+voice-gate-stale = Sua voz foi gravada por uma versão anterior e não é usada: grave-a de novo (Configurações, filtro de voz). Até lá o filtro de voz deixa passar todas as frases
 say-mic-off = o microfone está desligado: a pessoa o liga no Live e então voice_listen a ouve
 mic-only-person = só a pessoa liga o microfone, pelo botão no estúdio
 listen-gguf-missing = O modelo de reconhecimento «{ $engine }» não foi baixado: baixe-o com o motor transcribe.cpp em Configurações → Modelos.

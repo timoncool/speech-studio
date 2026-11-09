@@ -231,7 +231,7 @@ pub fn hold(n: u64, wait: Duration, speaking: impl Fn() -> bool + Send + 'static
 }
 
 /// GET /speech/listen/floor?after=N&seconds=S — the times the person spoke over the studio after the first N, waiting up
-/// to S seconds (at most 55) for one.
+/// to S seconds (at most 55) for one; `heard` is the number of the last event, so the next call asks after it.
 pub async fn voice_floor(Query(q): Query<HashMap<String, String>>) -> Json<Value> {
     let after: u64 = q.get("after").and_then(|v| v.parse().ok()).unwrap_or(0);
     let seconds: u64 = q.get("seconds").and_then(|v| v.parse().ok()).unwrap_or(30).min(55);
@@ -239,7 +239,7 @@ pub async fn voice_floor(Query(q): Query<HashMap<String, String>>) -> Json<Value
     loop {
         let (events, heard, waiting) = {
             let all = floors();
-            (all.iter().filter(|f| f.n > after).map(Floor::json).collect::<Vec<_>>(), all.len(), all.iter().rev().find(|f| f.decided.is_none()).map(|f| f.n))
+            (all.iter().filter(|f| f.n > after).map(Floor::json).collect::<Vec<_>>(), LAST.load(std::sync::atomic::Ordering::Relaxed), all.iter().rev().find(|f| f.decided.is_none()).map(|f| f.n))
         };
         if !events.is_empty() || Instant::now() >= until {
             return Json(json!({ "events": events, "heard": heard, "pending": waiting }));
@@ -279,7 +279,7 @@ mod tests {
         voice_floor(Query(HashMap::from([("after".to_string(), after.to_string()), ("seconds".to_string(), "0".to_string())]))).await.0
     }
 
-    /// Scenario 1 of TZ-LIVE-TRAINER: in agent mode the event reaches the agent and the studio goes on until it stops it.
+    /// In agent mode the event reaches the agent and the studio goes on until it stops it.
     #[tokio::test]
     async fn the_agent_hears_the_person_speak_over_it_and_stops_the_studio_itself() {
         let _slot = TEST_SLOT.lock().await;
@@ -303,7 +303,7 @@ mod tests {
         assert_eq!(agent_decides("continue"), None, "nothing waits any more");
     }
 
-    /// Scenario 3: in agent mode with no word from the agent the studio stops itself after the wait, told as auto.
+    /// In agent mode with no word from the agent the studio stops itself after the wait, told as auto.
     #[tokio::test]
     async fn with_no_word_from_the_agent_the_studio_stops_after_the_wait() {
         let _slot = TEST_SLOT.lock().await;
@@ -379,9 +379,13 @@ mod tests {
         new_conversation();
         let got = events(0).await;
         assert_eq!(got["events"], json!([]), "{got}");
-        assert_eq!(got["heard"], 0);
+        assert_eq!(got["heard"], old, "the next call asks after the last number");
         let new = raise("а теперь вот что", 4, None, Mode::Agent);
         assert!(new > old, "an event of the new conversation is not one the old wait can decide");
+        let after_heard = events(got["heard"].as_u64().unwrap()).await;
+        assert_eq!(after_heard["events"].as_array().unwrap().len(), 1, "{after_heard}");
+        assert_eq!(after_heard["heard"], new);
+        assert_eq!(events(new).await["events"], json!([]), "asked after the last one heard, nothing comes again");
         tokio::time::sleep(Duration::from_millis(250)).await;
         assert!(!cut.load(Ordering::Relaxed), "the old wait cut nothing");
         assert_eq!(events(0).await["events"][0]["decided"], Value::Null, "the new event waits for the agent");

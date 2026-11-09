@@ -74,6 +74,20 @@ fn median(xs: &[i64]) -> Option<i64> {
     }
 }
 
+/// Seconds the `spans` (start, end) cover, a stretch two of them share counted once.
+fn covered(mut spans: Vec<(f64, f64)>) -> f64 {
+    spans.retain(|(s, e)| e > s);
+    spans.sort_by(|x, y| x.0.total_cmp(&y.0));
+    let (mut busy, mut reach) = (0.0f64, f64::NEG_INFINITY);
+    for (s, e) in spans {
+        if e > reach {
+            busy += e - s.max(reach);
+            reach = e;
+        }
+    }
+    busy
+}
+
 /// The metrics of the person's `lines` (as `voice_lines` gives them), the studio's speech sounding over `studio`
 /// (seconds of the recording, in order), fillers from `fillers`. Lines of the studio's own voice heard back and typed
 /// lines are not speech of the person's and are only counted.
@@ -84,7 +98,7 @@ pub fn measure(lines: &[Value], studio: &[(f64, f64)], fillers: &[Vec<String>]) 
     spoken.sort_by(|a, b| a.start.total_cmp(&b.start));
     let timed: Vec<&Spoken> = spoken.iter().filter(|s| s.words.is_some()).collect();
     let words: usize = spoken.iter().map(Spoken::word_count).sum();
-    let speech_secs: f64 = spoken.iter().map(|s| (s.end - s.start).max(0.0)).sum();
+    let speech_secs: f64 = covered(spoken.iter().map(|s| (s.start, s.end)).collect());
     // the pace counts the lines with word timings only when there are any: a line's own edges hold the pause around it
     let (paced, pace_secs, wpm_source) = if timed.is_empty() {
         (words, speech_secs, "lines")
@@ -140,9 +154,10 @@ pub fn measure(lines: &[Value], studio: &[(f64, f64)], fillers: &[Vec<String>]) 
     let latencies: Vec<i64> = turns.iter().filter_map(|t| t["ms"].as_i64()).collect();
 
     let window = spoken.first().zip(spoken.last()).map(|(f, l)| (f.start, spoken.iter().map(|s| s.end).fold(l.end, f64::max)));
+    // neither speaking: the window less the union of the person's lines and the studio's speech, an overlap counted once
     let silence_secs = window.map(|(a, z)| {
-        let studio_in: f64 = studio.iter().map(|(sa, sz)| (sz.min(z) - sa.max(a)).max(0.0)).sum();
-        round2((z - a - speech_secs - studio_in).max(0.0))
+        let busy = covered(spoken.iter().map(|s| (s.start, s.end)).chain(studio.iter().map(|&(sa, sz)| (sa.max(a), sz.min(z)))).filter(|(s, e)| e > s).collect());
+        round2((z - a - busy).max(0.0))
     });
 
     json!({
@@ -233,7 +248,7 @@ mod tests {
         crate::audio::fillers::list(std::path::Path::new("no such folder")).unwrap()
     }
 
-    /// Scenario 7 of TZ-LIVE-TRAINER: pauses known to the millisecond come out within 50 ms.
+    /// Pauses known to the millisecond come out within 50 ms.
     #[test]
     fn pauses_inside_and_between_lines_match_the_known_ones() {
         let lines = [
@@ -259,7 +274,7 @@ mod tests {
         assert_eq!(m["start_latency"]["turns"][0]["line"], 3);
     }
 
-    /// Scenario 6: lines of a recogniser without word timings, echo and typed lines are measured without failing and
+    /// Lines of a recogniser without word timings, echo and typed lines are measured without failing and
     /// without timings made up for them.
     #[test]
     fn lines_without_words_echo_and_typed_ones_do_not_break_the_count() {
@@ -320,5 +335,14 @@ mod tests {
         assert_eq!(turns.len(), 1, "{m}");
         assert_eq!(turns[0]["studio_end"], 16.0);
         assert_eq!(turns[0]["ms"], 24000, "from the reply's end to the person's first word");
+    }
+
+    /// The person speaking over the studio is one stretch of speech, not two: the silence is what neither of them filled.
+    #[test]
+    fn speaking_over_the_studio_is_not_counted_twice_out_of_the_silence() {
+        let m = measure(&[line(1, &[("раз", 0.15, 3.85)]), line(2, &[("два", 9.15, 9.85)])], &[(3.0, 6.0)], &fillers());
+        // speech 0.15–3.85 and 9.15–9.85, the studio 3–6: 9.7 s, of them 6.55 s someone speaks
+        assert_eq!(m["silence_secs"], 3.15, "{m}");
+        assert_eq!(m["speech_secs"], 4.4);
     }
 }

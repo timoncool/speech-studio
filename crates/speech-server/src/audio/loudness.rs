@@ -246,7 +246,7 @@ mod tests {
     }
 
     /// Levelling a whole book holds its pieces, not copies of it: the memory `level` takes beyond the programme does
-    /// not grow with it (an eight-hour book once took tens of gigabytes and the export crashed).
+    /// not grow with it.
     #[test]
     #[ignore = "levels 12 minutes of sound: minutes in a debug build"]
     fn levelling_takes_the_same_memory_for_a_longer_programme() {

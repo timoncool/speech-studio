@@ -957,9 +957,8 @@ mod tests {
         ]);
     }
 
-    /// A book's scene breaks (`* * *`, 31 of 3196 blocks of the book of issue #24) became blocks voicing made nothing
-    /// of, and the book never got done: they are now a pause after the block before them, and such a block already in a
-    /// project is skipped, not waited for.
+    /// A book's scene breaks (`* * *`) are a pause after the block before them, not blocks voicing makes nothing of;
+    /// such a block already in a project is skipped, not waited for.
     #[test]
     fn a_scene_break_is_a_pause_not_a_block_to_voice() {
         let blocks = blocks_of("Первая сцена кончилась.\n\n* * *\n\nВторая началась.\n\n—\n\nИ кончилась.", "Р", None);

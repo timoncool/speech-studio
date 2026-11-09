@@ -334,6 +334,33 @@ pub fn guard_owner(on: bool) {
     OWNER_GUARD.store(on, Ordering::Relaxed);
 }
 
+/// Arms the gate for a Live conversation, or no longer (`live_gate_on`).
+pub fn arm_live(models_root: &Path, owner_guard: bool) {
+    LIVE.store(true, Ordering::Relaxed);
+    guard_owner(owner_guard);
+    arm(live_gate_on(models_root, owner_guard));
+}
+
+/// The Live conversation ended: the gate is no longer its.
+pub fn disarm_live() {
+    LIVE.store(false, Ordering::Relaxed);
+    arm(false);
+}
+
+/// Whether a Live conversation holds the gate.
+pub fn live() -> bool {
+    LIVE.load(Ordering::Relaxed)
+}
+
+static LIVE: AtomicBool = AtomicBool::new(false);
+
+/// Whether a Live conversation is gated: the person turned on the owner's-voice gate, set a wake word, or the echo
+/// guard keeps the studio from hearing itself by the owner's voice (`owner_guard`).
+pub fn live_gate_on(models_root: &Path, owner_guard: bool) -> bool {
+    let cfg = config(models_root);
+    cfg.enabled || owner_guard || cfg.wake_word.as_deref().map(str::trim).is_some_and(|w| !w.is_empty())
+}
+
 /// Whether a gated Live conversation is under way.
 pub fn is_armed() -> bool {
     ARMED.load(Ordering::Relaxed)

@@ -587,6 +587,71 @@ pub async fn export(State(st): State<AppState>, AxPath(pid): AxPath<String>, Jso
     }
 }
 
+/// A take as the window plays it: its voice effect, the clip's gain and fades over the kept part (`cut`, seconds), and
+/// with `level` (target LUFS, peak ceiling, dual mono — a project's loudness preset) the kept part brought to the
+/// loudness its exported file will have.
+fn take_as_played(samples: Vec<f32>, sr: u32, fx: Option<&str>, mix: &sp::Mix, cut: Option<[f64; 2]>, level: Option<(f64, f64, bool)>) -> Result<Vec<f32>, String> {
+    let mut done = match fx {
+        Some(fx) => crate::voices::fx::apply(&samples, sr, fx)?,
+        None => samples,
+    };
+    // the fades lie where the project's clip starts and ends in the file, so the window keeps seeking by the cut
+    let [a, z] = cut.unwrap_or([0.0, f64::INFINITY]);
+    let from = ((a * sr as f64) as usize).min(done.len());
+    let to = ((z * sr as f64) as usize).clamp(from, done.len());
+    mix.apply(&mut done[from..to], sr);
+    if let Some((target, peak, dual_mono)) = level {
+        // a take of silence has no loudness to bring anywhere: it plays as it is
+        if let Err(e) = crate::audio::loudness::level(&mut done[from..to], sr, target, peak, dual_mono) {
+            tracing::debug!("a take is played unlevelled: {e}");
+        }
+    }
+    Ok(done)
+}
+
+#[cfg(test)]
+mod take_tests {
+    use super::*;
+
+    fn quiet_speech(sr: u32) -> Vec<f32> {
+        (0..sr as usize * 3)
+            .map(|i| {
+                let t = i as f32 / sr as f32;
+                let env = if (t * 3.0) as u32 % 2 == 0 { 1.0 } else { 0.15 };
+                0.02 * env * ((t * 220.0 * std::f32::consts::TAU).sin() * 0.6 + (t * 1330.0 * std::f32::consts::TAU).sin() * 0.3)
+            })
+            .collect()
+    }
+
+    /// A quiet take plays in the window as loud as the project's preset makes its export, and the model's own samples
+    /// are what plays when no preset is asked for.
+    #[test]
+    fn a_quiet_take_plays_at_the_loudness_of_its_export() {
+        let sr = 24_000;
+        let raw = quiet_speech(sr);
+        let flat = sp::Mix { gain_db: 0.0, fade_in: 0.0, fade_out: 0.0 };
+        let before = crate::audio::loudness::integrated_lufs(&raw, sr).unwrap();
+        assert!(before < -30.0, "the take is quiet: {before}");
+        let as_is = take_as_played(raw.clone(), sr, None, &flat, None, None).unwrap();
+        assert_eq!(as_is, raw);
+        let (target, peak, _) = crate::speech::jobs::loudness("video").unwrap();
+        let played = take_as_played(raw.clone(), sr, None, &flat, None, Some((target, peak, true))).unwrap();
+        let mut exported = raw;
+        crate::audio::loudness::level(&mut exported, sr, target, peak, true).unwrap();
+        assert_eq!(played, exported, "the window plays what the export writes");
+        let after = crate::audio::loudness::integrated_lufs(&played, sr).unwrap();
+        assert!(after > before + 15.0, "{before} -> {after}");
+    }
+
+    /// Silence has nothing to level and plays as it is instead of failing the player.
+    #[test]
+    fn a_silent_take_plays_as_it_is() {
+        let flat = sp::Mix { gain_db: 0.0, fade_in: 0.0, fade_out: 0.0 };
+        let played = take_as_played(vec![0.0; 24_000], 24_000, None, &flat, None, Some((-14.0, -1.0, true))).unwrap();
+        assert!(played.iter().all(|v| *v == 0.0));
+    }
+}
+
 pub async fn take_file(State(st): State<AppState>, AxPath((pid, file)): AxPath<(String, String)>, axum::extract::Query(q): axum::extract::Query<std::collections::HashMap<String, String>>, req: axum::http::Request<axum::body::Body>) -> Response {
     if !sp::is_pid(&pid) || !safe_file(&file) {
         return refuse(StatusCode::BAD_REQUEST, "bad_request", file);
@@ -618,13 +683,25 @@ pub async fn take_file(State(st): State<AppState>, AxPath((pid, file)): AxPath<(
     if !sp::Mix::GAIN_DB.contains(&mix.gain_db) || mix.fade_in < 0.0 || mix.fade_out < 0.0 {
         return refuse(StatusCode::BAD_REQUEST, "bad_request", format!("gain {} fades {} {}", mix.gain_db, mix.fade_in, mix.fade_out));
     }
-    if fx.is_none() && mix.is_flat() {
+    // `level`: the project's loudness preset, so a take sounds in the window as loud as its exported file will; the
+    // take's own file stays as the model made it
+    let level = match q.get("level").filter(|l| !l.is_empty()) {
+        None => None,
+        Some(preset) => match crate::speech::jobs::loudness(preset) {
+            Some((target, peak, _)) => Some((target, peak, preset != "acx")),
+            None => return refuse(StatusCode::BAD_REQUEST, "bad_request", format!("level {preset}")),
+        },
+    };
+    if fx.is_none() && mix.is_flat() && level.is_none() {
         return crate::app::serve_file_range(&path, req, None).await;
     }
     let rendered = joined(
         tokio::task::spawn_blocking(move || -> Result<std::path::PathBuf, String> {
             let dir = path.parent().unwrap_or(Path::new(".")).join(".fx");
-            let recipe = format!("{fx:?} {mix:?} {cut:?}");
+            let recipe = match level {
+                Some(level) => format!("{fx:?} {mix:?} {cut:?} {level:?}"),
+                None => format!("{fx:?} {mix:?} {cut:?}"),
+            };
             let out = dir.join(format!("{file}.{}.wav", &blake3::hash(recipe.as_bytes()).to_hex()[..16]));
             let fresh = |o: &Path| std::fs::metadata(o).and_then(|m| m.modified()).ok() >= std::fs::metadata(&path).and_then(|m| m.modified()).ok();
             if out.is_file() && fresh(&out) {
@@ -635,15 +712,7 @@ pub async fn take_file(State(st): State<AppState>, AxPath((pid, file)): AxPath<(
             let wav = tmp.path().join("take.wav");
             crate::audio::media::extract_audio(&path, &wav, crate::speech::jobs::SR, 1)?;
             let (samples, sr) = crate::audio::wavio::read_mono_f32(&wav)?;
-            let mut done = match &fx {
-                Some(fx) => crate::voices::fx::apply(&samples, sr, fx)?,
-                None => samples,
-            };
-            // the fades lie where the project's clip starts and ends in the file, so the window keeps seeking by the cut
-            let [a, z] = cut.unwrap_or([0.0, f64::INFINITY]);
-            let from = ((a * sr as f64) as usize).min(done.len());
-            let to = ((z * sr as f64) as usize).clamp(from, done.len());
-            mix.apply(&mut done[from..to], sr);
+            let done = take_as_played(samples, sr, fx.as_deref(), &mix, cut, level)?;
             let part = out.with_extension("wav.part");
             crate::audio::wavio::write_mono_f32(&part, &done, sr)?;
             std::fs::rename(&part, &out).map_err(|e| format!("{}: {e}", out.display()))?;

@@ -469,6 +469,7 @@ fn synth_block_with(p: &SpeechPaths, pid: &str, project: &SpeechProject, b: &Blo
                         let styled = Some(b.direction.trim()).filter(|d| drama && !d.is_empty()).map(|d| format!("[{d}] {phrase}"));
                         let recommended = crate::engines::recommended_sampling(own, params);
                         let req = tts_host::Request {
+                            pace: if speeds { tts_host::pace_of(params.speed) } else { 1.0 },
                             text: styled.as_deref().unwrap_or(phrase),
                             lang,
                             ref_wav: reference.as_ref().map(|(w, _)| w.as_path()),
@@ -880,10 +881,16 @@ fn marked(qc: Option<crate::audio::qc::Check>, flawed: &[String]) -> Option<crat
     Some(check)
 }
 
+/// How much the speed `b` is asked at stretches its speech (`tts_host::pace_of`); 1 when its engine reads no speed.
+fn asked_pace(project: &SpeechProject, b: &Block) -> f64 {
+    let speeds = crate::engines::get(project.engine_of(b)).is_some_and(|m| m.params.iter().any(|s| s.key == "speed"));
+    if speeds { tts_host::pace_of(project.params_of(b).speed) } else { 1.0 }
+}
+
 /// The take's sound measured and the flags of `want` it raises (Dub Studio's synthesis defect first), over the part of
 /// the take the project uses; its expected length is counted on `spoken`, the take's text as the engine was given it,
-/// at the `speed` it was asked at, as the voicing guard counts it.
-fn sound_flags(take: &Take, spoken: &str, lang: &str, speed: f64, file: &Path, want: &[String], norm: crate::audio::flags::Norm) -> Result<(crate::audio::flags::Features, Vec<String>), String> {
+/// at the `pace` it was asked at (`asked_pace`), as the voicing guard counts it.
+fn sound_flags(take: &Take, spoken: &str, lang: &str, pace: f64, file: &Path, want: &[String], norm: crate::audio::flags::Norm) -> Result<(crate::audio::flags::Features, Vec<String>), String> {
     const SR: u32 = 24_000;
     let tmp = tempfile::Builder::new().prefix("flags-").tempdir().map_err(|e| e.to_string())?;
     let wav = tmp.path().join("take.wav");
@@ -901,7 +908,7 @@ fn sound_flags(take: &Take, spoken: &str, lang: &str, speed: f64, file: &Path, w
     let mut raised = crate::audio::flags::flags(&features, want, spoken, norm);
     if on("defect") {
         let chars = stx::visible(spoken).chars().filter(|c| c.is_alphanumeric()).count();
-        if let Some(d) = tts_host::defect(&samples, SR as i32, chars, lang, tts_host::pace_of(speed)) {
+        if let Some(d) = tts_host::defect(&samples, SR as i32, chars, lang, pace) {
             raised.insert(0, d.to_string());
         }
     }
@@ -989,7 +996,7 @@ fn check_takes(p: &SpeechPaths, pid: &str, made: &BTreeMap<String, Vec<u32>>, re
             };
             if !want.is_empty() {
                 let spoken = preparation::prepare(&take.text, &prep_opts(p, &project, project.lang_of(&b), project.engine_of(&b), voice.as_deref(), &entries, false)).map_err(|e| t!("stress-failed", detail = e))?.text;
-                let (features, raised) = sound_flags(take, &spoken, &lang, project.params_of(&b).speed, &file, &want, norm)?;
+                let (features, raised) = sound_flags(take, &spoken, &lang, asked_pace(&project, &b), &file, &want, norm)?;
                 check.speech_secs = Some(features.trimmed_s);
                 check.syllables = Some(crate::audio::flags::syllables(&spoken));
                 check.lufs = features.lufs;

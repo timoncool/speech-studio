@@ -174,6 +174,7 @@ pub fn design(p: &VoicePaths, description: &str, sample: &str, lang: &str, count
     for k in 0..count.clamp(1, DESIGN_MAX) {
         progress(json!({ "type": "progress", "stage": "voice_design", "msg": t!("voice-designing", n = (k + 1) as i64, total = count as i64), "pct": (k * 100 / count.max(1)) as i64 }));
         let req = crate::engines::tts_host::Request {
+            pace: 1.0,
             text: sample,
             lang,
             ref_wav: None,

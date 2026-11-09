@@ -811,6 +811,7 @@ say-hushed = 用户在窗口中停止了语音：请等待其下一句话后再�
 live-metrics-bad-range = 不是行号：{ $value }
 say-no-floor = 现在没有人打断工作室的讲话：没有需要继续的内容
 echo-guard-no-owner = 按你的声音防回声需要先录制你的声音（设置，声音门禁）：在此之前工作室只按音量和自己说过的话避免听到自己
+voice-gate-stale = 你的声音是旧版本录制的，不再使用：请重新录制（设置，声音门禁）。在此之前声音门禁放行所有语句
 say-mic-off = 麦克风已关闭：由用户在 Live 中打开，之后 voice_listen 才能听到
 mic-only-person = 只有用户本人能在程序中用按钮打开麦克风
 listen-gguf-missing = 识别模型「{ $engine }」尚未下载：请在「设置 → 模型」中下载它和 transcribe.cpp 引擎。

@@ -99,12 +99,12 @@ fn airing() -> std::sync::MutexGuard<'static, Airing> {
     AIR.get_or_init(|| Mutex::new(Airing { blocks: Vec::new(), until: None, levels: Default::default() })).lock().unwrap_or_else(|p| p.into_inner())
 }
 
-/// Root mean square of `samples`.
+/// Root mean square of `samples`, summed in f64 so an hour of sound keeps its precision.
 pub fn rms(samples: &[f32]) -> f32 {
     if samples.is_empty() {
         return 0.0;
     }
-    (samples.iter().map(|s| s * s).sum::<f32>() / samples.len() as f32).sqrt()
+    (samples.iter().map(|s| (*s as f64) * (*s as f64)).sum::<f64>() / samples.len() as f64).sqrt() as f32
 }
 
 /// How loud the sound said aloud is from `from` to `to` (the loudest of its pieces then, as the window plays it now:
@@ -426,7 +426,7 @@ mod tests {
         assert_eq!(playback_level(later, later + std::time::Duration::from_millis(100), std::time::Duration::ZERO), None);
     }
 
-    /// Scenario of TZ-LIVE-TRAINER F: a phrase not ready when the one before it ended is told by the silence heard
+    /// A phrase not ready when the one before it ended is told by the silence heard
     /// before it; a phrase ready in time, the session's first and one whose own text came late wait nothing of the queue.
     #[test]
     fn the_silence_before_a_phrase_that_was_not_ready_is_measured() {
