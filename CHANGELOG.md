@@ -15,6 +15,7 @@ release notes on GitHub are taken from the release's section.
 
 ### Changed
 
+- **An update of a component is shown as an update** — when a new version replaces an engine you already have, the start screen says «Components update» and names what is updated and why, instead of «First start».
 - **In Live the agent decides when you speak over it** — the studio turns its voice down and the agent stops or goes on (`voice_floor`, `say_continue`); with no word from it within 1.2 s the studio stops by itself. The setting "When you speak over the agent" in Live's voice tab chooses the agent, an immediate stop or none. A phrase cut off while it played is shown as interrupted.
 
 ### Fixed
