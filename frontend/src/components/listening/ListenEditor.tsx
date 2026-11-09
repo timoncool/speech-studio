@@ -19,7 +19,7 @@ import { CLOUD_ENGINE_NAMES, askCloud } from "../../lib/cloudConsent";
 import { bridgeError, flash } from "../../lib/mcpBridge";
 import Transcript, { type Selection } from "./Transcript";
 import EditorMore from "../EditorMore";
-import { RATES } from "../speech/Transport";
+import { RATES } from "../speech/rates";
 import ListenSettings from "./ListenSettings";
 import ListenExport from "./ListenExport";
 import ListenStats from "./ListenStats";

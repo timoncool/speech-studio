@@ -25,7 +25,8 @@ import { useVoices } from "../../lib/voices";
 import { comboOf, matches, typingIn, useShortcuts } from "../../lib/shortcuts";
 import EnrichDialog, { type EnrichChange } from "./EnrichDialog";
 import { cloudApi } from "../../lib/cloud";
-import Transport, { RATES, type TransportBlock } from "./Transport";
+import Transport, { type TransportBlock } from "./Transport";
+import { RATES } from "./rates";
 import { useStore } from "../../store";
 import { usePublishEditor } from "../../lib/editorBridge";
 import ErrorNote from "../ErrorNote";
@@ -78,6 +79,9 @@ export default function ProjectEditor({ pid, onBack }: { pid: string; onBack: ()
   const { t } = useTranslation();
   const { project, error, saving, edit, undo, redo, canUndo, canRedo, flush, reload } = useSpeechProject(pid);
   const [job, setJob] = useState<{ id: string; ids: string[] | null } | null>(null);
+  const latestProject = useRef(project);
+  const latestJob = useRef(job);
+  useEffect(() => { latestProject.current = project; latestJob.current = job; }, [project, job]);
   const [jobError, setJobError] = useState<string | null>(null);
   const [playing, setPlaying] = useState<string | null>(null);
   const [playingTake, setPlayingTake] = useState<number | null>(null);
@@ -209,16 +213,20 @@ export default function ProjectEditor({ pid, onBack }: { pid: string; onBack: ()
   const paid = project && (project.settings.engine === "fal" || project.settings.engine === "runware") && project.settings.cloud_model ? project.settings.engine : null;
   const paidBlocks = paid && project ? blocks.filter((b) => ["pending", "stale", "failed"].includes(stateOf(b)) && engineOf(project, b) === paid) : [];
   const paidChars = paidBlocks.reduce((n, b) => n + b.text.length, 0);
-  const [cost, setCost] = useState<{ usd: number | null; exact: boolean | null } | null>(null);
+  const [estimate, setCost] = useState<{ usd: number | null; exact: boolean | null } | null>(null);
+  const cost = paid && project && paidBlocks.length ? estimate : null;
+  const cloudModel = project?.settings.cloud_model;
+  const cloudValues = project?.settings.cloud_values;
+  const paidCount = paidBlocks.length;
   useEffect(() => {
-    if (!paid || !project || !paidBlocks.length) { setCost(null); return; }
+    if (!paid || cloudModel == null || !paidCount) return;
     let alive = true;
     const timer = window.setTimeout(() => {
-      cloudApi.estimate(paid, project.settings.cloud_model, project.settings.cloud_values ?? {}, paidBlocks.length, paidChars)
+      cloudApi.estimate(paid, cloudModel, cloudValues ?? {}, paidCount, paidChars)
         .then((c) => { if (alive) setCost(c); }, () => { if (alive) setCost(null); });
     }, 400);
     return () => { alive = false; window.clearTimeout(timer); };
-  }, [paid, project?.settings.cloud_model, project?.settings.cloud_values, paidBlocks.length, paidChars]);
+  }, [paid, cloudModel, cloudValues, paidCount, paidChars]);
   // the blocks a character's voice reaches: theirs, without a voice of their own
   const castBlocks = (speaker: string) => blocks.filter((b) => b.speaker === speaker && !b.voice && !b.hidden);
   const setCast = (speaker: string, v: string | null) => edit((p) => { if (v) p.cast[speaker] = v; else delete p.cast[speaker]; return p; });
@@ -330,9 +338,6 @@ export default function ProjectEditor({ pid, onBack }: { pid: string; onBack: ()
     const timer = window.setInterval(tick, 2000);
     return () => window.clearInterval(timer);
   }, [job, pid]);
-  const latestProject = useRef(project);
-  const latestJob = useRef(job);
-  useEffect(() => { latestProject.current = project; latestJob.current = job; }, [project, job]);
   useEffect(() => {
     if (playing || !queue.length) return;
     const advance = () => {

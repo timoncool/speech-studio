@@ -8,7 +8,7 @@ import { named } from "../../lib/a11y";
 import { useEscapeLayer } from "../../lib/escape";
 import { LANG_CHOICES } from "./langs";
 import VoicePicker from "./VoicePicker";
-import { PARAM_LABEL } from "./OwnParams";
+import { PARAM_LABEL } from "./paramLabel";
 import OpenRouterModelSelect from "../OpenRouterModelSelect";
 import CloudModelPicker from "../cloud/CloudModelPicker";
 import CloudForm from "../cloud/CloudForm";

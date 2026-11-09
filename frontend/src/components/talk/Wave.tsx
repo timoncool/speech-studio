@@ -10,8 +10,10 @@ export default function Wave({ state, level, className }: VisualProps) {
   const box = useRef<HTMLDivElement>(null);
   const stateRef = useRef(state);
   const levelRef = useRef(level);
-  stateRef.current = state;
-  levelRef.current = level;
+  useEffect(() => {
+    stateRef.current = state;
+    levelRef.current = level;
+  });
 
   useEffect(() => {
     const el = box.current;

@@ -87,9 +87,11 @@ export default function Bands({ look, state, bands, token, className }: VisualPr
   const stateRef = useRef(state);
   const bandsRef = useRef(bands);
   const tokenRef = useRef(token);
-  stateRef.current = state;
-  bandsRef.current = bands;
-  tokenRef.current = token;
+  useEffect(() => {
+    stateRef.current = state;
+    bandsRef.current = bands;
+    tokenRef.current = token;
+  });
 
   useEffect(() => {
     const el = canvas.current;

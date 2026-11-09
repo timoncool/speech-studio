@@ -96,6 +96,7 @@ export function useTalk({ fed }: { fed: boolean }) {
   }, []);
 
   const { waiting: fetching, caught } = useAfterDownload(setError);
+  const again = useRef<() => void>(() => undefined);
   const listen = useCallback(async () => {
     const { lang, device, asr } = talkPrefs();
     try {
@@ -103,9 +104,12 @@ export function useTalk({ fed }: { fed: boolean }) {
       setRunning(true);
       setMuted(false);
     } catch (e) {
-      if (!caught(e, () => { void listen(); })) setError(errorText(e));
+      if (!caught(e, () => again.current())) setError(errorText(e));
     }
   }, [caught]);
+  useEffect(() => {
+    again.current = () => { void listen(); };
+  }, [listen]);
 
   const toggleMic = useCallback(async () => {
     setError(null);

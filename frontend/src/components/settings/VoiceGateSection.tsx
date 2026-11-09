@@ -44,6 +44,7 @@ export default function VoiceGateSection() {
   const speechSecs = useRef(0);
   const elapsedSecs = useRef(0);
   const finishing = useRef(false);
+  const finish = useRef<() => void>(() => undefined);
   // the wake-word model downloads like any other component; its progress is shown here, not on another screen
   const setup = useSetupStatus();
 
@@ -67,12 +68,11 @@ export default function VoiceGateSection() {
         const enough = speechSecs.current >= ENROLL_SPEECH_SECONDS || elapsedSecs.current >= ENROLL_MAX_SECONDS;
         if (enough && !finishing.current) {
           finishing.current = true;
-          void finishEnroll();
+          finish.current();
         }
       }, () => { level.current = 0; });
     }, POLL_MS);
     return () => window.clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recording]);
 
   // While testing: poll the live match and the level, so the person speaks and watches how the model hears them.
@@ -140,6 +140,10 @@ export default function VoiceGateSection() {
     }
   };
 
+  useEffect(() => {
+    finish.current = () => { void finishEnroll(); };
+  });
+
   const cancelEnroll = async () => {
     try {
       await talkApi.micTestStop();
@@ -202,7 +206,7 @@ export default function VoiceGateSection() {
   useEffect(() => {
     if (state?.wake_word?.trim() && (state.wake_lang == null || state.wake_lang === "")) {
       const ui = i18n.language.slice(0, 2);
-      patch({ wake_lang: ui === "zh" ? "cmn" : ui });
+      voiceGateApi.set({ wake_lang: ui === "zh" ? "cmn" : ui }).then((r) => setState((s) => (s ? { ...s, ...r } : s)), (e: unknown) => setProblem(errorText(e)));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state?.wake_word, state?.wake_lang]);

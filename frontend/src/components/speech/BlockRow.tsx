@@ -84,7 +84,7 @@ function useSpokenWord(audio: React.RefObject<HTMLAudioElement | null> | undefin
   const [word, setWord] = useState<[number, number] | null>(null);
   const times = useMemo(() => (take && (!take.text || take.text === text) ? wordTimes(text, take.duration, take.qc?.timed) : []), [text, take]);
   useEffect(() => {
-    if (!active || !audio || !times.length) { setWord(null); return; }
+    if (!active || !audio || !times.length) return;
     let frame = 0;
     let last = "";
     const tick = () => {
@@ -96,7 +96,7 @@ function useSpokenWord(audio: React.RefObject<HTMLAudioElement | null> | undefin
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
   }, [active, audio, times]);
-  return word;
+  return active && audio && times.length ? word : null;
 }
 
 function AutoText({ value, onCommit, label, inputRef, stale, locked, reading, found, foundHere }: { value: string; onCommit: (v: string) => void; label: string; inputRef: React.RefObject<HTMLTextAreaElement | null>; stale: boolean; locked: boolean; reading: [number, number] | null; found: RegExp | null; foundHere: boolean }) {

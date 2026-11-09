@@ -63,14 +63,17 @@ export default function VoiceCatalog({ have, onClose, onGot }: { have: Set<strin
     a.play().catch((e: unknown) => { setPlaying(null); setProblems([errorText(e)]); });
   };
 
-  const facts = (v: Entry): VoiceFacts => ({
-    label: name(v), gender: v.gender, age: v.age_group ?? "", lang: v.language ?? "", description: v.description ?? "",
+  const filtered = useMemo(() => {
+    const label = (v: Entry) => v.displayName || prettyVoice(v.name);
+    const facts = (v: Entry): VoiceFacts => ({
+    label: label(v), gender: v.gender, age: v.age_group ?? "", lang: v.language ?? "", description: v.description ?? "",
     tags: [v.name], source: "", favorite: false, duration: v.duration_s ?? null, born: v.birth_year ?? null,
-    search: [name(v), v.description ?? "", v.name, v.language ?? "", langName(v.language ?? ""),
+    search: [label(v), v.description ?? "", v.name, v.language ?? "", langName(v.language ?? ""),
       v.gender ? t(`voices.gender_${v.gender as "female" | "male"}`) : "", v.age_group ? t(`voices.age_${v.age_group as "adult" | "child"}`) : "",
       v.birth_year ? String(v.birth_year) : ""].filter(Boolean).join(" "),
-  });
-  const filtered = useMemo(() => applyVoiceFilter(all ?? [], facts, filter), [all, filter]);
+    });
+    return applyVoiceFilter(all ?? [], facts, filter);
+  }, [all, filter, t]);
 
   const toggle = (n: string) => setPicked((p) => { const s = new Set(p); if (s.has(n)) s.delete(n); else s.add(n); return s; });
 

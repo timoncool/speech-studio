@@ -37,7 +37,11 @@ export default function VoiceEditor({ voice, all, onClose, onChanged, onRenamed,
   const [lang, setLang] = useState(voice.card.lang);
   const [variant, setVariant] = useState(voice.card.variant);
   const [license, setLicense] = useState(voice.card.license);
-  useEffect(() => { setVariant(voice.card.variant); }, [voice.card.variant]);
+  const [variantSeen, setVariantSeen] = useState(voice.card.variant);
+  if (variantSeen !== voice.card.variant) {
+    setVariantSeen(voice.card.variant);
+    setVariant(voice.card.variant);
+  }
   const [transcript, setTranscript] = useState(voice.transcript ?? "");
   const [busy, setBusy] = useState<string | null>(null);
   const [denoiseDb, setDenoiseDb] = useState(18);

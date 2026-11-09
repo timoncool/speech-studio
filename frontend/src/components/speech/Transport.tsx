@@ -4,9 +4,15 @@ import { Pause, PencilLine, Play, RotateCcw, RotateCw, SkipBack, SkipForward, Sq
 import { named } from "../../lib/a11y";
 import { masterVolume, setMasterVolume, MASTER_VOLUME_EVENT } from "../../lib/masterVolume";
 
-export const RATES = [0.75, 1, 1.25, 1.5, 2];
+import { RATES } from "./rates";
 
 export type TransportBlock = { id: string; speaker: string; text: string; duration: number | null };
+
+const NO_TIME = { at: 0, of: 0 };
+
+function moveTo(a: HTMLAudioElement, to: number) {
+  a.currentTime = to;
+}
 
 function clock(s: number): string {
   const m = Math.floor(s / 60);
@@ -35,9 +41,10 @@ export default function Transport({ blocks, audio, playing, paused, rate, start,
   onEdit: () => void;
 }) {
   const { t } = useTranslation();
-  const [time, setTime] = useState({ at: 0, of: 0 });
+  const [heard, setTime] = useState({ at: 0, of: 0 });
+  const time = playing ? heard : NO_TIME;
   useEffect(() => {
-    if (!playing) { setTime({ at: 0, of: 0 }); return; }
+    if (!playing) return;
     let frame = 0;
     const tick = () => {
       const a = audio.current;
@@ -64,7 +71,7 @@ export default function Transport({ blocks, audio, playing, paused, rate, start,
   const current = index >= 0 ? blocks[index] : null;
   const total = blocks.reduce((s, b) => s + (b.duration ?? 0), 0);
   const voiced = blocks.filter((b) => b.duration != null).length;
-  const seek = (to: number) => { const a = audio.current; if (a && playing) a.currentTime = Math.max(0, Math.min(to, time.of || to)); };
+  const seek = (to: number) => { const a = audio.current; if (a && playing) moveTo(a, Math.max(0, Math.min(to, time.of || to))); };
   const round = "grid place-items-center w-8 h-8 rounded-md text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-2)] disabled:opacity-30";
   const fromSelected = start && blocks[0] && start !== blocks[0].id;
 

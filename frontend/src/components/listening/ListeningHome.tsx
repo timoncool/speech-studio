@@ -7,7 +7,7 @@ import { listenApi, clock, MEDIA, prepare, TRANSCRIPT_FORMATS, type ListenCard, 
 import QuickListen from "./QuickListen";
 import WatchFolder from "./WatchFolder";
 import BatchList, { type BatchItem } from "../BatchList";
-import { ENGINES } from "./ListenSettings";
+import { ENGINES } from "./engines";
 import { LANG_CHOICES } from "../speech/langs";
 import { speechApi } from "../../lib/speech";
 import { errorText } from "../../lib/voices";
@@ -228,6 +228,10 @@ export default function ListeningHome({ onOpen }: { onOpen: (pid: string) => voi
 }
 
 /** A recording from a microphone straight into a new project: device, level, time. */
+function nowMs(): number {
+  return performance.now();
+}
+
 function MicRecorder({ lang, onDone, onError }: { lang: string; onDone: (pid: string, project: ListenProject) => void; onError: (e: string) => void }) {
   const { t } = useTranslation();
   const [devices, setDevices] = useState<string[] | null>(null);
@@ -251,9 +255,9 @@ function MicRecorder({ lang, onDone, onError }: { lang: string; onDone: (pid: st
       setRecording(true);
       setHeard([]);
       setPartial(null);
-      const began = Date.now();
+      const began = nowMs();
       timer.current = window.setInterval(() => {
-        setSeconds(Math.floor((Date.now() - began) / 1000));
+        setSeconds(Math.floor((nowMs() - began) / 1000));
         api.recordLevel().then((l) => setLevel(l.level), () => undefined);
         polls.current += 1;
         if (live && polls.current % 8 === 0) {

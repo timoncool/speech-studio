@@ -19,10 +19,10 @@ export default function ListenExport({ pid, onClose }: { pid: string; onClose: (
   const [digits, setDigits] = useState(false);
   const [rules, setRules] = useState("");
   const [profiles, setProfiles] = useState<SubtitleRules[]>([]);
-  useEffect(() => { listenApi.subtitleRules().then((r) => setProfiles(r.rules), (e: unknown) => setError(errorText(e))); }, []);
   const subtitles = format === "srt" || format === "vtt" || format === "ass";
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  useEffect(() => { listenApi.subtitleRules().then((r) => setProfiles(r.rules), (e: unknown) => setError(errorText(e))); }, []);
   const [copied, setCopied] = useState(false);
   const changed = <T,>(set: (v: T) => void) => (v: T) => { set(v); setMade(null); setCopied(false); };
   const make = async () => {

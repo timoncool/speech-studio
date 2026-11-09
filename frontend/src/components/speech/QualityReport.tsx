@@ -9,7 +9,7 @@ import { useEscapeLayer } from "../../lib/escape";
 import HeardDiff from "./HeardDiff";
 import { Tip } from "../Hint";
 
-export const LIGHT_COLOR: Record<QualityLight, string> = { green: "var(--color-good)", amber: "var(--color-warn)", red: "var(--color-bad)", none: "var(--color-muted)" };
+const LIGHT_COLOR: Record<QualityLight, string> = { green: "var(--color-good)", amber: "var(--color-warn)", red: "var(--color-bad)", none: "var(--color-muted)" };
 
 /** The project's light in the editor's bar: the share of checked takes that passed; a click opens the report. */
 export function QualityButton({ pid, version, onOpen }: { pid: string; version: unknown; onOpen: () => void }) {
@@ -39,7 +39,7 @@ export default function QualityReport({ pid, blocks, onJump, onChanged, onClose 
   const [fixed, setFixed] = useState<Record<string, string>>({});
   useEscapeLayer(() => { if (!checking) onClose(); });
   const load = () => speechApi.quality(pid).then(setR, (e: unknown) => setError(errorText(e)));
-  useEffect(() => { void load(); }, [pid]);
+  useEffect(() => { speechApi.quality(pid).then(setR, (e: unknown) => setError(errorText(e))); }, [pid]);
   const check = async () => {
     setChecking(true);
     setError(null);

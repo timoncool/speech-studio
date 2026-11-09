@@ -17,7 +17,9 @@ export default function LevelMeter({ peak, label }: { peak: () => number; label:
   const canvas = useRef<HTMLCanvasElement>(null);
   const readout = useRef<HTMLSpanElement>(null);
   const peakRef = useRef(peak);
-  peakRef.current = peak;
+  useEffect(() => {
+    peakRef.current = peak;
+  });
 
   useEffect(() => {
     const el = canvas.current;

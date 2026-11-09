@@ -24,7 +24,9 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
     c.run();
   };
   const keys = useRef({ shown, at, run });
-  keys.current = { shown, at, run };
+  useEffect(() => {
+    keys.current = { shown, at, run };
+  });
   // On the window, not the field: an agent's typing leaves the field, and Enter still has to run the pick.
   useEffect(() => {
     const h = (e: KeyboardEvent) => {

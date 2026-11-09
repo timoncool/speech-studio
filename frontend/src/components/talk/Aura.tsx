@@ -110,9 +110,11 @@ export default function Aura({ state, level, token, className }: VisualProps) {
   const target = useRef(LOOKS[state]);
   const levelRef = useRef(level);
   const tokenRef = useRef(token);
-  target.current = LOOKS[state];
-  levelRef.current = level;
-  tokenRef.current = token;
+  useEffect(() => {
+    target.current = LOOKS[state];
+    levelRef.current = level;
+    tokenRef.current = token;
+  });
 
   useEffect(() => {
     const el = canvas.current;

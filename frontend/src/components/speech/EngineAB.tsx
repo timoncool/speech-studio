@@ -12,6 +12,11 @@ import VoicePicker from "./VoicePicker";
 
 type Side = { engine: string; voice: string | null };
 
+/** Which take sounds first in the blind comparison: either, by chance. */
+function blindOrder(): number[] {
+  return Math.random() < 0.5 ? [0, 1] : [1, 0];
+}
+
 /** Two engines on one block, heard without their names: a take by each, played as variant 1 and 2 in an order drawn
  * at random; the one picked becomes the block's take, engine and voice, and the names are shown after the choice. */
 export default function EngineAB({ pid, project, block, onPick, onReload, onClose }: {
@@ -29,9 +34,9 @@ export default function EngineAB({ pid, project, block, onPick, onReload, onClos
   const [error, setError] = useState<string | null>(null);
   const [playing, setPlaying] = useState<number | null>(null);
   const audio = useRef<HTMLAudioElement | null>(null);
-  useEscapeLayer(() => { if (!busy) close(); });
   const stop = () => { audio.current?.pause(); audio.current = null; setPlaying(null); };
   const close = () => { stop(); onClose(); };
+  useEscapeLayer(() => { if (!busy) close(); });
   const name = (id: string) => engines.find((e) => e.id === id)?.name ?? id;
   const voiceName = (s: Side) => s.voice ?? voiceOf(project, block) ?? t("speech.baseVoice");
   const fits = (engineId: string, voice: string | null) => {
@@ -60,7 +65,7 @@ export default function EngineAB({ pid, project, block, onPick, onReload, onClos
       const r = (await followJob((await speechApi.ab(pid, block.id, shown)).job_id, "synth")) as { takes: number[] };
       await onReload();
       setMade(shown.map((s, i) => ({ ...s, take: r.takes[i] })));
-      setOrder(Math.random() < 0.5 ? [0, 1] : [1, 0]);
+      setOrder(blindOrder());
     } catch (e) { setError(errorText(e)); } finally { setBusy(false); }
   };
   const play = (side: number) => {

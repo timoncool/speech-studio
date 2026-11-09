@@ -41,26 +41,26 @@ function useTip(text: string) {
 /** A faint «?» beside a label, a toggle or a list, which have no hover of their own: hover, focus or a tap opens what
  * the control does and how it works. */
 export default function Hint({ text }: { text: string }) {
-  const tip = useTip(text);
+  const { open, setOpen, anchor, id, popup, events } = useTip(text);
   return (
     <>
-      <span ref={tip.anchor} tabIndex={0} role="button" aria-label={text} aria-describedby={tip.open ? tip.id : undefined} {...tip.events}
-        onClick={(e) => { e.preventDefault(); e.stopPropagation(); tip.setOpen((v) => !v); }}
-        className={`cursor-help inline-flex align-middle rounded-full transition hover:opacity-100 hover:text-[var(--color-accent-2)] focus-visible:opacity-100 focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--color-accent)] ${tip.open ? "opacity-100 text-[var(--color-accent-2)]" : "opacity-40 text-[var(--color-muted)]"}`}>
+      <span ref={anchor} tabIndex={0} role="button" aria-label={text} aria-describedby={open ? id : undefined} {...events}
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen((v) => !v); }}
+        className={`cursor-help inline-flex align-middle rounded-full transition hover:opacity-100 hover:text-[var(--color-accent-2)] focus-visible:opacity-100 focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--color-accent)] ${open ? "opacity-100 text-[var(--color-accent-2)]" : "opacity-40 text-[var(--color-muted)]"}`}>
         <HelpCircle size={12} />
       </span>
-      {tip.popup}
+      {popup}
     </>
   );
 }
 
 /** The same explanation on a button itself, without a «?»: it opens while the button is hovered or focused. */
 export function Tip({ text, children, className = "inline-flex" }: { text: string; children: ReactNode; className?: string }) {
-  const tip = useTip(text);
+  const { open, anchor, id, popup, events } = useTip(text);
   return (
-    <span ref={tip.anchor} aria-describedby={tip.open ? tip.id : undefined} {...tip.events} className={className}>
+    <span ref={anchor} aria-describedby={open ? id : undefined} {...events} className={className}>
       {children}
-      {tip.popup}
+      {popup}
     </span>
   );
 }

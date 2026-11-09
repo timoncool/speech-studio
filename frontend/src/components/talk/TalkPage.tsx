@@ -12,7 +12,7 @@ import { TALK_STYLES, type TalkStyle } from "./visual";
 const CONNECT = "claude mcp add --transport http speech-studio http://127.0.0.1:8797/mcp";
 
 /** The talk widget: a small bar with no frame and no background, over every other window in the desktop app. */
-export function openTalkWidget() {
+function openTalkWidget() {
   window.open(`${window.location.origin}/?widget`, "speech-talk-widget", "popup,width=420,height=96");
 }
 

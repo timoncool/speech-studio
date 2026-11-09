@@ -3,15 +3,7 @@ import { useEngines } from "../../lib/engines";
 import type { ParamSpec, SpeechParams } from "../../lib/speech";
 import Hint from "../Hint";
 
-/** How each sampling parameter is named and explained. */
-export const PARAM_LABEL: Record<ParamSpec["key"], { label: string; hint: string }> = {
-  temperature: { label: "speech.temperature", hint: "speech.temperatureHint" },
-  top_k: { label: "top-k", hint: "speech.topKHint" },
-  top_p: { label: "top-p", hint: "speech.topPHint" },
-  max_tokens: { label: "speech.maxTokens", hint: "speech.maxTokensHint" },
-  steps: { label: "speech.steps", hint: "speech.stepsHint" },
-  speed: { label: "speech.speed", hint: "speech.speedHint" },
-};
+import { PARAM_LABEL } from "./paramLabel";
 
 /** Sampling of a speaker or a block of its own: off, it takes what it inherits; on, it starts from that and changes. */
 export default function OwnParams({ engine, value, inherited, onChange, label }: { engine: string; value: SpeechParams | null | undefined; inherited: SpeechParams; onChange: (v: SpeechParams | null) => void; label: string }) {
