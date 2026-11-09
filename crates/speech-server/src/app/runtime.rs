@@ -94,8 +94,10 @@ pub fn set_ort_dylib_env(repo_root: &Path, beside_exe: &Path) -> Result<(), Stri
     }
     ORT_PATH_OURS.store(true, std::sync::atomic::Ordering::Relaxed);
     let rt = repo_root.join("models").join("runtime");
-    let found = dub_core::runtime::ort_candidates(&repo_root.join("models"))
-        .into_iter()
+    let candidates = dub_core::runtime::ort_candidates(&repo_root.join("models"));
+    let found = candidates
+        .iter()
+        .cloned()
         .chain([
             beside_exe.join(dub_core::runtime::ORT_LIBRARY),
             rt.join("onnxruntime-1.28.dll"),
@@ -105,10 +107,13 @@ pub fn set_ort_dylib_env(repo_root: &Path, beside_exe: &Path) -> Result<(), Stri
     match found {
         Some(cand) => std::env::set_var("ORT_DYLIB_PATH", cand),
         None => {
-            let [gpu, cpu] = dub_core::runtime::ort_candidates(&repo_root.join("models"))
-                .try_into()
-                .expect("a GPU and a CPU build");
-            std::env::set_var("ORT_DYLIB_PATH", if hw::gpu_report().cuda13_ok { gpu } else { cpu });
+            // Nothing downloaded yet: point at the build we will fetch (GPU first on CUDA) so ort
+            // finds it once the ONNX Runtime component lands. macOS ships a single Apple-silicon
+            // build, so there can be only one candidate -- never assume a GPU+CPU pair here.
+            let pick = if hw::gpu_report().cuda13_ok { candidates.first() } else { candidates.last() };
+            if let Some(pick) = pick {
+                std::env::set_var("ORT_DYLIB_PATH", pick);
+            }
             eprintln!("[ERROR] onnxruntime 1.28 not found in {}: recognition and diarization will not start until the ONNX Runtime component is downloaded", rt.display());
         }
     }
