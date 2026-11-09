@@ -218,11 +218,13 @@ pub fn second_opinion(repo_root: &Path, models_root: &Path, audio: &Path, lang: 
 const OWN_LANGUAGES_MIN: f32 = 0.1;
 
 /// The language of 16 kHz mono speech by VoxLingua107 (its first 30 s), for a model that knows `known` (its own
-/// languages): its likeliest own language while those hold a noticeable share, else `routed_language` of all the
-/// candidates, so «auto» never routes a recording to a model that cannot read it (a Chinese reference recognised by
-/// Parakeet, which does not know it, came back empty and was refused as silent) nor Russian heard as Belarusian away
-/// from it. None for a clip too short to hear. Needs the langid helper and the tcpp build on disk.
-pub(crate) fn spoken_language(models_root: &Path, wav: &Path, known: &[&str]) -> Result<Option<String>, String> {
+/// languages): `hint` (a language the speech is expected in; empty or «auto» — none) when the detector holds it likely
+/// too (`hinted_language`); else its likeliest own language while those hold a noticeable share, else
+/// `routed_language` of all the candidates, so «auto» never routes a recording to a model that cannot read it (a
+/// Chinese reference recognised by Parakeet, which does not know it, came back empty and was refused as silent) nor
+/// Russian heard as Belarusian away from it. None for a clip too short to hear. Needs the langid helper and the tcpp
+/// build on disk.
+pub(crate) fn spoken_language(models_root: &Path, wav: &Path, known: &[&str], hint: &str) -> Result<Option<String>, String> {
     let (pcm, _) = crate::audio::wavio::read_mono_f32_head(wav, 30 * 16_000)?;
     if pcm.len() < dub_asr::tcpp::LANGID_MIN_SAMPLES {
         return Ok(None);
@@ -230,12 +232,30 @@ pub(crate) fn spoken_language(models_root: &Path, wav: &Path, known: &[&str]) ->
     let pcm = pcm.as_slice();
     let engine = dub_asr::tcpp::engine_dir(models_root, crate::engines::models::tcpp_build(models_root));
     let model = dub_asr::tcpp::helper_path(models_root, &dub_asr::tcpp::LANGID);
+    let hinted = !hint.is_empty() && hint != "auto";
+    let all = if hinted { Some(dub_asr::tcpp::detect_language(&engine, &model, pcm, &[])?) } else { None };
+    if let Some(lang) = all.as_ref().and_then(|all| hinted_language(&all.ranked, hint)) {
+        return Ok(Some(lang));
+    }
     let own = dub_asr::tcpp::detect_language(&engine, &model, pcm, known)?;
     if own.allowed_mass >= OWN_LANGUAGES_MIN {
         return Ok(own.ranked.into_iter().next().map(|(code, _)| code));
     }
-    let all = dub_asr::tcpp::detect_language(&engine, &model, pcm, &[])?;
+    let all = match all {
+        Some(all) => all,
+        None => dub_asr::tcpp::detect_language(&engine, &model, pcm, &[])?,
+    };
     Ok(routed_language(&all.ranked, known))
+}
+
+/// `hint` when the detector holds it likely: it, or a close language it is taken for (`CLOSE`), is among the likeliest
+/// `KNOWN_AMONG` candidates. None otherwise: an English voice in a Russian project is recognised in English.
+fn hinted_language(ranked: &[(String, f32)], hint: &str) -> Option<String> {
+    ranked
+        .iter()
+        .take(KNOWN_AMONG)
+        .any(|(code, _)| code == hint || CLOSE.iter().any(|(from, to)| from == code && *to == hint))
+        .then(|| hint.to_string())
 }
 
 /// How many of the likeliest candidates are looked through for a language the model knows: VoxLingua107 puts a close

@@ -413,7 +413,7 @@ pub fn transcribe(p: &ListenPaths, pid: &str, progress: &dyn Fn(Value)) -> Resul
     };
     if let Some(model) = studio_model {
         crate::app::ensure_components(&p.repo_root, &[crate::engines::models::tcpp_build(&p.models_root).dir(), "langid"], &|ev| progress(ev))?;
-        if let Some(lang) = crate::app::recognition::spoken_language(&p.models_root, &mix, model.languages)? {
+        if let Some(lang) = crate::app::recognition::spoken_language(&p.models_root, &mix, model.languages, "")? {
             step(progress, t!("listen-step-langid", lang = lang.to_uppercase()), 7);
             engine = ready_engine(p, &project, &lang, progress)?;
             s.lang = lang;

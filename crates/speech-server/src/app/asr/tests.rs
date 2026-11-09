@@ -46,6 +46,17 @@ fn a_close_language_the_model_lacks_is_read_in_the_one_it_knows() {
     assert_eq!(routed_language(&ranked(&[("be", 0.94), ("ru", 0.04)]), &[]).as_deref(), Some("be"), "a recogniser that reads every language gets the language heard");
 }
 
+/// A project's language is the voice's only when the detector holds it likely: an English voice cloned into a Russian
+/// project stays English, Russian heard as Belarusian is Russian, a project in «auto» names nothing.
+#[test]
+fn a_project_s_language_is_taken_only_when_the_detector_holds_it_likely() {
+    let ranked = |xs: &[(&str, f32)]| xs.iter().map(|(c, p)| (c.to_string(), *p)).collect::<Vec<_>>();
+    assert_eq!(hinted_language(&ranked(&[("en", 0.95), ("cy", 0.02), ("ga", 0.01), ("ru", 0.005)]), "ru"), None);
+    assert_eq!(hinted_language(&ranked(&[("be", 0.60), ("ru", 0.40)]), "ru").as_deref(), Some("ru"));
+    assert_eq!(hinted_language(&ranked(&[("be", 0.97), ("lt", 0.01), ("pl", 0.01)]), "ru").as_deref(), Some("ru"), "taken for its close language");
+    assert_eq!(hinted_language(&ranked(&[("en", 0.95)]), "auto"), None);
+}
+
 #[test]
 fn an_explicit_missing_recognizer_returns_an_error_without_installing() {
     let _language = crate::i18n::test_language("ru");

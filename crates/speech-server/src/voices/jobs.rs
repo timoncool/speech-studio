@@ -30,18 +30,16 @@ fn recognise_reference(p: &VoicePaths, audio: &Path, card_lang: &str, hint: &str
     crate::app::recognition::transcribe(&p.repo_root, &p.models_root, audio, &lang, name)
 }
 
-/// The language a reference is recognised in: the one set on its card, else `hint` (the language of the project the
-/// voice speaks in, when it is set), or — under «Auto» — the language VoxLingua107 hears in it. «auto» when it cannot be
-/// heard, or when the selected recogniser (CrisperWhisper) reads every language itself and needs no language id.
+/// The language a reference is recognised in: the one set on its card, or — under «Auto» — the language VoxLingua107
+/// hears in it, `hint` (the language of the project the voice speaks in) when the detector holds it likely too: a
+/// voice of another language cloned into the project is still recognised in its own. «auto» when it cannot be heard,
+/// or when the selected recogniser (CrisperWhisper) reads every language itself and needs no language id.
 fn reference_language(p: &VoicePaths, audio: &Path, card_lang: &str, hint: &str, progress: &dyn Fn(Value)) -> String {
-    let set = |l: &str| !l.trim().is_empty() && l.trim() != "auto";
-    if set(card_lang) {
-        return card_lang.trim().to_string();
+    let lang = card_lang.trim();
+    if !lang.is_empty() && lang != "auto" {
+        return lang.to_string();
     }
-    if set(hint) {
-        return hint.trim().to_string();
-    }
-    match heard_reference_language(p, audio, progress) {
+    match heard_reference_language(p, audio, hint, progress) {
         Ok(Some(code)) => code,
         Ok(None) => "auto".to_string(),
         Err(e) => {
@@ -51,7 +49,7 @@ fn reference_language(p: &VoicePaths, audio: &Path, card_lang: &str, hint: &str,
     }
 }
 
-fn heard_reference_language(p: &VoicePaths, audio: &Path, progress: &dyn Fn(Value)) -> Result<Option<String>, String> {
+fn heard_reference_language(p: &VoicePaths, audio: &Path, hint: &str, progress: &dyn Fn(Value)) -> Result<Option<String>, String> {
     let sel = crate::engines::models::load_selection(&p.models_root);
     // CrisperWhisper reads «auto» itself across its languages, so it needs no language id
     let known: &[&str] = match crate::engines::models::resolve_asr_choice(&p.repo_root, &p.models_root, &sel) {
@@ -62,7 +60,7 @@ fn heard_reference_language(p: &VoicePaths, audio: &Path, progress: &dyn Fn(Valu
     let work = work_dir(&p.voices_dir, "langid", "langid")?;
     let wav = work.path().join("ref16k.wav");
     crate::audio::media::to_16k_mono(audio, &wav)?;
-    crate::app::recognition::spoken_language(&p.models_root, &wav, known)
+    crate::app::recognition::spoken_language(&p.models_root, &wav, known, hint)
 }
 
 /// Транскрипт рефа тем ASR, что выбран в настройках; пишет `<имя>.txt` и помечает транскрипт как распознанный.
@@ -250,15 +248,11 @@ pub fn ref_candidates(p: &VoicePaths, name: &str) -> Result<Value, String> {
 mod tests {
     use super::*;
 
-    /// A voice whose card names no language is recognised in the language of the project it speaks in, not in the one
-    /// heard in it; its card's language comes first.
+    /// The language on a voice's card comes before its project's and before what is heard in it.
     #[test]
-    fn a_voice_without_a_language_is_recognised_in_its_project_s() {
+    fn a_voice_s_card_language_comes_first() {
         let dir = tempfile::tempdir().unwrap();
         let p = VoicePaths { repo_root: dir.path().into(), models_root: dir.path().join("models"), voices_dir: dir.path().join("voices") };
-        let audio = dir.path().join("ref.wav");
-        assert_eq!(reference_language(&p, &audio, "", "ru", &|_| {}), "ru");
-        assert_eq!(reference_language(&p, &audio, "auto", "ru", &|_| {}), "ru");
-        assert_eq!(reference_language(&p, &audio, "en", "ru", &|_| {}), "en");
+        assert_eq!(reference_language(&p, &dir.path().join("ref.wav"), "en", "ru", &|_| {}), "en");
     }
 }
