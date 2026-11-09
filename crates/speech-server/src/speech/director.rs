@@ -500,18 +500,24 @@ pub fn rewrite_as_asked(llm: &ChatClient, blocks: &[(String, String, String)], l
     rewrite(llm, &system, blocks, 0.7, progress, &|_, after| Some(after.trim().to_string()).filter(|a| !a.is_empty()))
 }
 
-/// The end of a script that fits the model's context beside its answer: its last lines, the earliest first.
+/// The end of a script that fits the model's context beside its answer: its last lines, the earliest first. A last
+/// line longer than that alone is given by its end, so the model always has where to go on from.
 fn script_tail(written: &[(String, String)]) -> String {
+    let limit = CHUNK_CHARS * 2;
     let mut size = 0;
-    let mut tail: Vec<String> = written
-        .iter()
-        .rev()
-        .take_while(|(_, text)| {
-            size += text.chars().count();
-            size <= CHUNK_CHARS * 2
-        })
-        .map(|(speaker, text)| format!("{speaker}: {text}"))
-        .collect();
+    let mut tail: Vec<String> = Vec::new();
+    for (speaker, text) in written.iter().rev() {
+        let chars = text.chars().count();
+        if size + chars > limit {
+            if tail.is_empty() {
+                let end: String = text.chars().skip(chars - limit).collect();
+                tail.push(format!("{speaker}: …{end}"));
+            }
+            break;
+        }
+        size += chars;
+        tail.push(format!("{speaker}: {text}"));
+    }
     tail.reverse();
     tail.join("\n")
 }
@@ -615,6 +621,10 @@ mod tests {
         let first = tail.lines().next().unwrap();
         let kept = tail.lines().count();
         assert_eq!(first, format!("S{}: {}", (200 - kept) % 2, long[200 - kept].1), "the lines are in the script's order");
+        let one = vec![("Рассказчик".to_string(), format!("начало {} конец", "слово ".repeat(2_000)))];
+        let end = script_tail(&one);
+        assert!(end.starts_with("Рассказчик: …") && end.ends_with("конец") && !end.contains("начало"), "a last line too long is given by its end");
+        assert_eq!(end.chars().count(), "Рассказчик: …".chars().count() + CHUNK_CHARS * 2);
     }
 
     fn said(speaker: &str, text: &str) -> Line {

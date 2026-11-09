@@ -291,6 +291,22 @@ fn higgs_cache(repo_root: &Path) -> PathBuf {
     repo_root.join("temp").join("higgs-refs")
 }
 
+/// How long a reference prepared for Higgs is kept without being made again.
+const HIGGS_CACHE_KEEPS: std::time::Duration = std::time::Duration::from_secs(30 * 24 * 3600);
+
+/// The references prepared longer ago than `keeps` leave the cache: one still in use is made again from its source.
+fn prune_higgs_cache(cache: &Path, keeps: std::time::Duration) {
+    let Ok(entries) = std::fs::read_dir(cache) else { return };
+    for file in entries.filter_map(|e| e.ok().map(|e| e.path())).filter(|p| p.extension().is_some_and(|x| x == "wav")) {
+        let old = std::fs::metadata(&file).and_then(|m| m.modified()).ok().and_then(|at| at.elapsed().ok()).is_some_and(|age| age > keeps);
+        if old {
+            if let Err(e) = std::fs::remove_file(&file) {
+                tracing::warn!("the Higgs reference cache keeps {}: {e}", file.display());
+            }
+        }
+    }
+}
+
 impl Higgs {
     /// On the build of the voicing device chosen in the settings (`tts_backend`, else `local_backend`; «auto» — see
     /// [`build_for`]).
@@ -302,6 +318,7 @@ impl Higgs {
         let build = build_for(crate::engines::models::server_choice(models_root, "tts_backend"))?;
         let server = server(repo_root, models_root, build, HIGGS)?;
         let rate = server.speech_rate(HIGGS).map_err(|e| localize(&e))?;
+        prune_higgs_cache(&higgs_cache(repo_root), HIGGS_CACHE_KEEPS);
         Ok(Higgs { server: std::sync::Mutex::new(server), rate, cancel: AtomicBool::new(false), repo_root: repo_root.to_path_buf(), models_root: models_root.to_path_buf(), build })
     }
 
@@ -486,6 +503,11 @@ mod tests {
         let (x, sr) = crate::audio::wavio::read_mono_f32(&first).unwrap();
         assert_eq!(sr, 24_000);
         assert_eq!(x.len() as u64 % crate::audio::media::HIGGS_HOP, 0);
+        super::prune_higgs_cache(&cache, std::time::Duration::from_secs(3600));
+        assert!(first.is_file(), "a reference made lately stays");
+        super::prune_higgs_cache(&cache, std::time::Duration::ZERO);
+        assert!(!first.is_file(), "one made longer ago than the cache keeps leaves it");
+        assert!(super::higgs_reference(&cache, &voices.join("Анна.wav")).unwrap().is_file(), "and is made again when asked for");
     }
 
     /// How long one Smart Turn decision takes on the server of the voicing build (`SMART_ROOT` — a studio root with the

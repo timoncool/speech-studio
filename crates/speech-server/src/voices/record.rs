@@ -457,7 +457,12 @@ fn fetch_checked(
     let mut tries = 0;
     loop {
         tries += 1;
-        let have = std::fs::metadata(&part).map(|m| m.len()).unwrap_or(0).min(size);
+        let on_disk = std::fs::metadata(&part).map(|m| m.len()).unwrap_or(0);
+        // a part longer than the file is not this file's (an earlier version of it): it is downloaded anew
+        if on_disk > size {
+            std::fs::remove_file(&part).map_err(|e| format!("{}: {e}", part.display()))?;
+        }
+        let have = if on_disk > size { 0 } else { on_disk };
         // a part already whole (the last try broke off before it took its name) is checked as it is: asked for the
         // rest, a server answers there is none
         if size > 0 && have == size {
@@ -747,6 +752,20 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let dest = dir.path().join("v.mp3");
         std::fs::write(dir.path().join("v.mp3.part"), &body).unwrap();
+        fetch_checked(&client, &format!("{}/v", server.base()), &dest, body.len() as u64, None, &|_| {}).unwrap();
+        assert_eq!(std::fs::read(&dest).unwrap(), body);
+    }
+
+    /// A part longer than the file is another file's: it is dropped and the file downloaded anew, not given the name.
+    #[test]
+    fn a_part_longer_than_the_file_is_downloaded_anew() {
+        use dub_llm::test_http::{serve, Reply};
+        let body = b"the voice as it is now".to_vec();
+        let server = serve(vec![Reply::bytes(200, "audio/mpeg", body.clone())]);
+        let client = reqwest::blocking::Client::builder().no_proxy().build().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let dest = dir.path().join("v.mp3");
+        std::fs::write(dir.path().join("v.mp3.part"), b"an earlier and longer version of this voice").unwrap();
         fetch_checked(&client, &format!("{}/v", server.base()), &dest, body.len() as u64, None, &|_| {}).unwrap();
         assert_eq!(std::fs::read(&dest).unwrap(), body);
     }

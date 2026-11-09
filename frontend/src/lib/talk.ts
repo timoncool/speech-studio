@@ -13,17 +13,18 @@ export type LiveHeard = { running: boolean; lines: HeardLine[]; partial: { start
 export type LiveRole = {
   id: string;
   name: string;
-  goal?: string | null;
-  opens?: string | null;
-  turns?: number;
-  difficulty?: number;
-  checks?: string[];
-  notes?: string[];
-  problem?: string;
-  last_review?: { at: string; goal: string | null } | null;
-  turns_taken?: number;
+  goal: string | null;
+  opens: string | null;
+  turns: number;
+  difficulty: number;
+  checks: string[];
+  notes: string[];
 };
-export type LiveRoles = { folder: string; roles: LiveRole[]; playing: LiveRole | null };
+/** A role as the folder lists it: one whose file cannot be read has only its `problem`. */
+export type ListedRole = { id: string; name: string; goal?: string | null; problem?: string; last_review: { at: string; goal: string | null } | { problem: string } | null };
+/** The role in play, with how many turns the agent took in it. */
+export type PlayingRole = LiveRole & { turns_taken: number };
+export type LiveRoles = { folder: string; roles: ListedRole[]; playing: PlayingRole | null };
 
 /** The spoken conversation: the microphone heard live, and what an agent says aloud through the studio. */
 export const talkApi = {
@@ -39,6 +40,6 @@ export const talkApi = {
   micTestStop: () => postCoded<{ seconds: number; peak: number }>("/record/test/stop", {}),
   session: (id: string) => getCoded<{ session: string; open: boolean; phrases: SayPhrase[] }>(`/speech/say/${encodeURIComponent(id)}`),
   silence: () => sendCoded<unknown>("DELETE", "/speech/say"),
-  roles: () => getCodedPolled<LiveRoles>("/speech/roles"),
-  setRole: (id: string | null) => postCoded<{ playing: LiveRole | null }>("/speech/role", { id }),
+  roles: (lang: string) => getCodedPolled<LiveRoles>(`/speech/roles?lang=${encodeURIComponent(lang)}`),
+  setRole: (id: string | null, lang: string) => postCoded<{ playing: PlayingRole | null }>("/speech/role", { id, lang }),
 };

@@ -155,6 +155,7 @@ fn load(root: &Path, id: &str) -> Result<Value, String> {
 pub fn list(root: &Path, lang: &str) -> Result<Vec<Value>, String> {
     write_starters(root)?;
     let dir = folder(root);
+    let kept = review_files(root)?;
     let mut roles = Vec::new();
     for entry in std::fs::read_dir(&dir).map_err(|e| format!("{}: {e}", dir.display()))? {
         let path = entry.map_err(|e| format!("{}: {e}", dir.display()))?.path();
@@ -169,7 +170,11 @@ pub fn list(root: &Path, lang: &str) -> Result<Vec<Value>, String> {
         };
         role["file"] = json!(path);
         role["starter"] = json!(STARTERS.iter().any(|(s, _)| *s == id));
-        role["last_review"] = last_review(root, id, None).map_or(Value::Null, |r| json!({ "at": r["at"], "goal": r["goal"], "wpm": r["metrics"]["wpm"], "fillers_per_100_words": r["metrics"]["fillers_per_100_words"] }));
+        role["last_review"] = match last_review(&kept, id) {
+            None => Value::Null,
+            Some(Ok(r)) => json!({ "at": r["at"], "goal": r["goal"], "wpm": r["metrics"]["wpm"], "fillers_per_100_words": r["metrics"]["fillers_per_100_words"] }),
+            Some(Err(problem)) => json!({ "problem": problem }),
+        };
         roles.push(role);
     }
     roles.sort_by_key(|r| (r["starter"] != true, r["name"].as_str().unwrap_or_default().to_lowercase()));
@@ -268,18 +273,28 @@ fn reviews(root: &Path) -> PathBuf {
     folder(root).join(REVIEWS)
 }
 
-/// The latest review of role `id`, other than the file `but`.
-fn last_review(root: &Path, id: &str, but: Option<&Path>) -> Option<Value> {
-    let prefix = format!("{id}-");
-    let mut files: Vec<PathBuf> = std::fs::read_dir(reviews(root))
-        .ok()?
-        .filter_map(|e| e.ok().map(|e| e.path()))
-        .filter(|p| Some(p.as_path()) != but && p.extension().is_some_and(|x| x == "json"))
-        .filter(|p| p.file_stem().and_then(|s| s.to_str()).and_then(|s| s.strip_prefix(&prefix)).is_some_and(|stamp| stamp.starts_with(|c: char| c.is_ascii_digit())))
-        .collect();
-    // by the name without its extension: the second review of one second (`-2`) comes after the first
+/// Every review kept, by the name without its extension: the reviews of a role in the order they were made (the second
+/// of one second, `-2`, after the first). No folder yet: none.
+fn review_files(root: &Path) -> Result<Vec<PathBuf>, String> {
+    let dir = reviews(root);
+    let entries = match std::fs::read_dir(&dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(format!("{}: {e}", dir.display())),
+    };
+    let mut files: Vec<PathBuf> = entries.filter_map(|e| e.ok().map(|e| e.path())).filter(|p| p.extension().is_some_and(|x| x == "json")).collect();
     files.sort_by_key(|f| f.file_stem().map(|s| s.to_os_string()));
-    files.last().and_then(|f| read_file(f).ok())
+    Ok(files)
+}
+
+/// The latest review of role `id` among `files`; one that cannot be read is told, not passed over.
+fn last_review(files: &[PathBuf], id: &str) -> Option<Result<Value, String>> {
+    let prefix = format!("{id}-");
+    files
+        .iter()
+        .rev()
+        .find(|p| p.file_stem().and_then(|s| s.to_str()).and_then(|s| s.strip_prefix(&prefix)).is_some_and(|stamp| stamp.starts_with(|c: char| c.is_ascii_digit())))
+        .map(|f| read_file(f))
 }
 
 /// What is compared between two reviews of a role: the number's place in the metrics.
@@ -336,7 +351,7 @@ pub fn review(root: &Path, workspace: &Path, noticed: &Value) -> Result<Value, S
     let dir = reviews(root);
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     let file = review_file(&dir, &id);
-    let before = last_review(root, &id, None);
+    let before = last_review(&review_files(root)?, &id).transpose()?;
     let said: Vec<Value> = lines.iter().filter(|l| l["echo"] != true).map(|l| json!({ "n": l["n"], "text": l["text"], "start": l["start"] })).collect();
     let mut out = json!({
         "role": id,
@@ -529,9 +544,13 @@ mod tests {
         assert_ne!(first, second);
         std::fs::write(&second, r#"{"at":"second","metrics":{}}"#).unwrap();
         std::fs::write(reviews(dir.path()).join("boss-of-all-20260101-000000.json"), r#"{"at":"another role"}"#).unwrap();
-        assert_eq!(last_review(dir.path(), "boss", None).unwrap()["at"], "second");
-        assert_eq!(last_review(dir.path(), "boss", Some(&second)).unwrap()["at"], "first");
-        assert!(last_review(dir.path(), "stage", None).is_none());
+        let kept = review_files(dir.path()).unwrap();
+        assert_eq!(last_review(&kept, "boss").unwrap().unwrap()["at"], "second");
+        assert_eq!(last_review(&kept[..kept.iter().position(|f| f == &second).unwrap()], "boss").unwrap().unwrap()["at"], "first");
+        assert!(last_review(&kept, "stage").is_none());
+        std::fs::write(review_file(&reviews(dir.path()), "boss"), "{").unwrap();
+        assert!(last_review(&review_files(dir.path()).unwrap(), "boss").unwrap().is_err(), "a review that cannot be read is told");
+        assert!(review_files(&dir.path().join("nowhere")).unwrap().is_empty());
     }
 
     /// A review without a role in play, or with nothing the person said, is refused with the reason.
