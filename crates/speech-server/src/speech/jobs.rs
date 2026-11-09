@@ -989,8 +989,17 @@ fn check_takes(p: &SpeechPaths, pid: &str, made: &BTreeMap<String, Vec<u32>>, re
                         heard.text
                     };
                     let second = crate::app::recognition::second_opinion(&p.repo_root, &p.models_root, &file, &lang)?.map(|h| h.text);
-                    let heard: Vec<&str> = std::iter::once(first.as_str()).chain(second.as_deref()).collect();
-                    match crate::audio::flags::verdict(&stx::visible(&take.text), &heard) {
+                    // numbers are written alike on both sides before the texts are compared: a recogniser writes
+                    // «18.30» and «150» where the take's text says them in words, and that is not mush
+                    let said_lang = crate::text::prep::block_lang(&b.text, &lang);
+                    let written = stx::visible(&take.text);
+                    let text_said = crate::audio::qc::said_alike(&written, "", &said_lang)?.0;
+                    let heard_said: Vec<String> = std::iter::once(first.as_str())
+                        .chain(second.as_deref())
+                        .map(|h| crate::audio::qc::said_alike(&written, h, &said_lang).map(|pair| pair.1))
+                        .collect::<Result<_, _>>()?;
+                    let heard: Vec<&str> = heard_said.iter().map(String::as_str).collect();
+                    match crate::audio::flags::verdict(&text_said, &heard) {
                         Some("listen") => check.notes.push("listen".to_string()),
                         Some(v) => check.issues.push(v.to_string()),
                         None => check.notes.extend(suspects),

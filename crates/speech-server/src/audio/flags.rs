@@ -106,7 +106,11 @@ pub fn measure(x: &[f32], sr: u32, whistle: bool, repeat: bool) -> Features {
     let n20 = (sr as usize / 50).min(x.len());
     let edge = |s: &[f32]| s.iter().fold(0.0f32, |m, v| m.max(v.abs())) as f64;
     let peak_abs = x.iter().fold(0.0f32, |m, v| m.max(v.abs())) as f64;
-    f.edge_db = db(edge(&x[x.len() - n20..]).max(edge(&x[..n20])) / peak_abs.max(1e-9));
+    // a word begins fast: an engine that gives no silence before the speech (Audio8) reaches −10 dB of its peak within
+    // 20 ms of a natural onset, while a start cut mid-word is loud from its first milliseconds; so the start is judged
+    // by its first 5 ms and the end, where speech dies away slowly, by its last 20
+    let n5 = (sr as usize / 200).min(x.len());
+    f.edge_db = db(edge(&x[x.len() - n20..]).max(edge(&x[..n5])) / peak_abs.max(1e-9));
     let mut qr: Vec<f64> = quiet_frames.iter().map(|&i| rms[i]).collect();
     qr.sort_by(|a, b| a.total_cmp(b));
     f.noise_db = (!qr.is_empty()).then(|| db(qr[qr.len() / 2]));
