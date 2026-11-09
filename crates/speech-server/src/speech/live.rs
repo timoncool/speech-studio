@@ -66,8 +66,9 @@ pub fn silence(project: &str) {
     let _ = channel().send(json!({ "kind": "stop", "project": project, "aloud": true }));
 }
 
-/// How long the sound said aloud stays on record after it was heard.
-const AIRED_SECS: u64 = 120;
+/// How long the sound said aloud stays on record after it was heard: a whole conversation, whose metrics place the
+/// studio's speech among the person's lines.
+const AIRED_SECS: u64 = 6 * 3600;
 
 /// When a block said aloud sounds from the window, as the server sent it: the window plays the pieces one after
 /// another, so a piece sounds from the later of its sending and the end of the piece before it.
@@ -87,7 +88,7 @@ struct Airing {
     /// Where the sound the window has queued ends.
     until: Option<Instant>,
     /// How loud each piece sent to the window is (RMS of its samples) and when it sounds.
-    levels: std::collections::VecDeque<(Instant, Instant, f32)>,
+    levels: std::collections::VecDeque<(Instant, Instant, f32, String)>,
 }
 
 /// How long the loudness of the sound said aloud is kept.
@@ -111,7 +112,7 @@ pub fn rms(samples: &[f32]) -> f32 {
 /// nothing sounded then.
 pub fn playback_level(from: Instant, to: Instant, tail: std::time::Duration) -> Option<f32> {
     let ducked = 10f32.powf(f32::from_bits(DUCKED_DB.load(Ordering::Relaxed)) / 20.0);
-    airing().levels.iter().filter(|(a, z, _)| *a <= to && *z + tail >= from).map(|l| l.2 * ducked).reduce(f32::max)
+    airing().levels.iter().filter(|(a, z, _, _)| *a <= to && *z + tail >= from).map(|l| l.2 * ducked).reduce(f32::max)
 }
 
 /// `secs` more of `block`'s sound sent to the window to play now.
@@ -124,7 +125,7 @@ fn aired(project: &str, block: &str, secs: f64, level: f32) {
     while air.levels.front().is_some_and(|l| now.saturating_duration_since(l.1).as_secs() >= LEVEL_SECS) {
         air.levels.pop_front();
     }
-    air.levels.push_back((from, to, level));
+    air.levels.push_back((from, to, level, project.to_string()));
     air.blocks.retain(|a| now.saturating_duration_since(a.to).as_secs() < AIRED_SECS);
     match air.blocks.iter_mut().rev().find(|a| a.block == block) {
         Some(a) => a.to = to,
@@ -142,13 +143,17 @@ pub fn queue_wait_ms(block: &str) -> Option<u64> {
     airing().blocks.iter().rev().find(|a| a.block == block).and_then(|a| a.wait_ms)
 }
 
-/// The window dropped `project`'s sound: what it had queued does not sound.
+/// The window dropped `project`'s sound: what it had queued does not sound, and is not heard back.
 fn cut_airing(project: &str) {
     let now = Instant::now();
     let mut air = airing();
     for a in air.blocks.iter_mut().filter(|a| a.project == project) {
         a.to = a.to.min(now);
         a.from = a.from.min(a.to);
+    }
+    for l in air.levels.iter_mut().filter(|l| l.3 == project) {
+        l.1 = l.1.min(now);
+        l.0 = l.0.min(l.1);
     }
     let latest = air.blocks.iter().map(|a| a.to).max();
     air.until = latest.filter(|u| *u > now);
@@ -184,7 +189,7 @@ pub fn air_for_test(project: &str, block: &str, from: Instant, to: Instant) {
 /// Sound as loud as `level` (RMS) said aloud from `from` to `to`, for tests.
 #[cfg(test)]
 pub fn level_for_test(from: Instant, to: Instant, level: f32) {
-    airing().levels.push_back((from, to, level));
+    airing().levels.push_back((from, to, level, String::new()));
 }
 
 /// The window plays as loud as set, for tests.
@@ -406,6 +411,19 @@ mod tests {
         assert_eq!(player(), Some(first.0));
         drop(first);
         assert_eq!(player(), Some(second.0), "the next window plays once the first closes");
+    }
+
+    /// Sound the window dropped on a stop is not heard back: the half-duplex does not hold the microphone for it.
+    #[test]
+    fn a_dropped_queue_is_not_heard_back() {
+        let _air = AIR_TEST.lock().unwrap_or_else(|p| p.into_inner());
+        quiet_window();
+        let p = "p-dropped";
+        aired(p, "dr-1", 5.0, 0.2);
+        let later = Instant::now() + std::time::Duration::from_secs(2);
+        assert!(playback_level(later, later + std::time::Duration::from_millis(100), std::time::Duration::ZERO).is_some());
+        silence(p);
+        assert_eq!(playback_level(later, later + std::time::Duration::from_millis(100), std::time::Duration::ZERO), None);
     }
 
     /// Scenario of TZ-LIVE-TRAINER F: a phrase not ready when the one before it ended is told by the silence heard

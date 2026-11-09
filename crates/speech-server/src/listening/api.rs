@@ -193,7 +193,7 @@ pub async fn watch_stop(State(st): State<AppState>) -> Response {
 
 /// GET /listen/record/live — what live recognition of the recording under way has heard: phrases with their times.
 pub async fn record_live() -> Json<Value> {
-    Json(crate::listening::live::state())
+    Json(crate::listening::live::state_with_words())
 }
 
 /// GET /listen/{pid} — проект.

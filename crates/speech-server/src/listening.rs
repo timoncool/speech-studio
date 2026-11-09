@@ -31,7 +31,7 @@ pub(crate) mod watching {
     pub(crate) use super::watch::{resume, Dependencies};
 }
 pub(crate) mod recognition {
-    pub(crate) use super::live::{engine, heard_at, mute, muted, recording_secs, state, switch, type_line};
+    pub(crate) use super::live::{engine, heard_at, mute, muted, recording_secs, state, state_with_words, switch, type_line};
     #[cfg(test)]
     pub(crate) use super::live::{conversation_for_test, end_for_test, words_for_test, TEST_SLOT};
 }

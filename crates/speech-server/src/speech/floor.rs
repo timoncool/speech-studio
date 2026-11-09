@@ -155,10 +155,11 @@ fn floors() -> std::sync::MutexGuard<'static, Vec<Floor>> {
 }
 
 /// The person took the floor saying `partial` (`words` words, from `at`): the event, decided already unless the agent
-/// decides it. Answers its number.
+/// decides it. Answers its number, which no event of an earlier conversation had: a wait still running from one cannot
+/// decide an event of the next.
 pub fn raise(partial: &str, words: usize, at: Option<f64>, mode: Mode) -> u64 {
     let mut all = floors();
-    let n = all.len() as u64 + 1;
+    let n = LAST.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
     let now = Instant::now();
     let decided = match mode {
         Mode::Always => Some(("stop", now)),
@@ -169,9 +170,14 @@ pub fn raise(partial: &str, words: usize, at: Option<f64>, mode: Mode) -> u64 {
     n
 }
 
-/// A new conversation starts with no events: the ones of the conversation before belong to it.
+/// The number of the last event raised.
+static LAST: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// A new conversation starts with no events, the ones of the conversation before belonging to it, and the studio's
+/// voice at its own level: a wait of the old one does not leave it quieter.
 pub fn new_conversation() {
     floors().clear();
+    super::live::duck(0.0);
 }
 
 /// The event waiting for the agent's word, if one does.
@@ -257,6 +263,7 @@ pub async fn say_continue(AxPath(sid): AxPath<String>) -> Response {
 #[cfg(test)]
 pub fn clear_for_test() {
     floors().clear();
+    LAST.store(0, std::sync::atomic::Ordering::Relaxed);
 }
 
 #[cfg(test)]
@@ -365,12 +372,19 @@ mod tests {
     async fn a_new_conversation_starts_with_no_events() {
         let _slot = TEST_SLOT.lock().await;
         clear_for_test();
-        raise("стоп стоп стоп стоп", 4, None, Mode::Always);
+        let cut = Arc::new(AtomicBool::new(false));
+        let old = raise("подожди", 1, None, Mode::Agent);
+        let c = cut.clone();
+        hold(old, Duration::from_millis(100), || true, move || c.store(true, Ordering::Relaxed));
         new_conversation();
         let got = events(0).await;
         assert_eq!(got["events"], json!([]), "{got}");
         assert_eq!(got["heard"], 0);
-        assert_eq!(raise("а теперь вот что", 4, None, Mode::Always), 1, "numbers start again");
+        let new = raise("а теперь вот что", 4, None, Mode::Agent);
+        assert!(new > old, "an event of the new conversation is not one the old wait can decide");
+        tokio::time::sleep(Duration::from_millis(250)).await;
+        assert!(!cut.load(Ordering::Relaxed), "the old wait cut nothing");
+        assert_eq!(events(0).await["events"][0]["decided"], Value::Null, "the new event waits for the agent");
     }
 
     #[test]

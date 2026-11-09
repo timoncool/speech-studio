@@ -881,8 +881,9 @@ fn marked(qc: Option<crate::audio::qc::Check>, flawed: &[String]) -> Option<crat
 }
 
 /// The take's sound measured and the flags of `want` it raises (Dub Studio's synthesis defect first), over the part of
-/// the take the project uses; its expected length is counted on `spoken`, the take's text as the engine was given it.
-fn sound_flags(take: &Take, spoken: &str, lang: &str, file: &Path, want: &[String], norm: crate::audio::flags::Norm) -> Result<(crate::audio::flags::Features, Vec<String>), String> {
+/// the take the project uses; its expected length is counted on `spoken`, the take's text as the engine was given it,
+/// at the `speed` it was asked at, as the voicing guard counts it.
+fn sound_flags(take: &Take, spoken: &str, lang: &str, speed: f64, file: &Path, want: &[String], norm: crate::audio::flags::Norm) -> Result<(crate::audio::flags::Features, Vec<String>), String> {
     const SR: u32 = 24_000;
     let tmp = tempfile::Builder::new().prefix("flags-").tempdir().map_err(|e| e.to_string())?;
     let wav = tmp.path().join("take.wav");
@@ -900,7 +901,7 @@ fn sound_flags(take: &Take, spoken: &str, lang: &str, file: &Path, want: &[Strin
     let mut raised = crate::audio::flags::flags(&features, want, spoken, norm);
     if on("defect") {
         let chars = stx::visible(spoken).chars().filter(|c| c.is_alphanumeric()).count();
-        if let Some(d) = tts_host::defect(&samples, SR as i32, chars, lang, 1.0) {
+        if let Some(d) = tts_host::defect(&samples, SR as i32, chars, lang, tts_host::pace_of(speed)) {
             raised.insert(0, d.to_string());
         }
     }
@@ -988,7 +989,7 @@ fn check_takes(p: &SpeechPaths, pid: &str, made: &BTreeMap<String, Vec<u32>>, re
             };
             if !want.is_empty() {
                 let spoken = preparation::prepare(&take.text, &prep_opts(p, &project, project.lang_of(&b), project.engine_of(&b), voice.as_deref(), &entries, false)).map_err(|e| t!("stress-failed", detail = e))?.text;
-                let (features, raised) = sound_flags(take, &spoken, &lang, &file, &want, norm)?;
+                let (features, raised) = sound_flags(take, &spoken, &lang, project.params_of(&b).speed, &file, &want, norm)?;
                 check.speech_secs = Some(features.trimmed_s);
                 check.syllables = Some(crate::audio::flags::syllables(&spoken));
                 check.lufs = features.lufs;

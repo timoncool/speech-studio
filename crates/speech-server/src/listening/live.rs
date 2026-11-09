@@ -185,9 +185,7 @@ impl Duplex {
     }
 }
 
-/// The person is heard this much over the studio's voice coming back: on the recordings of 08.11 the echo spreads
-/// around its median and the person is a median 30 dB over it; with 12 dB, 9 % of the person's 100 ms frames are held
-/// back (44 % at the fixed −18 dB).
+/// The person is heard this much over the studio's voice coming back, which spreads around its measured level.
 pub const ECHO_MARGIN_DB: f32 = 12.0;
 /// How fast the measured echo follows each piece held back.
 const ECHO_LEARN: f32 = 0.1;
@@ -278,12 +276,28 @@ pub fn type_line(text: &str) -> Result<(), String> {
     .ok_or_else(|| t!("listen-live-not-running"))
 }
 
-/// What live recognition has heard so far, and why it stopped when it did.
+/// What live recognition has heard so far, and why it stopped when it did; the lines without their word timings,
+/// which the conversation's turns are polled for many times a second.
 pub fn state() -> Value {
+    state_of(false)
+}
+
+/// `state` with each line's word timings.
+pub fn state_with_words() -> Value {
+    state_of(true)
+}
+
+fn state_of(words: bool) -> Value {
     match live().lock().unwrap_or_else(|p| p.into_inner()).as_ref() {
         Some(l) => json!({
             "running": !l.stop.load(Ordering::Relaxed),
-            "lines": l.lines.iter().enumerate().map(|(n, (a, z, text))| json!({ "start": a, "end": z, "text": text, "typed": l.typed.contains(&n), "owner": !l.foreign.contains(&n), "echo": l.echo.contains(&n), "words": l.words.get(&n).map(|ws| ws.iter().map(|(w, a, z)| json!({ "text": w, "start": a, "end": z })).collect::<Vec<_>>()), "words_source": if l.typed.contains(&n) { "typed" } else if l.words.contains_key(&n) { "asr" } else { "none" } })).collect::<Vec<_>>(),
+            "lines": l.lines.iter().enumerate().map(|(n, (a, z, text))| {
+                let mut line = json!({ "start": a, "end": z, "text": text, "typed": l.typed.contains(&n), "owner": !l.foreign.contains(&n), "echo": l.echo.contains(&n), "words_source": if l.typed.contains(&n) { "typed" } else if l.words.contains_key(&n) { "asr" } else { "none" } });
+                if words {
+                    line["words"] = json!(l.words.get(&n).map(|ws| ws.iter().map(|(w, a, z)| json!({ "text": w, "start": a, "end": z })).collect::<Vec<_>>()));
+                }
+                line
+            }).collect::<Vec<_>>(),
             "partial": l.partial.as_ref().map(|(a, text)| json!({ "start": a, "text": text })),
             "error": l.error,
             "muted": l.muted,

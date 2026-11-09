@@ -415,8 +415,8 @@ mod tests {
         assert_eq!(cosine(&[], &[]), 0.0);
     }
 
-    /// A print an earlier version took with the recording's silence recognised no phrase of the owner (98 % of their
-    /// lines under the 0.61 they had set): it is told as stale and never used, a print of the speech alone is.
+    /// A print taken with the recording's silence does not recognise the owner's phrases: it is told as stale and
+    /// never used, a print of the speech alone is.
     #[test]
     fn a_print_taken_with_the_silence_is_stale_and_one_of_the_speech_is_used() {
         let dir = tempfile::tempdir().unwrap();

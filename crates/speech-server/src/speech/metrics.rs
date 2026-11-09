@@ -127,9 +127,15 @@ pub fn measure(lines: &[Value], studio: &[(f64, f64)], fillers: &[Vec<String>]) 
             _ => replies.push((a, z)),
         }
     }
+    // a reply is answered by the person's first line after it, unless the studio spoke again before that line
     let turns: Vec<Value> = replies
         .iter()
-        .filter_map(|&(a, z)| spoken.iter().find(|s| s.end > z && s.start >= a - REPLY_GAP_SECS).map(|s| json!({ "studio_end": round2(z), "line": s.n, "ms": ms(s.start - z) })))
+        .enumerate()
+        .filter_map(|(i, &(a, z))| {
+            let line = spoken.iter().find(|s| s.end > z && s.start >= a - REPLY_GAP_SECS)?;
+            let overtaken = replies.get(i + 1).is_some_and(|next| next.0 < line.start);
+            (!overtaken).then(|| json!({ "studio_end": round2(z), "line": line.n, "ms": ms(line.start - z) }))
+        })
         .collect();
     let latencies: Vec<i64> = turns.iter().filter_map(|t| t["ms"].as_i64()).collect();
 
@@ -161,7 +167,7 @@ pub fn measure(lines: &[Value], studio: &[(f64, f64)], fillers: &[Vec<String>]) 
 
 /// The person's lines numbered from `from` to `to` (both counted, from 1), all of them when not given.
 fn range(q: &HashMap<String, String>) -> Result<(Vec<Value>, Value), Response> {
-    let state = crate::listening::recognition::state();
+    let state = crate::listening::recognition::state_with_words();
     let (lines, _) = super::say::person_lines(&state);
     let number = |k: &str| q.get(k).filter(|v| !v.is_empty()).map(|v| v.parse::<usize>().map_err(|_| refuse(StatusCode::BAD_REQUEST, "bad_range", t!("live-metrics-bad-range", value = v.clone())))).transpose();
     let from = number("from")?.unwrap_or(1).max(1);
@@ -303,5 +309,16 @@ mod tests {
         assert_eq!(m["speech_secs"].to_string(), "0.0");
         let typed = measure(&[json!({ "n": 1, "text": "привет", "typed": true })], &[], &fillers());
         assert_eq!(typed["speech_secs"].to_string(), "0.0");
+    }
+
+    /// A reply the studio followed with another before the person spoke went unanswered: it is no turn, and the person's
+    /// line answers the last reply only.
+    #[test]
+    fn a_reply_overtaken_by_the_next_is_not_answered() {
+        let m = measure(&[line(1, &[("ну", 40.0, 40.3), ("да", 40.4, 40.7)])], &[(10.0, 12.0), (14.0, 16.0)], &fillers());
+        let turns = m["start_latency"]["turns"].as_array().unwrap();
+        assert_eq!(turns.len(), 1, "{m}");
+        assert_eq!(turns[0]["studio_end"], 16.0);
+        assert_eq!(turns[0]["ms"], 24000, "from the reply's end to the person's first word");
     }
 }

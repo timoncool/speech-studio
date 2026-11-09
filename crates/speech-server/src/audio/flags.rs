@@ -239,8 +239,7 @@ pub struct Norm {
 }
 
 /// Share of the samples at full scale from which a take is clipped: the level open-tts-eval fails a clip at (it warns
-/// from 0.001). A loud voice touches full scale for a few samples in a second and that is not heard: one such run used
-/// to mark the take defective and keep the project from export.
+/// from 0.001). A loud voice touching full scale for a few samples is not heard as clipping.
 pub const CLIP_SHARE: f64 = 0.01;
 
 /// The flags of `want` the take raises, as issue names (`clipping`, `little_speech`, `long_pause`, `edge`,

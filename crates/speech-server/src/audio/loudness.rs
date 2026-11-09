@@ -174,14 +174,15 @@ pub fn level(x: &mut [f32], sr: u32, target: f64, peak_db: f64, dual_mono: bool)
     // measured by the mean square of its loud samples on the same scale, as `level_piece` does, instead of refusing
     // the export as silent
     let integrated_lufs = |x: &[f32], sr: u32| {
-        integrated_lufs(x, sr)
-            .filter(|l| l.is_finite())
-            .or_else(|| {
-                let peak = x.iter().fold(0.0f32, |m, &v| m.max(v.abs()));
-                let loud: Vec<f64> = x.iter().filter(|v| peak >= 1e-4 && v.abs() > peak * 0.05).map(|&v| v as f64 * v as f64).collect();
-                (!loud.is_empty()).then(|| -0.691 + 10.0 * (loud.iter().sum::<f64>() / loud.len() as f64).max(1e-12).log10())
-            })
-            .map(|l| if dual_mono { l + DUAL_MONO_DB } else { l })
+        let short = x.len() < (0.4 * sr as f64) as usize;
+        let measured = if short {
+            let peak = x.iter().fold(0.0f32, |m, &v| m.max(v.abs()));
+            let loud: Vec<f64> = x.iter().filter(|v| peak >= 1e-4 && v.abs() > peak * 0.05).map(|&v| v as f64 * v as f64).collect();
+            (!loud.is_empty()).then(|| -0.691 + 10.0 * (loud.iter().sum::<f64>() / loud.len() as f64).max(1e-12).log10())
+        } else {
+            integrated_lufs(x, sr).filter(|l| l.is_finite())
+        };
+        measured.map(|l| if dual_mono { l + DUAL_MONO_DB } else { l })
     };
     let before = integrated_lufs(x, sr).ok_or_else(|| t!("media-loudnorm-silent"))?;
     let mut limit_db = peak_db - TRUE_PEAK_MARGIN_DB;
@@ -233,6 +234,15 @@ mod tests {
         assert!(done.after > done.before, "brought up towards the target: {done:?}");
         assert!(word.iter().all(|v| v.abs() < 1.0));
         assert!(level(&mut vec![0.0f32; 4_000], sr, -14.0, -1.0, false).is_err(), "silence has nothing to level");
+    }
+
+    /// A programme longer than a gating block that is all under the absolute gate is silence, not something to raise by
+    /// fifty decibels: it is refused as before, only a programme shorter than a block is measured by its loud samples.
+    #[test]
+    fn a_long_near_silent_programme_is_refused() {
+        let sr = 24_000;
+        let mut hiss: Vec<f32> = (0..sr as usize * 5).map(|i| 2e-4 * ((i * 7919 % 1000) as f32 / 500.0 - 1.0)).collect();
+        assert!(level(&mut hiss, sr, -14.0, -1.0, false).is_err());
     }
 
     /// Levelling a whole book holds its pieces, not copies of it: the memory `level` takes beyond the programme does

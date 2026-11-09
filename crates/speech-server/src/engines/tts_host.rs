@@ -459,9 +459,7 @@ fn token_cap(chars: usize, lang: &str) -> u32 {
 }
 
 /// Секунд звука на знак, выше которых фраза считается разнесённой: вдвое медленнее обычного чтения, плюс запас на
-/// короткие фразы. На 970 дублях установленной студии (09.11.2026) медиана 0,09–0,11 с на знак, p95 у Drama 3 и
-/// Qwen3-TTS 0,16–0,19, p99 до 0,25: прежний предел 0,13 (HiggsAudio-Studio) попадал в обычный разброс медленных
-/// голосов и браковал их на каждой попытке.
+/// короткие фразы; медленные голоса читают в пределах этого.
 const RUNAWAY_PER_CHAR: f64 = 0.2;
 const RUNAWAY_SLACK: f64 = 3.0;
 /// Секунд звука на знак, ниже которых фраза считается оборванной (22 знака в секунду; обычное чтение — 9–13).
@@ -491,15 +489,13 @@ fn tail_click(samples: &[f32], sr: usize) -> (f64, f64) {
     let at_rate: Vec<f32> = if sr == CLICK_RATE {
         end.to_vec()
     } else {
-        let n = (end.len() as u64 * CLICK_RATE as u64 / sr as u64) as usize;
-        (0..n)
-            .map(|i| {
-                let x = i as f64 * sr as f64 / CLICK_RATE as f64;
-                let (a, f) = (x.floor() as usize, x.fract() as f32);
-                let b = (a + 1).min(end.len() - 1);
-                end[a.min(end.len() - 1)] * (1.0 - f) + end[b] * f
-            })
-            .collect()
+        match audio_post::resample::mono(end, sr as u32, CLICK_RATE as u32) {
+            Ok(x) => x,
+            Err(e) => {
+                tracing::error!("[ERROR] the end of a take could not be resampled to measure a click: {e:#}");
+                return (0.0, 0.0);
+            }
+        }
     };
     let tail = CLICK_RATE * 30 / 1000;
     if at_rate.len() < tail + 2 {
@@ -834,7 +830,15 @@ pub fn synth(engine: &Tts, req: &Request) -> Result<Synth, String> {
             }
         }
         let started = Instant::now();
-        let (mut samples, sr) = run_guarded(engine, call, timeout, req.live.clone())?;
+        let (mut samples, sr) = match run_guarded(engine, call, timeout, req.live.clone()) {
+            Ok(made) => made,
+            // a later attempt failing leaves the take an earlier one kept: the block is not left without a voice
+            Err(e) if kept.is_some() && !e.starts_with(ENGINE_STUCK) && e != crate::jobs::CANCELLED => {
+                tracing::warn!("voicing guard: {} attempt {} of {tries} failed: {e}", engine.name(), attempt + 1);
+                break;
+            }
+            Err(e) => return Err(e),
+        };
         let seconds = started.elapsed().as_secs_f64();
         if !aloud && soften_tail_click(&mut samples, sr.max(0) as usize) {
             tracing::info!("voicing: {} ended the take with a click, its last 30 ms are faded out", engine.name());
