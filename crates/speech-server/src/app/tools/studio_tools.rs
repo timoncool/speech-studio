@@ -427,7 +427,7 @@ pub(super) fn tools() -> Vec<Tool> {
         },
         Tool {
             name: "studio_timings",
-            description: "How long each step took, latest last, to compare engines with the person: asr - each phrase heard live (the recogniser, the speech's length, recognise_ms, after_speech_ms from the end of the person's speech to its text); tts - each phrase said aloud (engine and voice, heard_ms from its text arriving to its first sound, first_ms the engine's own time to it, synth_ms, audio_secs); load - an engine loaded for speaking (ms). kind picks one of them; last how many (100).",
+            description: "How long each step took, latest last, to compare engines with the person: asr - each phrase heard live (the recogniser, the speech's length, recognise_ms, after_speech_ms from the end of the person's speech to its text); tts - each phrase said aloud (engine and voice, heard_ms from its text arriving to its first sound, first_ms the engine's own time to it, synth_ms, audio_secs, queue_wait_ms the silence heard before it because it was not ready); load - an engine loaded for speaking (ms). kind picks one of them; last how many (100).",
             schema: || object(json!({ "kind": { "type": "string", "enum": ["asr", "tts", "load"] }, "last": { "type": "integer", "minimum": 1 } }), &[]),
             call: |args| get(format!("/timings{}", query(&[("kind", given(args, "kind")), ("last", args.get("last").and_then(Value::as_u64).map(|v| v.to_string()))]))),
         },
@@ -445,7 +445,7 @@ pub(super) fn tools() -> Vec<Tool> {
         },
         Tool {
             name: "say_state",
-            description: "A say_start session: each phrase with whether it was said, is waiting, was interrupted or failed, the wait the person heard from its text arriving to its first sound (heard_ms: loading the engine and the queue included), the engine's own time to the first sound (first_ms) and its length; the text not yet a phrase; whether the session is open. last gives only the last N phrases.",
+            description: "A say_start session: each phrase with whether it was said, is waiting, was interrupted or failed, the wait the person heard from its text arriving to its first sound (heard_ms: loading the engine and the queue included), the engine's own time to the first sound (first_ms), its length, and queue_wait_ms - the silence the person heard before it because it was not ready when the phrase before it ended (0: ready in time; none for the session's first phrase); at the top the longest such silence (queue_wait_ms) and how many were over gaps_over_ms (300: heard as the studio stopping mid-thought); the text not yet a phrase; whether the session is open. last gives only the last N phrases.",
             schema: || object(json!({ "session": { "type": "string" }, "last": { "type": "integer", "minimum": 1 } }), &["session"]),
             call: |args| get(format!("/speech/say/{}{}", segment(&text(args, "session")?), query(&[("last", args.get("last").and_then(Value::as_u64).map(|v| v.to_string()))]))),
         },

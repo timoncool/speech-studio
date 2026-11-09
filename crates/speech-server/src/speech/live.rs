@@ -77,6 +77,9 @@ pub struct Aired {
     pub block: String,
     pub from: Instant,
     pub to: Instant,
+    /// The silence heard before this phrase because it was not ready: from the later of the end of the session's
+    /// phrase before it and the arrival of its own text, to its first sound. None for a session's first phrase.
+    pub wait_ms: Option<u64>,
 }
 
 struct Airing {
@@ -100,8 +103,18 @@ fn aired(project: &str, block: &str, secs: f64) {
     air.blocks.retain(|a| now.saturating_duration_since(a.to).as_secs() < AIRED_SECS);
     match air.blocks.iter_mut().rev().find(|a| a.block == block) {
         Some(a) => a.to = to,
-        None => air.blocks.push(Aired { project: project.into(), block: block.into(), from, to }),
+        None => {
+            let before = air.blocks.iter().filter(|a| a.project == project).map(|a| a.to).max();
+            let arrived = crate::app::since_arrival(block).and_then(|ms| now.checked_sub(std::time::Duration::from_millis(ms)));
+            let wait_ms = before.map(|end| from.saturating_duration_since(arrived.map_or(end, |t| t.max(end))).as_millis() as u64);
+            air.blocks.push(Aired { project: project.into(), block: block.into(), from, to, wait_ms });
+        }
     }
+}
+
+/// The silence heard before `block` because it was not ready (see `Aired::wait_ms`).
+pub fn queue_wait_ms(block: &str) -> Option<u64> {
+    airing().blocks.iter().rev().find(|a| a.block == block).and_then(|a| a.wait_ms)
 }
 
 /// The window dropped `project`'s sound: what it had queued does not sound.
@@ -136,7 +149,7 @@ pub fn aired_blocks() -> Vec<Aired> {
 #[cfg(test)]
 pub fn air_for_test(project: &str, block: &str, from: Instant, to: Instant) {
     let mut air = airing();
-    air.blocks.push(Aired { project: project.into(), block: block.into(), from, to });
+    air.blocks.push(Aired { project: project.into(), block: block.into(), from, to, wait_ms: None });
 }
 
 /// The windows that play what is said aloud, by connection, in the order they opened: only the first plays it, so a
@@ -327,6 +340,28 @@ mod tests {
         assert_eq!(player(), Some(first.0));
         drop(first);
         assert_eq!(player(), Some(second.0), "the next window plays once the first closes");
+    }
+
+    /// Scenario of TZ-LIVE-TRAINER F: a phrase not ready when the one before it ended is told by the silence heard
+    /// before it; a phrase ready in time, the session's first and one whose own text came late wait nothing of the queue.
+    #[test]
+    fn the_silence_before_a_phrase_that_was_not_ready_is_measured() {
+        let p = "p-queue-wait";
+        crate::app::arrived("qw-1");
+        aired(p, "qw-1", 0.05);
+        assert_eq!(queue_wait_ms("qw-1"), None, "the session's first phrase");
+        crate::app::arrived("qw-2");
+        aired(p, "qw-2", 0.05);
+        assert_eq!(queue_wait_ms("qw-2"), Some(0), "queued behind the first while it still played");
+        crate::app::arrived("qw-3");
+        std::thread::sleep(std::time::Duration::from_millis(250));
+        aired(p, "qw-3", 0.05);
+        let wait = queue_wait_ms("qw-3").unwrap();
+        assert!((120..=260).contains(&wait), "ready only well after the phrase before it ended: {wait}");
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        crate::app::arrived("qw-4");
+        aired(p, "qw-4", 0.05);
+        assert!(queue_wait_ms("qw-4").unwrap() < 50, "its text came late, not the engine: {:?}", queue_wait_ms("qw-4"));
     }
 
     #[tokio::test]

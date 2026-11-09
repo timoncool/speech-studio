@@ -34,7 +34,7 @@ fn time_aloud(live: &crate::speech::live::Phrase, take: &Take) {
         crate::app::note("tts", json!({
             "block": live.block(), "engine": take.engine, "voice": take.voice, "chars": take.text.chars().count(),
             "heard_ms": take.heard_ms, "first_ms": take.first_ms, "synth_ms": (take.synth_secs * 1000.0).round() as u64,
-            "audio_secs": (take.duration * 100.0).round() / 100.0,
+            "audio_secs": (take.duration * 100.0).round() / 100.0, "queue_wait_ms": crate::speech::live::queue_wait_ms(live.block()),
         }));
     }
 }

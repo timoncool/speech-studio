@@ -451,8 +451,9 @@ pub async fn stop(State(st): State<AppState>, AxPath(sid): AxPath<String>) -> Re
     Json(json!({ "stopped": sid })).into_response()
 }
 
-/// GET /speech/say/{session}[?last=N] — what was said and how soon each phrase was heard, what waits, whether it is
-/// open; with `last`, only the last N phrases.
+/// GET /speech/say/{session}[?last=N] — what was said and how soon each phrase was heard, the silence heard before a
+/// phrase that was not ready in time (`queue_wait_ms`), what waits, whether it is open; with `last`, only the last N
+/// phrases.
 pub async fn state(State(st): State<AppState>, AxPath(sid): AxPath<String>, axum::extract::Query(q): axum::extract::Query<HashMap<String, String>>) -> Response {
     let project = match crate::speech::load(&st.workspace, &sid) {
         Ok(p) => p,
@@ -466,11 +467,19 @@ pub async fn state(State(st): State<AppState>, AxPath(sid): AxPath<String>, axum
         .skip(skip)
         .map(|b| {
             let take = b.takes.iter().find(|t| Some(t.n) == b.active);
-            json!({ "id": b.id, "text": b.text, "state": if INTERRUPTED.lock().unwrap_or_else(|p| p.into_inner()).contains_key(&b.id) { "interrupted" } else if take.is_some() { "said" } else if b.error.is_some() { "failed" } else { "waiting" }, "error": b.error.as_ref().map(|e| e.text.clone()), "first_ms": take.and_then(|t| t.first_ms), "heard_ms": take.and_then(|t| t.heard_ms), "seconds": take.map(|t| t.duration) })
+            json!({ "id": b.id, "text": b.text, "state": if INTERRUPTED.lock().unwrap_or_else(|p| p.into_inner()).contains_key(&b.id) { "interrupted" } else if take.is_some() { "said" } else if b.error.is_some() { "failed" } else { "waiting" }, "error": b.error.as_ref().map(|e| e.text.clone()), "first_ms": take.and_then(|t| t.first_ms), "heard_ms": take.and_then(|t| t.heard_ms), "queue_wait_ms": super::live::queue_wait_ms(&b.id), "seconds": take.map(|t| t.duration) })
         })
         .collect();
-    Json(json!({ "session": sid, "open": pending.is_some(), "waiting_text": pending.unwrap_or_default(), "phrases": phrases })).into_response()
+    let waits: Vec<u64> = phrases.iter().filter_map(|p| p["queue_wait_ms"].as_u64()).collect();
+    Json(json!({
+        "session": sid, "open": pending.is_some(), "waiting_text": pending.unwrap_or_default(), "phrases": phrases,
+        "queue_wait_ms": waits.iter().max(), "gaps_over_ms": GAP_MS, "gaps_over": waits.iter().filter(|w| **w > GAP_MS).count(),
+    }))
+    .into_response()
 }
+
+/// A silence between two phrases longer than this is heard as the studio stopping mid-thought.
+pub const GAP_MS: u64 = 300;
 
 static LISTENING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 /// The person stopped the speech in a window, when this many phrases had been heard: what an agent says next waits for
