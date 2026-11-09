@@ -6511,7 +6511,7 @@ dependencies = [
 
 [[package]]
 name = "speech-server"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "acpp-server",
  "anyhow",
@@ -6595,7 +6595,7 @@ dependencies = [
 
 [[package]]
 name = "speech-studio-desktop"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "rfd 0.18.0",
  "serde",

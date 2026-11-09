@@ -6,6 +6,8 @@ release notes on GitHub are taken from the release's section.
 
 ## Unreleased
 
+## 0.5.0 — 2026-11-10
+
 ### Added
 
 - **Audio8 TTS Realistic-Air — a compact multilingual voice with zero-shot cloning** (Settings → Models → Voicing): a new voicing engine beside Higgs and Supertonic — the Audio8 Realistic-Air 0.6B model (Q8_0, 1.5 GB) on the audio.cpp server. It speaks 23 languages, Russian among them, with its own stress, clones a voice from a reference clip and its exact transcript, and answers a phrase at a time at 44.1 kHz. Download it in Models; Higgs stays the default.
@@ -27,6 +29,8 @@ release notes on GitHub are taken from the release's section.
 
 ### Fixed
 
+- **A block you approved by ear is exported** ([#35](https://github.com/timoncool/speech-studio/issues/35)): a take the check turned down kept its block out of the export even after you listened to it and marked it «approved» — the export said hundreds of voiced blocks were errors. Your approval now outranks the check: the block counts as voiced, passes in the quality light and is exported as it is; the export window says so. The «Export without the unvoiced» checkbox shows its number again.
+- **Downloads through a proxy whose password has special characters** (`/ ? # :`, a space, non-Latin letters) now work instead of being refused; the libraries the studio is built on are updated.
 - **Recognition no longer fails after voicing with Qwen3-TTS** ([#28](https://github.com/timoncool/speech-studio/issues/28)): «transcribe.dll: LoadLibraryExW failed» came when the recognition engine was loaded after Qwen3-TTS — both carried a ggml library of the same name, and Windows gave the second engine the first one's. The recognition engine (transcribe.cpp 0.2.1) now names its own, so the two no longer meet in either order, on Windows and Linux.
 - **Blocks no longer stay unvoiced or keep a project from export because of a too strict sound check**: a take was called «clipped» for a single run of three samples at full scale — now from 1 % of the samples, the level speech-quality tools fail a clip at — and such a take kept the whole project from export («blocks keep the export back»). A click at the end of a take is faded out instead of the take being thrown away. A phrase counts as «drawn out» only when it is twice as slow as normal reading (slow voices were turned away on every attempt), and the limits follow the speed you asked for. When every attempt still comes out with a defect, the least damaged take is kept and marked for you to listen to, instead of «No block was voiced». Every take turned away is written to the log with what it was measured by.
 - **The check of a take no longer mistakes a fast start or spoken numbers for a defect**: an engine that begins speaking at once (Audio8) had nearly every take sent to a second recognition as «cut at the edge», which made checking a project take minutes; and a phrase with numbers said in words («восемнадцать тридцать») was called «mush instead of the text» when the recogniser wrote them in digits.
