@@ -275,14 +275,17 @@ export const speechApi = {
   unknownWords: (pid: string) => getCoded<{ words: UnknownWord[]; stress_checked: boolean }>(`/projects/${pid}/unknown-words`),
   tryRule: (pid: string, body: { phrase: string; rule: DictEntry; voice: string | null }) => postCoded<{ job_id: string }>(`/projects/${pid}/dictionary/try`, body),
   tryUrl: (pid: string, file: string) => `${BASE}/projects/${pid}/tries/${encodeURIComponent(file)}`,
-  /** A take as it sounds in the project: with its voice effect, and with the clip's gain and fades over the kept part. */
-  takeUrl: (pid: string, file: string, fx?: string | null, mix?: Mix, cut?: [number, number] | null) => {
+  /** A take as it sounds in the project: with its voice effect, with the clip's gain and fades over the kept part, and
+   * with `level` (the project's loudness preset) as loud as its exported file will be. Without them — the model's file. */
+  takeUrl: (pid: string, file: string, fx?: string | null, mix?: Mix, cut?: [number, number] | null, level?: string) => {
     const q = new URLSearchParams();
     if (fx) q.set("fx", fx);
-    if (mix && !isFlat(mix)) {
+    const mixed = !!mix && !isFlat(mix);
+    if (mixed) {
       q.set("gain", String(mix.gain_db)); q.set("fin", String(mix.fade_in)); q.set("fout", String(mix.fade_out));
-      if (cut) { q.set("a", String(cut[0])); q.set("z", String(cut[1])); }
     }
+    if (level && level !== "off") q.set("level", level);
+    if (cut && (mixed || q.has("level"))) { q.set("a", String(cut[0])); q.set("z", String(cut[1])); }
     const query = q.toString();
     return `${BASE}/projects/${pid}/takes/${encodeURIComponent(file)}${query ? `?${query}` : ""}`;
   },

@@ -73,7 +73,7 @@ export default function EngineAB({ pid, project, block, onPick, onReload, onClos
     stop();
     const take = block.takes.find((tk) => tk.n === made?.[side].take);
     if (!take) return;
-    const el = new Audio(speechApi.takeUrl(pid, take.file));
+    const el = new Audio(speechApi.takeUrl(pid, take.file, null, undefined, null, project.settings.loudness));
     el.onended = () => setPlaying(null);
     audio.current = el;
     setPlaying(side);

@@ -11,7 +11,7 @@ import { Tip } from "../Hint";
 type Sort = "created" | "duration" | "rtf";
 
 /** Every take of the project with the parameters it was made with; play one or voice its block again with the same seed. */
-export default function HistoryDialog({ pid, onRepeat, onClose }: { pid: string; onRepeat: (block: string, seed: number) => void; onClose: () => void }) {
+export default function HistoryDialog({ pid, level, onRepeat, onClose }: { pid: string; /** The project's loudness preset: takes play as loud as the export. */ level: string; onRepeat: (block: string, seed: number) => void; onClose: () => void }) {
   const { t, i18n } = useTranslation();
   useEscapeLayer(onClose);
   const engines = useEngines();
@@ -29,7 +29,8 @@ export default function HistoryDialog({ pid, onRepeat, onClose }: { pid: string;
     const key = `${r.block}-${r.n}`;
     audio.current?.pause();
     if (playing === key) { setPlaying(null); return; }
-    const a = new Audio(`${speechApi.takeUrl(pid, r.file)}?n=${r.n}`);
+    const url = speechApi.takeUrl(pid, r.file, null, undefined, null, level);
+    const a = new Audio(`${url}${url.includes("?") ? "&" : "?"}n=${r.n}`);
     audio.current = a;
     a.onended = () => setPlaying(null);
     a.play().then(() => setPlaying(key), (e: unknown) => setError(errorText(e)));

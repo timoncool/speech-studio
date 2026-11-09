@@ -315,7 +315,7 @@ export default function ProjectEditor({ pid, onBack }: { pid: string; onBack: ()
     if (!take) return;
     audio.current?.pause();
     const fx = latestProject.current ? fxOf(latestProject.current, b) : null;
-    const url = speechApi.takeUrl(pid, take.file, fx, b.mix, take.cut);
+    const url = speechApi.takeUrl(pid, take.file, fx, b.mix, take.cut, latestProject.current?.settings.loudness);
     const a = new Audio(`${url}${url.includes("?") ? "&" : "?"}n=${take.n}`);
     a.volume = volume.current;
     a.playbackRate = rate.current;
@@ -915,7 +915,7 @@ export default function ProjectEditor({ pid, onBack }: { pid: string; onBack: ()
         <EnrichDialog changes={enriched.changes} refused={enriched.refused} mode={enriched.mode} onClose={() => setEnriched(null)}
           onApply={(kept) => { edit((p) => { for (const b of blockList(p)) { const c = kept.find((x) => x.id === b.id); if (c && b.text === c.before) b.text = c.after; } return p; }); setEnriched(null); }} />
       )}
-      {history && <HistoryDialog pid={pid} onClose={() => setHistory(false)} onRepeat={(block, seed) => { setHistory(false); void runSynth({ ids: [block], force: true, seed }); }} />}
+      {history && <HistoryDialog pid={pid} level={project.settings.loudness} onClose={() => setHistory(false)} onRepeat={(block, seed) => { setHistory(false); void runSynth({ ids: [block], force: true, seed }); }} />}
       {dictionary && <DictionaryDialog pid={pid} project={project} onChange={edit} onClose={() => setDictionary(false)} />}
       {recast && (
         <RecastDialog speaker={recast.speaker} from={project.cast[recast.speaker] ?? null} to={recast.to} blocks={castBlocks(recast.speaker)} engine={project.settings.engine}
