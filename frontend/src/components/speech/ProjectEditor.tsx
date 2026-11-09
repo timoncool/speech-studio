@@ -32,10 +32,12 @@ import { usePublishEditor } from "../../lib/editorBridge";
 import ErrorNote from "../ErrorNote";
 import RecastDialog from "./RecastDialog";
 import { CLOUD_ENGINE_NAMES, askCloud, askDirector } from "../../lib/cloudConsent";
-import { JOBS_CHANGED, bridgeError, flash, isMine, useChanged } from "../../lib/mcpBridge";
+import { JOBS_CHANGED, bridgeError, isMine, useChanged } from "../../lib/mcpBridge";
 import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors, type Announcements, type DragEndEvent, type UniqueIdentifier } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import BlockRow, { type BlockActions } from "./BlockRow";
+import LazyBlock from "./LazyBlock";
+import { LAZY_FROM, showBlockRow } from "./blockRows";
 import VoicePicker from "./VoicePicker";
 import ProjectSettings from "./ProjectSettings";
 import ExportDialog from "./ExportDialog";
@@ -248,9 +250,7 @@ export default function ProjectEditor({ pid, onBack }: { pid: string; onBack: ()
       if (!blocks.some((b) => b.id === id)) return false;
       setSelected([id]);
       setAnchor(id);
-      const row = document.getElementById(`block-${id}`);
-      row?.scrollIntoView({ block: "center", behavior: "smooth" });
-      flash(row);
+      showBlockRow(id, { smooth: true });
       return true;
     },
     player: {
@@ -410,9 +410,7 @@ export default function ProjectEditor({ pid, onBack }: { pid: string; onBack: ()
   const showBlock = (id: string) => {
     setSelected([id]);
     setAnchor(id);
-    const row = document.getElementById(`block-${id}`);
-    row?.scrollIntoView({ block: "center", behavior: "smooth" });
-    flash(row);
+    showBlockRow(id, { smooth: true });
   };
 
   const listenFrom = (id: string) => {
@@ -714,7 +712,7 @@ export default function ProjectEditor({ pid, onBack }: { pid: string; onBack: ()
       </div>
       {simple && (
         <StepBar steps={[
-          { id: "text", done: blocks.some((b) => b.text.trim()), run: () => { const first = blocks[0]; if (first) document.getElementById(`block-${first.id}`)?.querySelector("textarea")?.focus(); } },
+          { id: "text", done: blocks.some((b) => b.text.trim()), run: () => { const first = blocks[0]; if (first) showBlockRow(first.id, { focus: true }); } },
           { id: "voices", done: blocks.length > 0 && blocks.every((b) => voiceOf(project, b) !== null || engines?.find((e) => e.id === engineOf(project, b))?.needs_voice === false), run: () => { setCastOpen(true); document.getElementById("speech-cast")?.scrollIntoView({ block: "nearest" }); } },
           { id: "voice", done: (counts.ready ?? 0) > 0 && (counts.ready ?? 0) >= blocks.length - (counts.skipped ?? 0), run: () => { if (!job) void runSynth({}); } },
           { id: "export", done: exported, run: () => setExporting(true) },
@@ -743,7 +741,7 @@ export default function ProjectEditor({ pid, onBack }: { pid: string; onBack: ()
       {musicOpen && <MusicDialog pid={pid} tracks={(project.tracks ?? []).map((tr) => ({ id: tr.id, name: tr.name }))} flush={flush} onClose={() => setMusicOpen(false)} onDone={() => { setMusicOpen(false); reload(); }} />}
       {searching && (
         <SearchReplace blocks={blocks} onClose={() => { setSearching(false); setFound({ re: null, current: null }); }} onFound={onFound}
-          onJump={(id) => document.getElementById(`block-${id}`)?.scrollIntoView({ block: "center", behavior: "smooth" })}
+          onJump={(id) => showBlockRow(id, { smooth: true })}
           onReplace={(changes) => edit((p) => { for (const b of blockList(p)) if (changes[b.id] !== undefined) b.text = changes[b.id]; return p; })} />
       )}
       <div className="relative flex-1 min-h-0 flex">
@@ -794,7 +792,7 @@ export default function ProjectEditor({ pid, onBack }: { pid: string; onBack: ()
             </label>
           ))}
         </aside>
-        <div className="flex-1 min-w-0 overflow-y-auto px-4 py-4">
+        <div data-block-scroll className="flex-1 min-w-0 overflow-y-auto px-4 py-4">
           {error && <ErrorNote text={error} />}
           {jobError && <ErrorNote text={jobError} onClose={() => setJobError(null)} />}
           <input ref={bookFile} type="file" accept=".epub,.fb2,.pdf,.docx,.html,.htm,.md,.txt" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void openEditedBook(f); }} />
@@ -832,10 +830,12 @@ export default function ProjectEditor({ pid, onBack }: { pid: string; onBack: ()
                   const index = blockIndex.get(b.id) ?? 0;
                   const rendering = !!job && (job.ids === null ? ["pending", "stale", "failed"].includes(stateOf(b)) : job.ids.includes(b.id));
                   const note = notes[b.id];
-                  return <BlockRow key={b.id} pid={pid} engine={engineOf(project, b)} projectEngine={project.settings.engine} projectLang={project.settings.lang} speakerEngine={project.cast_engines?.[b.speaker] || null} voice={voiceOf(project, b)} block={b} index={index} state={stateOf(b)} fit={project.status?.[b.id]?.fit} rendering={rendering} playing={playing === b.id} playingTake={playing === b.id ? playingTake : null} playhead={playing === b.id ? audio : undefined} simple={simple} variants={variantsFor(b)} inheritedParams={(project.settings.one_voice ? undefined : project.cast_params?.[b.speaker]) ?? project.settings.params} tint={tintOf(b.speaker)}
+                  const row = () => <BlockRow key={b.id} pid={pid} engine={engineOf(project, b)} projectEngine={project.settings.engine} projectLang={project.settings.lang} speakerEngine={project.cast_engines?.[b.speaker] || null} voice={voiceOf(project, b)} block={b} index={index} state={stateOf(b)} fit={project.status?.[b.id]?.fit} rendering={rendering} playing={playing === b.id} playingTake={playing === b.id ? playingTake : null} playhead={playing === b.id ? audio : undefined} simple={simple} variants={variantsFor(b)} inheritedParams={(project.settings.one_voice ? undefined : project.cast_params?.[b.speaker]) ?? project.settings.params} tint={tintOf(b.speaker)}
                     stressing={!!stressing?.includes(b.id)} doubts={note && note.text === b.text ? note.words : []}
                     selected={selected.includes(b.id)} selecting={selected.length > 0} open={panel === b.id} side={wide ? side : null} a={actions(b)}
                     found={found.re} foundHere={found.current === b.id} />;
+                  if (blocks.length < LAZY_FROM) return row();
+                  return <LazyBlock key={b.id} id={b.id} chars={b.text.length} keep={panel === b.id || playing === b.id || found.current === b.id} label={t("speech.blockN", { n: index + 1 })}>{row}</LazyBlock>;
                 })}
               </ol>
             </section>
@@ -899,7 +899,7 @@ export default function ProjectEditor({ pid, onBack }: { pid: string; onBack: ()
             }
             return p;
           })}
-          onJump={(id) => document.getElementById(`block-${id}`)?.scrollIntoView({ block: "center", behavior: "smooth" })}
+          onJump={(id) => showBlockRow(id, { smooth: true })}
           onChoose={(id, previous, choice: OverlapChoice) => edit((p) => {
             const at = locate(p, id);
             const before = locate(p, previous);
@@ -932,8 +932,8 @@ export default function ProjectEditor({ pid, onBack }: { pid: string; onBack: ()
         <EngineAB pid={pid} project={project} block={blockList(project).find((b) => b.id === comparing)!} onClose={() => setComparing(null)} onReload={reload}
           onPick={(change) => edit((p) => { const at = locate(p, comparing); if (at) Object.assign(p.chapters[at[0]].blocks[at[1]], change); return p; })} />
       )}
-      {quality && <QualityReport pid={pid} blocks={blocks} onClose={() => setQuality(false)} onChanged={reload} onJump={(id) => { setSelected([id]); document.getElementById(`block-${id}`)?.scrollIntoView({ block: "center", behavior: "smooth" }); }} />}
-      {linting && <LintDialog pid={pid} blocks={blocks} onClose={() => setLinting(false)} onJump={(id) => { setSelected([id]); document.getElementById(`block-${id}`)?.scrollIntoView({ block: "center", behavior: "smooth" }); }} />}
+      {quality && <QualityReport pid={pid} blocks={blocks} onClose={() => setQuality(false)} onChanged={reload} onJump={(id) => { setSelected([id]); showBlockRow(id, { smooth: true }); }} />}
+      {linting && <LintDialog pid={pid} blocks={blocks} onClose={() => setLinting(false)} onJump={(id) => { setSelected([id]); showBlockRow(id, { smooth: true }); }} />}
       {exporting && <ExportDialog pid={pid} project={project} onChange={edit} flush={flush} onClose={() => setExporting(false)} onVoiceMissing={(ids) => { setExporting(false); void runSynth({ ids, force: true }); }} onDone={(file) => { setExported(true); pushActivity(t("speech.exported", { file }), "done"); }} />}
     </main>
   );
