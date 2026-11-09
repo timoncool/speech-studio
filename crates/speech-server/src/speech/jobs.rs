@@ -918,6 +918,14 @@ fn sound_flags(take: &Take, spoken: &str, lang: &str, pace: f64, file: &Path, wa
     Ok((features, raised))
 }
 
+/// The language a block's take is checked in: the block's own, or under «auto» the one its text is read in
+/// (`block_lang`: Russian for a Cyrillic text, as its stresses and numbers are). The check knows the words it expects,
+/// so it does not leave their language to be guessed from the sound: a Russian phrase in a voice with an accent was
+/// heard as Ukrainian and failed the check. «auto» stays for a text the rules name no language for.
+fn take_language(project: &SpeechProject, b: &Block) -> String {
+    Some(crate::text::prep::block_lang(&b.text, project.lang_of(b))).filter(|l| !l.is_empty()).unwrap_or_else(|| "auto".into())
+}
+
 /// `recognise` checks the text by recognition whatever the project's settings say.
 fn check_takes(p: &SpeechPaths, pid: &str, made: &BTreeMap<String, Vec<u32>>, recognise: bool, progress: &dyn Fn(Value)) -> Result<Vec<String>, String> {
     tts_host::make_room();
@@ -944,7 +952,7 @@ fn check_takes(p: &SpeechPaths, pid: &str, made: &BTreeMap<String, Vec<u32>>, re
         for (id, takes) in made {
             let Some(b) = project.blocks().find(|b| &b.id == id) else { continue };
             for take in b.takes.iter().filter(|t| takes.contains(&t.n)) {
-                files.push((takes_dir(p, pid).join(&take.file), project.lang_of(b).to_string(), b.id.clone()));
+                files.push((takes_dir(p, pid).join(&take.file), take_language(&project, b), b.id.clone()));
             }
         }
         crate::app::recognition::transcribe_many(&p.repo_root, &p.models_root, &files)?
@@ -957,7 +965,7 @@ fn check_takes(p: &SpeechPaths, pid: &str, made: &BTreeMap<String, Vec<u32>>, re
         progress(json!({ "type": "progress", "stage": "speech_qc", "msg": t!("speech-qc-block", n = (i + 1) as i64, total = made.len() as i64), "pct": (i * 100 / made.len().max(1)) as i64 }));
         let project = crate::speech::load(&p.workspace, pid)?;
         let Some(b) = project.blocks().find(|b| &b.id == id).cloned() else { continue };
-        let lang = project.lang_of(&b).to_string();
+        let lang = take_language(&project, &b);
         let strictness = project.settings.qc.strictness.clone();
         let voice = project.voice_of(&b).filter(|v| preset_of(project.engine_of(&b), Some(v)).is_none());
         let norm = voice_norm(&project, project.voice_of(&b).as_deref());
@@ -2589,6 +2597,20 @@ mod tests {
         assert_eq!(sp::status(&pauses, "k"), "skipped");
         project.chapters[0].blocks = vec![pauses];
         assert_eq!(not_ready(&p, &project, &wanted(&project, &Scope::default())), None, "nothing to voice: nothing to be ready for");
+    }
+
+    /// A take is checked in the language of its block's text: under «auto» a Russian text is heard in Russian, not in
+    /// whatever its sound is guessed to be; a project's or a block's own language stands; a Latin text stays «auto».
+    #[test]
+    fn a_take_is_checked_in_the_language_of_its_text() {
+        let mut project = sp::from_text("Книга", "Проверка сборки. Распознавание после озвучки должно работать.", "n");
+        assert_eq!(project.settings.lang, "auto");
+        let b = project.chapters[0].blocks[0].clone();
+        assert_eq!(take_language(&project, &b), "ru");
+        let latin = Block { text: "The check after voicing has to work.".into(), ..Default::default() };
+        assert_eq!(take_language(&project, &latin), "auto");
+        project.settings.lang = "uk".into();
+        assert_eq!(take_language(&project, &b), "uk");
     }
 
     /// An export that fails while it encodes leaves the file exported before under the same name as it was, and no

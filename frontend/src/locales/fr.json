@@ -1100,7 +1100,7 @@
     "exportDurationAllowed": "Durée autorisée : l’export utilisera ces prises",
     "allowDuration": "Autoriser l’écart de durée",
     "allowUnvoiced": "Exporter sans les {{n}} blocs non doublés",
-    "exportApproveHint": "Un bloc refusé par la vérification vous semble juste à l’oreille ? Marquez-le « approuvé » dans sa relecture : il est exporté tel quel.",
+    "exportApproveHint": "Un bloc refusé par la vérification vous semble juste à l’oreille ? Marquez-le « validé » dans sa relecture : il est exporté tel quel.",
     "format": "Format",
     "exportLoudness": "Volume : {{preset}}",
     "exportRun": "Créer le fichier",

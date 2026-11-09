@@ -190,7 +190,10 @@ pub async fn create(State(st): State<AppState>, Json(body): Json<Value>) -> Resp
         // an engine that speaks only a library voice gets one, as the window offers it, so voicing does not fail for it
         if project.settings.voice.is_none() {
             if let Some(m) = crate::engines::get(&project.settings.engine).filter(|m| m.needs_voice && m.presets.is_empty()) {
-                project.settings.voice = crate::voices::default_voice(&p.voices_dir, &project.settings.lang, m.ref_text_required);
+                // under «auto» the voice is of the language the project's text is read in, not the library's first by name
+                let text: String = project.blocks().map(|b| b.text.as_str()).take(20).collect::<Vec<_>>().join(" ");
+                let lang = crate::text::prep::block_lang(&text, &project.settings.lang);
+                project.settings.voice = crate::voices::default_voice(&p.voices_dir, &lang, m.ref_text_required);
             }
         }
         crate::speech::validate(&project)?;
