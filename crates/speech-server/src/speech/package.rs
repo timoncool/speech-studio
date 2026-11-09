@@ -150,7 +150,7 @@ pub fn unpack(p: &SpeechPaths, bytes: &[u8]) -> Result<(String, Vec<String>), St
         if f.is_dir() {
             continue;
         }
-        let name = f.name().replace('\\', "/");
+        let name = f.name().map_err(|e| e.to_string())?.replace('\\', "/");
         if name.contains("..") || name.starts_with('/') {
             return Err(t!("speechproj-bad-path", path = name));
         }

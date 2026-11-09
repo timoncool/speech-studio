@@ -153,9 +153,9 @@ pub fn decode(bytes: &[u8]) -> String {
     if let Ok(s) = std::str::from_utf8(bytes) {
         return s.to_string();
     }
-    let mut det = chardetng::EncodingDetector::new();
+    let mut det = chardetng::EncodingDetector::new(chardetng::Iso2022JpDetection::Allow);
     det.feed(bytes, true);
-    det.guess(None, true).decode(bytes).0.into_owned()
+    det.guess(None, chardetng::Utf8Detection::Allow).decode(bytes).0.into_owned()
 }
 
 /// Текст HTML-фрагмента: абзацы и заголовки — с новой строки, скрипты и стили — мимо.

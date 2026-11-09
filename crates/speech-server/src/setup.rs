@@ -2695,10 +2695,9 @@ fn dl_agent() -> Result<ureq::Agent, DlError> {
     Ok(cfg.build().into())
 }
 
-/// ureq-прокси из адреса маршрута. ureq шлёт логин и пароль прокси ровно как они записаны в адресе, без
-/// раскодирования %XX, поэтому они передаются раскодированными. Держит он их внутри своего адреса и делит по
-/// последним `@` и `:`: пароль с `/ ? #`, пробелом или не-ASCII (любой прокси) или с `:` (SOCKS5) дошёл бы до
-/// прокси другим — такой прокси для закачки ошибка с причиной, а не неверный пароль.
+/// ureq-прокси из адреса маршрута. Строителю ureq логин и пароль отдаются раскодированными: он сам кодирует их в
+/// свой адрес и шлёт прокси как есть. Логин и пароль, которые ureq отдал бы прокси иными, — ошибка с причиной, а не
+/// неверный пароль у прокси.
 fn dl_proxy(url: &reqwest::Url) -> Result<ureq::Proxy, String> {
     use ureq::ProxyProtocol;
     let shown = dub_llm::net::masked(url.as_str());
@@ -3476,7 +3475,7 @@ fn extract_archive(archive: &Path, name: &str, extract: Extract, dir: &Path) -> 
                 if entry.is_dir() {
                     continue;
                 }
-                let entry_name = entry.name().replace('\\', "/");
+                let entry_name = entry.name().map_err(|e| t!("setup-zip-entry", error = e.to_string()))?.replace('\\', "/");
                 let Some(out) = place(&entry_name) else { continue };
                 let mode = entry.unix_mode();
                 write_entry(&mut entry, &out, mode)?;
@@ -3816,8 +3815,8 @@ mod tests {
         for (password, kind) in [("p@ss:1/x", ProxyKind::Http), ("p@ss:1/x", ProxyKind::Socks5), ("pa:ss", ProxyKind::Socks5), ("pa ss", ProxyKind::Http), ("p\u{e4}ss", ProxyKind::Http),
         ] {
             let address = format!("bob:{}@1.2.3.4:8000", dub_llm::net::encode_userinfo(password));
-            let refused = download_proxy(&address, kind).expect_err(password);
-            assert!(refused.contains("ureq") && !refused.contains(password) && !refused.contains(&dub_llm::net::encode_userinfo(password)), "{refused}");
+            let proxy = download_proxy(&address, kind).unwrap();
+            assert_eq!((proxy.username(), proxy.password(), proxy.host(), proxy.port()), (Some("bob"), Some(password), "1.2.3.4", 8000), "{password}");
         }
     }
 

@@ -392,7 +392,7 @@ pub(crate) fn kill_pid(pid: u32) -> bool {
 #[cfg(not(windows))]
 pub(crate) fn kill_pid(pid: u32) -> bool {
     let p = sysinfo::Pid::from_u32(pid);
-    let mut sys = sysinfo::System::new();
+    let mut sys = sysinfo::System::new().expect("sysinfo has Linux and macOS");
     sys.refresh_processes(sysinfo::ProcessesToUpdate::Some(&[p]), true);
     sys.process(p).map(|pr| pr.kill()).unwrap_or(false)
 }

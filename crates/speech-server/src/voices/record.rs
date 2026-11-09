@@ -579,7 +579,7 @@ pub fn download_pack(dir: &std::path::Path, cb: &dyn Fn(serde_json::Value)) -> R
     for i in 0..zip.len() {
         let mut file = zip.by_index(i).map_err(|e| format!("zip[{i}]: {e}"))?;
         if file.is_dir() { continue; }
-        let name = std::path::Path::new(file.name())
+        let name = std::path::Path::new(file.name().map_err(|e| format!("zip[{i}]: {e}"))?.as_ref())
             .file_name()
             .and_then(|s| s.to_str())
             .map(|s| s.to_string());

@@ -19,7 +19,7 @@ tauri-plugin-opener = "2"    # opener:default окна; страницу рел�
 tauri-plugin-single-instance = "2"  # второй запуск отдаёт фокус уже открытому окну
 tauri-plugin-global-shortcut = "2"  # клавиша Live «держать и говорить» из любого окна
 tauri-plugin-autostart = "2"  # запуск при входе в систему (голосовой гейт: студия слушает сразу), выкл по умолчанию
-rfd = "0.17"                 # диалог ошибки старта, когда окна Tauri ещё нет
+rfd = "0.18"                 # диалог ошибки старта, когда окна Tauri ещё нет
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # axum-бэкенд встроен В ЭТОТ ЖЕ процесс (один exe, без speech-server.exe-сайдкара): serve_blocking с фонового потока.

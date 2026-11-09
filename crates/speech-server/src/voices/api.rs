@@ -450,7 +450,7 @@ pub fn import_zip_mapped(dir: &Path, bytes: &[u8]) -> Result<(Vec<(String, Strin
         if f.is_dir() {
             continue;
         }
-        let entry = Path::new(f.name()).file_name().and_then(|s| s.to_str()).unwrap_or("").to_string();
+        let entry = Path::new(f.name().map_err(|e| e.to_string())?.as_ref()).file_name().and_then(|s| s.to_str()).unwrap_or("").to_string();
         let Some((stem, ext)) = entry.strip_suffix(".words.json").map(|stem| (stem, "words.json")).or_else(|| entry.rsplit_once('.')) else { continue };
         let name = lib::sanitize(stem);
         let ext = ext.to_ascii_lowercase();
