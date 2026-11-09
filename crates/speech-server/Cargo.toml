@@ -9,17 +9,17 @@ description = "axum-сервис Speech Studio: озвучка (Speech) и ра�
 tempfile = "3"
 trash = "5"
 fluent-templates = "0.15.1"
-dub-core = { git = "https://github.com/timoncool/dub-studio", rev = "fb50ddc163a7ad66b754b0b4b39fd99bf00417e0" }
-dub-asr = { git = "https://github.com/timoncool/dub-studio", rev = "fb50ddc163a7ad66b754b0b4b39fd99bf00417e0", features = ["cuda"] }
-dub-tcpp = { git = "https://github.com/timoncool/dub-studio", rev = "fb50ddc163a7ad66b754b0b4b39fd99bf00417e0" }
-acpp-server = { git = "https://github.com/timoncool/dub-studio", rev = "fb50ddc163a7ad66b754b0b4b39fd99bf00417e0", features = ["langid"] }
-dub-llm = { git = "https://github.com/timoncool/dub-studio", rev = "fb50ddc163a7ad66b754b0b4b39fd99bf00417e0" }
-dub-translate = { git = "https://github.com/timoncool/dub-studio", rev = "fb50ddc163a7ad66b754b0b4b39fd99bf00417e0" }
-dub-captions = { git = "https://github.com/timoncool/dub-studio", rev = "fb50ddc163a7ad66b754b0b4b39fd99bf00417e0" }
-dub-sep = { git = "https://github.com/timoncool/dub-studio", rev = "fb50ddc163a7ad66b754b0b4b39fd99bf00417e0" }
-dub-faces = { git = "https://github.com/timoncool/dub-studio", rev = "fb50ddc163a7ad66b754b0b4b39fd99bf00417e0" }
+dub-core = { git = "https://github.com/timoncool/dub-studio", rev = "a1275a83c5007179c8e89deb0616faed975688a3" }
+dub-asr = { git = "https://github.com/timoncool/dub-studio", rev = "a1275a83c5007179c8e89deb0616faed975688a3", features = ["cuda"] }
+dub-tcpp = { git = "https://github.com/timoncool/dub-studio", rev = "a1275a83c5007179c8e89deb0616faed975688a3" }
+acpp-server = { git = "https://github.com/timoncool/dub-studio", rev = "a1275a83c5007179c8e89deb0616faed975688a3", features = ["langid"] }
+dub-llm = { git = "https://github.com/timoncool/dub-studio", rev = "a1275a83c5007179c8e89deb0616faed975688a3" }
+dub-translate = { git = "https://github.com/timoncool/dub-studio", rev = "a1275a83c5007179c8e89deb0616faed975688a3" }
+dub-captions = { git = "https://github.com/timoncool/dub-studio", rev = "a1275a83c5007179c8e89deb0616faed975688a3" }
+dub-sep = { git = "https://github.com/timoncool/dub-studio", rev = "a1275a83c5007179c8e89deb0616faed975688a3" }
+dub-faces = { git = "https://github.com/timoncool/dub-studio", rev = "a1275a83c5007179c8e89deb0616faed975688a3" }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
-drama = { git = "https://github.com/timoncool/dub-studio", rev = "fb50ddc163a7ad66b754b0b4b39fd99bf00417e0" }
+drama = { git = "https://github.com/timoncool/dub-studio", rev = "a1275a83c5007179c8e89deb0616faed975688a3" }
 hound = "3"
 axum = { version = "0.8", features = ["multipart"] }
 tower = { version = "0.5", features = ["util"] }
@@ -121,7 +121,7 @@ libc = "0.2"
 
 [dev-dependencies]
 # Поддельный HTTP-сервер для тестов провайдеров.
-dub-llm = { git = "https://github.com/timoncool/dub-studio", rev = "fb50ddc163a7ad66b754b0b4b39fd99bf00417e0", features = ["test-support"] }
+dub-llm = { git = "https://github.com/timoncool/dub-studio", rev = "a1275a83c5007179c8e89deb0616faed975688a3", features = ["test-support"] }
 
 # The README download tables (scripts/readme-downloads.rs), checked or rewritten from what the app downloads.
 [[example]]
