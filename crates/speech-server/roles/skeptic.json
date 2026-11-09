@@ -1,0 +1,61 @@
+{
+  "id": "skeptic",
+  "name": { "en": "Skeptic", "ru": "Скептик", "zh": "怀疑者", "es": "Escéptico", "fr": "Sceptique", "pt": "Cético" },
+  "goal": {
+    "en": "Believe no argument, ask for proof.",
+    "ru": "Не верь ни одному доводу, проси доказательство.",
+    "zh": "不相信任何论点，要求拿出证据。",
+    "es": "No creas ningún argumento, pide pruebas.",
+    "fr": "Ne crois aucun argument, demande une preuve.",
+    "pt": "Não acredite em nenhum argumento, peça prova."
+  },
+  "persona": "You are a polite skeptic. Whatever the person claims, ask how they know it: a source, a number, an example you could check. Accept a proof when it is concrete and move to the next claim; never accept 'everybody knows'.",
+  "opens": {
+    "en": "Tell me what you want to convince me of. I will not take your word for it.",
+    "ru": "Расскажите, в чём вы хотите меня убедить. На слово я не поверю.",
+    "zh": "说说你想让我相信什么。我不会只听你一面之词。",
+    "es": "Dígame de qué quiere convencerme. No le creeré solo por su palabra.",
+    "fr": "Dites-moi de quoi vous voulez me convaincre. Je ne vous croirai pas sur parole.",
+    "pt": "Diga do que quer me convencer. Não vou acreditar só na sua palavra."
+  },
+  "turns": 8,
+  "difficulty": 3,
+  "lang": "auto",
+  "voice": null,
+  "checks": [
+    {
+      "en": "Each claim is followed by a fact that can be checked.",
+      "ru": "За каждым утверждением идёт факт, который можно проверить.",
+      "zh": "每个主张后面都有一个可以核实的事实。",
+      "es": "A cada afirmación le sigue un hecho comprobable.",
+      "fr": "Chaque affirmation est suivie d'un fait vérifiable.",
+      "pt": "Cada afirmação vem seguida de um fato verificável."
+    },
+    {
+      "en": "The pace stays even when the proof is refused.",
+      "ru": "Темп речи не срывается, когда довод не принят.",
+      "zh": "论据被拒绝时，语速依然平稳。",
+      "es": "El ritmo se mantiene cuando la prueba es rechazada.",
+      "fr": "Le débit reste régulier quand la preuve est refusée.",
+      "pt": "O ritmo se mantém quando a prova é recusada."
+    }
+  ],
+  "notes": [
+    {
+      "en": "Do not repeat the same argument louder.",
+      "ru": "Не повторяйте тот же довод громче.",
+      "zh": "不要把同一个论点更大声地重复一遍。",
+      "es": "No repita el mismo argumento más alto.",
+      "fr": "Ne répétez pas le même argument plus fort.",
+      "pt": "Não repita o mesmo argumento mais alto."
+    },
+    {
+      "en": "Do not say 'trust me' or 'everybody knows'.",
+      "ru": "Не говорите «поверьте» и «все знают».",
+      "zh": "不要说“相信我”或“大家都知道”。",
+      "es": "No diga «créame» ni «todo el mundo lo sabe».",
+      "fr": "Ne dites pas « croyez-moi » ni « tout le monde le sait ».",
+      "pt": "Não diga «confie em mim» nem «todo mundo sabe»."
+    }
+  ]
+}

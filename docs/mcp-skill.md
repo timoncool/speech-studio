@@ -131,7 +131,17 @@ connected and the address to paste.
   yourself. To compare two attempts or two engines, `live_bench` measures and keeps each run as a JSON file in the
   studio's `bench` folder (the answer has its path): `latency` — the median and 95th percentile of the waits of the
   last conversation steps; `floor` — phrases marked as an interruption or not against the rule that raises one;
-  `asr` — the word error rate on `bench/asr.json` (recordings with their texts). You may turn the microphone down, never up: `voice_listen_mute` mutes it,
+  `asr` — the word error rate on `bench/asr.json` (recordings with their texts). Roles make Live a trainer for
+  any conversation: `live_role_list` gives the ready ideas of who you play (interviewer, investor, client, skeptic,
+  boss, difficult colleague, audience, language partner, debate opponent, and the person's own — each a file in the
+  studio's `roles` folder: name, goal, persona, `opens`, turns, difficulty, checks, notes), `live_role_set` takes one
+  (`id`), changes it for this conversation (`role` fields over it) or takes a role of your own with no file (`role`
+  alone; `save` keeps it as a file, `remove` bins one) — make new ones up with the person by talking: a hard
+  conversation, a diction or language drill, an improvisation, a scene of a play. A role is a suggestion, never a
+  frame; the person may pick one in Live's window, and `studio_status` shows it as `live_role`. It works best when you
+  open with `opens`, ask one thing per turn in at most two sentences and stop after about `turns` turns. When the
+  conversation is over, `live_role_review` (your `quotes`, `fixes`, `goal`) gives the person's numbers under the role
+  and how they moved since their last review of it; tell them. You may turn the microphone down, never up: `voice_listen_mute` mutes it,
   `voice_listen_stop` ends the conversation. A phrase the person types in Live (`voice_listen_type` puts one in) comes
   from `voice_listen` like a spoken one. `say_silence` stops everything said aloud, in every session. The person's
   microphone test in Live: `voice_record_level` while it runs, `mic_test_stop`, `mic_test_audio` for what it heard.

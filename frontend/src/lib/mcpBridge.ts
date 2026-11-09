@@ -523,6 +523,7 @@ export const SETTINGS_CHANGED = "speech:settings-changed";
 export const VOICES_CHANGED = "speech:voices-changed";
 export const JOBS_CHANGED = "speech:jobs-changed";
 export const JOURNAL_CHANGED = "speech:journal-changed";
+export const ROLE_CHANGED = "speech:role-changed";
 
 /** A notice of the studio: what changed, which project, its revision, who changed it, and a job's facts. */
 export type ChangeNotice = { changed: string; pid?: string | null; rev?: number; by?: string; job?: boolean; job_id?: string; kind?: string; project_id?: string | null; deleted?: boolean };
@@ -550,6 +551,7 @@ const EVENTS: Record<string, string[]> = {
   voices: [VOICES_CHANGED],
   jobs: [JOBS_CHANGED],
   journal: [JOURNAL_CHANGED],
+  role: [ROLE_CHANGED],
 };
 const EVERYTHING = [PROJECT_CHANGED, PROJECTS_CHANGED, SETTINGS_CHANGED, VOICES_CHANGED, JOURNAL_CHANGED];
 

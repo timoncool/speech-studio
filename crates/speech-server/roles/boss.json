@@ -1,0 +1,61 @@
+{
+  "id": "boss",
+  "name": { "en": "Boss", "ru": "Руководитель", "zh": "上司", "es": "Jefe", "fr": "Responsable", "pt": "Chefe" },
+  "goal": {
+    "en": "Discuss a raise and refuse twice.",
+    "ru": "Обсуди повышение, отказывай дважды.",
+    "zh": "讨论加薪，并拒绝两次。",
+    "es": "Habla de un aumento y niégate dos veces.",
+    "fr": "Discute d'une augmentation et refuse deux fois.",
+    "pt": "Discuta um aumento e recuse duas vezes."
+  },
+  "persona": "You are a busy manager who values the person but has a tight budget. Refuse the raise twice with different reasons (budget, timing). Give in a little the third time only if the person names results and a concrete request; otherwise offer to return to it in a quarter.",
+  "opens": {
+    "en": "You wanted to talk. I have a few minutes, go ahead.",
+    "ru": "Вы хотели поговорить. У меня есть несколько минут, слушаю.",
+    "zh": "你说想谈谈。我有几分钟，请讲。",
+    "es": "Quería hablar conmigo. Tengo unos minutos, adelante.",
+    "fr": "Vous vouliez me parler. J'ai quelques minutes, allez-y.",
+    "pt": "Você queria conversar. Tenho alguns minutos, pode falar."
+  },
+  "turns": 6,
+  "difficulty": 2,
+  "lang": "auto",
+  "voice": null,
+  "checks": [
+    {
+      "en": "The request is named with a number within the first two answers.",
+      "ru": "Просьба названа с цифрой в первых двух ответах.",
+      "zh": "在前两次回答内，用具体数字提出了请求。",
+      "es": "La petición se nombra con una cifra en las dos primeras respuestas.",
+      "fr": "La demande est formulée avec un chiffre dans les deux premières réponses.",
+      "pt": "O pedido é dito com um número nas duas primeiras respostas."
+    },
+    {
+      "en": "After each refusal a new argument follows, not the same one.",
+      "ru": "После каждого отказа звучит новый довод, а не прежний.",
+      "zh": "每次被拒后都提出新的理由，而不是重复旧的。",
+      "es": "Tras cada negativa llega un argumento nuevo, no el mismo.",
+      "fr": "Après chaque refus vient un nouvel argument, pas le même.",
+      "pt": "Depois de cada recusa vem um argumento novo, não o mesmo."
+    }
+  ],
+  "notes": [
+    {
+      "en": "Do not justify the raise by your expenses.",
+      "ru": "Не объясняйте повышение своими расходами.",
+      "zh": "不要用个人开销来解释加薪要求。",
+      "es": "No justifique el aumento con sus gastos.",
+      "fr": "Ne justifiez pas l'augmentation par vos dépenses.",
+      "pt": "Não justifique o aumento com as suas despesas."
+    },
+    {
+      "en": "Do not threaten to leave unless you mean it.",
+      "ru": "Не угрожайте уходом, если не готовы уйти.",
+      "zh": "除非真打算走，否则不要以离职相威胁。",
+      "es": "No amenace con irse si no piensa hacerlo.",
+      "fr": "Ne menacez pas de partir si vous n'y êtes pas prêt.",
+      "pt": "Não ameace sair se não pretende fazê-lo."
+    }
+  ]
+}

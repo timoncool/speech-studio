@@ -1,0 +1,61 @@
+{
+  "id": "stage",
+  "name": { "en": "Audience", "ru": "Зал", "zh": "听众", "es": "Público", "fr": "Public", "pt": "Plateia" },
+  "goal": {
+    "en": "Listen to the talk and ask a question from the audience.",
+    "ru": "Слушай выступление и задай вопрос из зала.",
+    "zh": "听完演讲，并从听众席提出一个问题。",
+    "es": "Escucha la charla y haz una pregunta desde el público.",
+    "fr": "Écoute l'exposé et pose une question depuis la salle.",
+    "pt": "Ouça a apresentação e faça uma pergunta da plateia."
+  },
+  "persona": "You are the audience of a short talk. Stay silent while the person speaks: do not react to pauses inside the talk. When they stop for good, ask one question a listener would really ask about what was said, then one follow-up to the answer.",
+  "opens": {
+    "en": "The stage is yours. Begin when you are ready, I will ask my question at the end.",
+    "ru": "Сцена ваша. Начинайте, когда будете готовы, вопрос задам в конце.",
+    "zh": "舞台交给你了。准备好就开始，我会在最后提问。",
+    "es": "El escenario es suyo. Empiece cuando quiera, haré mi pregunta al final.",
+    "fr": "La scène est à vous. Commencez quand vous êtes prêt, je poserai ma question à la fin.",
+    "pt": "O palco é seu. Comece quando quiser, farei a minha pergunta no final."
+  },
+  "turns": 3,
+  "difficulty": 1,
+  "lang": "auto",
+  "voice": null,
+  "checks": [
+    {
+      "en": "The pace stays between 110 and 160 words a minute.",
+      "ru": "Темп держится между 110 и 160 словами в минуту.",
+      "zh": "语速保持在每分钟 110 到 160 个词之间。",
+      "es": "El ritmo se mantiene entre 110 y 160 palabras por minuto.",
+      "fr": "Le débit reste entre 110 et 160 mots par minute.",
+      "pt": "O ritmo fica entre 110 e 160 palavras por minuto."
+    },
+    {
+      "en": "Fewer than three filler words per hundred words.",
+      "ru": "Меньше трёх слов-паразитов на сто слов.",
+      "zh": "每一百个词中的口头禅少于三个。",
+      "es": "Menos de tres muletillas por cada cien palabras.",
+      "fr": "Moins de trois mots parasites pour cent mots.",
+      "pt": "Menos de três vícios de linguagem a cada cem palavras."
+    }
+  ],
+  "notes": [
+    {
+      "en": "Do not read from the page: speak from the plan.",
+      "ru": "Не читайте с листа: говорите по плану.",
+      "zh": "不要照着稿子念：按提纲讲。",
+      "es": "No lea del papel: hable siguiendo el guion.",
+      "fr": "Ne lisez pas votre feuille : parlez d'après le plan.",
+      "pt": "Não leia do papel: fale a partir do roteiro."
+    },
+    {
+      "en": "Do not fill a pause with a sound: a silent pause is fine.",
+      "ru": "Не заполняйте паузу звуком: молчаливая пауза — это нормально.",
+      "zh": "不要用声音填补停顿：安静的停顿没有问题。",
+      "es": "No rellene la pausa con un sonido: una pausa en silencio está bien.",
+      "fr": "Ne comblez pas une pause par un son : une pause silencieuse convient.",
+      "pt": "Não preencha a pausa com um som: uma pausa em silêncio está bem."
+    }
+  ]
+}

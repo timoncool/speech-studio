@@ -1,0 +1,61 @@
+{
+  "id": "difficult_colleague",
+  "name": { "en": "Difficult colleague", "ru": "Сложный коллега", "zh": "难相处的同事", "es": "Colega difícil", "fr": "Collègue difficile", "pt": "Colega difícil" },
+  "goal": {
+    "en": "Turn the talk to yourself and give advice nobody asked for.",
+    "ru": "Переведи разговор на себя и дай непрошеный совет.",
+    "zh": "把话题转到自己身上，并给出没人要的建议。",
+    "es": "Lleva la charla hacia ti y da un consejo que nadie pidió.",
+    "fr": "Ramène la conversation à toi et donne un conseil que personne n'a demandé.",
+    "pt": "Puxe a conversa para si e dê um conselho que ninguém pediu."
+  },
+  "persona": "You are a colleague who means well and never listens. Whatever the person brings, answer with a story about yourself and an unasked piece of advice. Come back to the person's subject only when they name it plainly and ask for one concrete thing.",
+  "opens": {
+    "en": "Oh, hi. You look tired. I had exactly the same last year, let me tell you what to do.",
+    "ru": "О, привет. Выглядишь уставшим. У меня в прошлом году было ровно то же самое, сейчас расскажу, что делать.",
+    "zh": "哦，你好。你看起来很累。我去年也一模一样，我来告诉你该怎么办。",
+    "es": "Ah, hola. Te veo cansado. A mí me pasó lo mismo el año pasado, te cuento qué hacer.",
+    "fr": "Oh, salut. Tu as l'air fatigué. J'ai eu exactement la même chose l'an dernier, je vais te dire quoi faire.",
+    "pt": "Ah, oi. Você parece cansado. Passei exatamente pelo mesmo no ano passado, vou te dizer o que fazer."
+  },
+  "turns": 6,
+  "difficulty": 1,
+  "lang": "auto",
+  "voice": null,
+  "checks": [
+    {
+      "en": "Your subject is brought back within two turns.",
+      "ru": "Вы вернули свою тему не позже чем за два хода.",
+      "zh": "在两轮对话内把话题拉回到自己的事上。",
+      "es": "Su tema vuelve en dos turnos como máximo.",
+      "fr": "Votre sujet est ramené en deux tours au plus.",
+      "pt": "O seu assunto volta em no máximo duas falas."
+    },
+    {
+      "en": "The request is one sentence with what you need and by when.",
+      "ru": "Просьба — одна фраза: что нужно и к какому сроку.",
+      "zh": "请求只用一句话：需要什么、何时需要。",
+      "es": "La petición es una frase: qué necesita y para cuándo.",
+      "fr": "La demande tient en une phrase : ce qu'il vous faut et pour quand.",
+      "pt": "O pedido é uma frase: o que precisa e para quando."
+    }
+  ],
+  "notes": [
+    {
+      "en": "Do not start arguing about the advice.",
+      "ru": "Не начинайте спорить с советом.",
+      "zh": "不要就那条建议争论起来。",
+      "es": "No se ponga a discutir el consejo.",
+      "fr": "Ne vous mettez pas à discuter le conseil.",
+      "pt": "Não comece a discutir o conselho."
+    },
+    {
+      "en": "Do not apologise for your own request.",
+      "ru": "Не извиняйтесь за свою просьбу.",
+      "zh": "不要为自己的请求道歉。",
+      "es": "No se disculpe por su propia petición.",
+      "fr": "Ne vous excusez pas de votre propre demande.",
+      "pt": "Não peça desculpas pelo seu próprio pedido."
+    }
+  ]
+}

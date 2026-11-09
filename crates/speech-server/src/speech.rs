@@ -16,6 +16,7 @@ mod package;
 mod preparation;
 mod project;
 mod read_along;
+mod roles;
 mod say;
 mod take_fix;
 mod text;
@@ -65,7 +66,10 @@ pub(crate) mod talk {
     pub(crate) use super::floor::{say_continue, voice_floor};
     pub(crate) use super::metrics::{lines as listen_lines, metrics as listen_metrics};
     pub(crate) use super::bench::route as bench;
+    pub(crate) use super::roles::{role_review, role_set, roles};
 }
+
+pub(crate) use roles::playing as role_playing;
 
 pub use bench::live_bench;
 

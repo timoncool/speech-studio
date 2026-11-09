@@ -438,6 +438,24 @@ pub(super) fn tools() -> Vec<Tool> {
             call: |args| post("/speech/bench".into(), json!({ "kind": text(args, "kind")?, "rounds": args.get("rounds").and_then(Value::as_u64).unwrap_or(0) })),
         },
         Tool {
+            name: "live_role_list",
+            description: "Roles for a Live conversation: ready ideas of who you play for the person to practise with (interviewer, investor, client, skeptic, boss, difficult colleague, audience, language partner, debate opponent, and the person's own). Each is a file in the studio's roles folder (folder): name, goal, persona, opens (a first line), turns, difficulty 1-3, lang, voice, checks (what counts as success), notes (what the person should avoid), last_review; playing is the one in play. A role is a suggestion, not a frame. lang gives the texts in another language than the window's.",
+            schema: || object(json!({ "lang": { "type": "string" } }), &[]),
+            call: |args| get(format!("/speech/roles{}", query(&[("lang", given(args, "lang"))]))),
+        },
+        Tool {
+            name: "live_role_set",
+            description: "Take a role for the Live conversation; the person may pick one in Live's window too (studio_status shows it as live_role). id: a role of live_role_list as it is; role: fields over it for this conversation (turns, persona, opens, anything), or with no id a role of your own (it needs a name; any other field is yours, fields of your own are kept as given); save true keeps it as a file under its id for next time, so the person and you can make up new roles and scenarios by talking - a hard conversation, a diction or language drill, a speech exercise, an improvisation, a scene of a play; lang: the language of its texts. Neither id nor role ends the role in play; remove true with an id puts that role's file into the bin. Nothing is enforced: the answer's brief says how a role works best, turns_taken counts your turns.",
+            schema: || object(json!({ "id": { "type": "string" }, "role": { "type": "object" }, "lang": { "type": "string" }, "save": { "type": "boolean" }, "remove": { "type": "boolean" } }), &[]),
+            call: |args| post("/speech/role".into(), json!({ "id": args.get("id"), "role": args.get("role"), "lang": args.get("lang"), "save": args.get("save"), "remove": args.get("remove") })),
+        },
+        Tool {
+            name: "live_role_review",
+            description: "The review of the conversation held under the role in play, kept as a file beside the roles: the person's numbers over their lines since the role was taken (metrics as voice_metrics: wpm, pauses, fillers, start_latency), their lines to quote, your turns, and before - how the numbers moved against the last review of the same role. Give what you noticed: quotes (three of the person's phrases worth repeating to them), fixes (three things to change), goal (one aim for the next round). Call it when the conversation is over, then tell the person.",
+            schema: || object(json!({ "quotes": { "type": "array", "items": { "type": "string" } }, "fixes": { "type": "array", "items": { "type": "string" } }, "goal": { "type": "string" } }), &[]),
+            call: |args| post("/speech/role/review".into(), json!({ "quotes": args.get("quotes"), "fixes": args.get("fixes"), "goal": args.get("goal") })),
+        },
+        Tool {
             name: "voice_listen_type",
             description: "Put a phrase into the conversation as if the person said it, as typing in Live's text field does: voice_listen gives it next.",
             schema: || object(json!({ "text": { "type": "string" } }), &["text"]),

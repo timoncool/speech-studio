@@ -4,6 +4,7 @@ import { AppWindow, Copy, History } from "lucide-react";
 import { named } from "../../lib/a11y";
 import { setTalkPrefs, useTalkPrefs } from "../../lib/talkPrefs";
 import Hint, { Tip } from "../Hint";
+import RolePicker from "./RolePicker";
 import TalkControls from "./TalkControls";
 import TalkVisual from "./TalkVisual";
 import { useTalk } from "./useTalk";
@@ -44,6 +45,7 @@ export default function TalkPage() {
             {agent?.agent_connected ? (agent.agent_name ? t("talk.agentNamed", { name: agent.agent_name }) : t("talk.agentOn")) : t("talk.agentOff")}
           </span>
         </div>
+        <RolePicker />
 
         <div className="flex-1 min-h-0 w-full max-w-3xl overflow-y-auto flex flex-col items-center justify-center gap-4">
           <TalkVisual look={look} state={state} level={loudness} bands={talk.bands} token={state === "thinking" ? "--color-accent-2" : "--color-accent"} className={look === "wave" || look === "bars" || look === "matrix" ? "shrink-0 h-[clamp(7rem,26vh,14rem)] w-full max-w-2xl" : "shrink-0 h-[clamp(8rem,34vh,20rem)] aspect-square"} />

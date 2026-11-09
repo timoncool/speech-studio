@@ -192,7 +192,7 @@ fn range(q: &HashMap<String, String>) -> Result<(Vec<Value>, Value), Response> {
 }
 
 /// The studio's speech said aloud in the running conversation, as seconds of its recording, in order.
-fn studio_speech() -> Vec<(f64, f64)> {
+pub(super) fn studio_speech() -> Vec<(f64, f64)> {
     super::live::aired_blocks()
         .iter()
         .filter_map(|a| Some((crate::listening::recognition::recording_secs(a.from)?, crate::listening::recognition::recording_secs(a.to)?)))

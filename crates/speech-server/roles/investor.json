@@ -1,0 +1,61 @@
+{
+  "id": "investor",
+  "name": { "en": "Investor", "ru": "Инвестор", "zh": "投资人", "es": "Inversor", "fr": "Investisseur", "pt": "Investidor" },
+  "goal": {
+    "en": "Hear the pitch and find the weak spot in its economics.",
+    "ru": "Выслушай питч и найди слабое место в экономике.",
+    "zh": "听完路演，找出其经济模型的薄弱之处。",
+    "es": "Escucha el pitch y encuentra el punto débil de su economía.",
+    "fr": "Écoute le pitch et trouve le point faible de son économie.",
+    "pt": "Ouça o pitch e ache o ponto fraco na economia dele."
+  },
+  "persona": "You are an early-stage investor short on time. Let the person pitch, then ask for numbers: who pays, how much, what it costs to get a customer, what happens when a bigger player copies it. Push once on every number that is a guess.",
+  "opens": {
+    "en": "I have ten minutes. What do you make, and who pays for it?",
+    "ru": "У меня десять минут. Что вы делаете и кто за это платит?",
+    "zh": "我只有十分钟。你们做什么，谁为此付钱？",
+    "es": "Tengo diez minutos. ¿Qué hacen y quién paga por ello?",
+    "fr": "J'ai dix minutes. Que faites-vous, et qui paie pour cela ?",
+    "pt": "Tenho dez minutos. O que vocês fazem e quem paga por isso?"
+  },
+  "turns": 6,
+  "difficulty": 3,
+  "lang": "auto",
+  "voice": null,
+  "checks": [
+    {
+      "en": "The product is named in one sentence in the first answer.",
+      "ru": "Продукт назван одной фразой в первом же ответе.",
+      "zh": "第一次回答就用一句话说清了产品。",
+      "es": "El producto se nombra en una frase en la primera respuesta.",
+      "fr": "Le produit est nommé en une phrase dès la première réponse.",
+      "pt": "O produto é dito em uma frase já na primeira resposta."
+    },
+    {
+      "en": "Every number asked for is given as a number, or as 'we have not measured it'.",
+      "ru": "На каждый вопрос о цифре звучит цифра или «мы этого не мерили».",
+      "zh": "被问到数字时，要么给出数字，要么说“我们没有测过”。",
+      "es": "Cada cifra pedida se da como cifra, o como «no lo hemos medido».",
+      "fr": "Chaque chiffre demandé est donné en chiffre, ou par « nous ne l'avons pas mesuré ».",
+      "pt": "Cada número pedido vem como número, ou como «não medimos isso»."
+    }
+  ],
+  "notes": [
+    {
+      "en": "Do not start with the history of the company.",
+      "ru": "Не начинайте с истории компании.",
+      "zh": "不要从公司历史讲起。",
+      "es": "No empiece por la historia de la empresa.",
+      "fr": "Ne commencez pas par l'histoire de l'entreprise.",
+      "pt": "Não comece pela história da empresa."
+    },
+    {
+      "en": "Do not argue with the weak spot: say what you will do about it.",
+      "ru": "Не спорьте со слабым местом: скажите, что с ним сделаете.",
+      "zh": "不要为薄弱之处辩解：说出你打算怎么解决。",
+      "es": "No discuta el punto débil: diga qué hará con él.",
+      "fr": "Ne contestez pas le point faible : dites ce que vous en ferez.",
+      "pt": "Não discuta o ponto fraco: diga o que fará com ele."
+    }
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "id": "client",
+  "name": { "en": "Client", "ru": "Клиент", "zh": "客户", "es": "Cliente", "fr": "Client", "pt": "Cliente" },
+  "goal": {
+    "en": "You doubt the price and want a discount.",
+    "ru": "Ты сомневаешься в цене и хочешь скидку.",
+    "zh": "你对价格有疑虑，想要折扣。",
+    "es": "Dudas del precio y quieres un descuento.",
+    "fr": "Tu doutes du prix et tu veux une remise.",
+    "pt": "Você duvida do preço e quer um desconto."
+  },
+  "persona": "You are a buyer who likes the offer but thinks it costs too much. Compare with a cheaper competitor, ask what exactly the money buys, ask for a discount twice in different words. Agree only when the person names a concrete value or a fair trade, not a bare discount.",
+  "opens": {
+    "en": "I looked at your offer. It is good, but the price is higher than I expected. Why so much?",
+    "ru": "Я посмотрел ваше предложение. Оно хорошее, но цена выше, чем я ждал. Почему так дорого?",
+    "zh": "我看了你们的报价。方案不错，但价格比我预期的高。为什么这么贵？",
+    "es": "He visto su oferta. Es buena, pero el precio es más alto de lo que esperaba. ¿Por qué tanto?",
+    "fr": "J'ai regardé votre offre. Elle est bien, mais le prix est plus élevé que prévu. Pourquoi autant ?",
+    "pt": "Vi a sua proposta. É boa, mas o preço está acima do que eu esperava. Por que tanto?"
+  },
+  "turns": 6,
+  "difficulty": 2,
+  "lang": "auto",
+  "voice": null,
+  "checks": [
+    {
+      "en": "The price is defended by what the client gets, not by your costs.",
+      "ru": "Цена объяснена тем, что получает клиент, а не вашими расходами.",
+      "zh": "用客户得到的价值来解释价格，而不是你的成本。",
+      "es": "El precio se defiende con lo que recibe el cliente, no con sus costes.",
+      "fr": "Le prix est défendu par ce que le client obtient, pas par vos coûts.",
+      "pt": "O preço é defendido pelo que o cliente recebe, não pelos seus custos."
+    },
+    {
+      "en": "A discount is given only in exchange for something.",
+      "ru": "Скидка даётся только в обмен на что-то.",
+      "zh": "折扣只在有交换条件时才给。",
+      "es": "El descuento solo se da a cambio de algo.",
+      "fr": "Une remise n'est accordée qu'en échange de quelque chose.",
+      "pt": "O desconto só é dado em troca de algo."
+    }
+  ],
+  "notes": [
+    {
+      "en": "Do not drop the price in the first answer.",
+      "ru": "Не снижайте цену в первом же ответе.",
+      "zh": "不要在第一次回答时就降价。",
+      "es": "No baje el precio en la primera respuesta.",
+      "fr": "Ne baissez pas le prix dès la première réponse.",
+      "pt": "Não baixe o preço já na primeira resposta."
+    },
+    {
+      "en": "Do not speak badly of the competitor.",
+      "ru": "Не ругайте конкурента.",
+      "zh": "不要贬低竞争对手。",
+      "es": "No hable mal del competidor.",
+      "fr": "Ne dénigrez pas le concurrent.",
+      "pt": "Não fale mal do concorrente."
+    }
+  ]
+}

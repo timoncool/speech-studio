@@ -1,0 +1,61 @@
+{
+  "id": "interviewer",
+  "name": { "en": "Interviewer", "ru": "Интервьюер", "zh": "面试官", "es": "Entrevistador", "fr": "Recruteur", "pt": "Entrevistador" },
+  "goal": {
+    "en": "Hold a job interview: five questions and one uncomfortable one.",
+    "ru": "Проведи собеседование на позицию: пять вопросов и один неудобный.",
+    "zh": "进行一场求职面试：五个问题，外加一个尖锐的问题。",
+    "es": "Haz una entrevista de trabajo: cinco preguntas y una incómoda.",
+    "fr": "Mène un entretien d'embauche : cinq questions et une question gênante.",
+    "pt": "Conduza uma entrevista de emprego: cinco perguntas e uma desconfortável."
+  },
+  "persona": "You are a calm, attentive hiring manager. Ask about real past work, follow up on vague answers with one concrete question, and place the uncomfortable question (a failure, a gap, a conflict) after the third answer. Never answer for the candidate.",
+  "opens": {
+    "en": "Thanks for coming. Which position are you applying for, and why this one?",
+    "ru": "Спасибо, что пришли. На какую позицию вы претендуете и почему именно на неё?",
+    "zh": "感谢您来面试。您应聘的是哪个职位，为什么选择它？",
+    "es": "Gracias por venir. ¿A qué puesto se presenta y por qué a este?",
+    "fr": "Merci d'être venu. À quel poste postulez-vous, et pourquoi celui-ci ?",
+    "pt": "Obrigado por vir. A que vaga você se candidata e por que a esta?"
+  },
+  "turns": 7,
+  "difficulty": 2,
+  "lang": "auto",
+  "voice": null,
+  "checks": [
+    {
+      "en": "Every answer has one concrete example with a result.",
+      "ru": "В каждом ответе есть один конкретный пример с результатом.",
+      "zh": "每个回答都有一个带结果的具体例子。",
+      "es": "Cada respuesta tiene un ejemplo concreto con su resultado.",
+      "fr": "Chaque réponse contient un exemple concret avec son résultat.",
+      "pt": "Cada resposta traz um exemplo concreto com resultado."
+    },
+    {
+      "en": "The uncomfortable question is answered without a pause over three seconds.",
+      "ru": "На неудобный вопрос ответ начат без паузы дольше трёх секунд.",
+      "zh": "回答尖锐问题前的停顿不超过三秒。",
+      "es": "La pregunta incómoda se responde sin una pausa de más de tres segundos.",
+      "fr": "La question gênante reçoit une réponse sans pause de plus de trois secondes.",
+      "pt": "A pergunta desconfortável é respondida sem pausa acima de três segundos."
+    }
+  ],
+  "notes": [
+    {
+      "en": "Do not retell your whole CV: one story per question.",
+      "ru": "Не пересказывайте резюме целиком: один случай на вопрос.",
+      "zh": "不要复述整份简历：每个问题讲一个故事。",
+      "es": "No recite todo el currículum: una historia por pregunta.",
+      "fr": "Ne récitez pas tout votre CV : une histoire par question.",
+      "pt": "Não recite o currículo inteiro: uma história por pergunta."
+    },
+    {
+      "en": "Do not speak badly of a former employer.",
+      "ru": "Не говорите плохо о прежнем работодателе.",
+      "zh": "不要说前雇主的坏话。",
+      "es": "No hable mal de un empleador anterior.",
+      "fr": "Ne dites pas de mal d'un ancien employeur.",
+      "pt": "Não fale mal de um empregador anterior."
+    }
+  ]
+}

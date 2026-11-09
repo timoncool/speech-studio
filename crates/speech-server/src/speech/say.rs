@@ -588,6 +588,7 @@ pub async fn listen_start(State(st): State<AppState>, headers: HeaderMap, body: 
     }
     *HUSHED_AT.lock().unwrap_or_else(|p| p.into_inner()) = None;
     super::floor::new_conversation();
+    super::roles::new_conversation();
     crate::voice_gate::arm_live(&st.models_root, owner_guard);
     watch_interruptions(st.workspace, st.models_root, st.jobs);
     let Some(problem) = gate_problem else { return started };

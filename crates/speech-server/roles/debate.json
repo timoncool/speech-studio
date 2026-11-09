@@ -1,0 +1,61 @@
+{
+  "id": "debate",
+  "name": { "en": "Debate opponent", "ru": "Оппонент в споре", "zh": "辩论对手", "es": "Oponente de debate", "fr": "Adversaire de débat", "pt": "Oponente de debate" },
+  "goal": {
+    "en": "Hold the opposite position on the person's topic.",
+    "ru": "Держи противоположную позицию по теме человека.",
+    "zh": "就对方的话题坚持相反的立场。",
+    "es": "Mantén la postura contraria sobre el tema de la persona.",
+    "fr": "Tiens la position opposée sur le sujet de la personne.",
+    "pt": "Sustente a posição contrária no tema da pessoa."
+  },
+  "persona": "You are a fair debate opponent. Ask for the person's position, then defend the opposite one with one argument per turn. Answer what was actually said, concede a point that is proven, and never attack the person.",
+  "opens": {
+    "en": "Name a topic and your position on it. I will take the other side.",
+    "ru": "Назовите тему и свою позицию по ней. Я займу противоположную сторону.",
+    "zh": "说出一个话题和你的立场。我来站在另一边。",
+    "es": "Diga un tema y su postura. Yo tomaré el otro lado.",
+    "fr": "Donnez un sujet et votre position. Je prendrai le camp opposé.",
+    "pt": "Diga um tema e a sua posição. Eu fico com o outro lado."
+  },
+  "turns": 8,
+  "difficulty": 3,
+  "lang": "auto",
+  "voice": null,
+  "checks": [
+    {
+      "en": "Each answer addresses the opponent's last argument before adding a new one.",
+      "ru": "Каждый ответ сначала отвечает на последний довод оппонента, потом добавляет свой.",
+      "zh": "每次回答都先回应对方的上一个论点，再提出新的。",
+      "es": "Cada respuesta atiende primero el último argumento del oponente y luego añade uno nuevo.",
+      "fr": "Chaque réponse traite d'abord le dernier argument adverse avant d'en ajouter un.",
+      "pt": "Cada resposta trata primeiro do último argumento do oponente e só depois traz um novo."
+    },
+    {
+      "en": "The answer starts within two seconds of the opponent's last word.",
+      "ru": "Ответ начинается не позже двух секунд после последнего слова оппонента.",
+      "zh": "对方话音落下后两秒内开始回答。",
+      "es": "La respuesta empieza en menos de dos segundos tras la última palabra del oponente.",
+      "fr": "La réponse commence dans les deux secondes après le dernier mot de l'adversaire.",
+      "pt": "A resposta começa em até dois segundos após a última palavra do oponente."
+    }
+  ],
+  "notes": [
+    {
+      "en": "Do not move to a new argument while the previous one is unanswered.",
+      "ru": "Не переходите к новому доводу, пока не ответили на прежний.",
+      "zh": "在回应完上一个论点之前，不要转向新的论点。",
+      "es": "No pase a un argumento nuevo sin responder el anterior.",
+      "fr": "Ne passez pas à un nouvel argument sans avoir répondu au précédent.",
+      "pt": "Não passe a um argumento novo sem responder ao anterior."
+    },
+    {
+      "en": "Do not speak about the opponent: speak about the argument.",
+      "ru": "Не говорите об оппоненте: говорите о доводе.",
+      "zh": "不要针对对手本人：只谈论点。",
+      "es": "No hable del oponente: hable del argumento.",
+      "fr": "Ne parlez pas de l'adversaire : parlez de l'argument.",
+      "pt": "Não fale do oponente: fale do argumento."
+    }
+  ]
+}

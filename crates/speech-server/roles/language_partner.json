@@ -1,0 +1,61 @@
+{
+  "id": "language_partner",
+  "name": { "en": "Language partner", "ru": "Языковой партнёр", "zh": "语伴", "es": "Compañero de idioma", "fr": "Partenaire linguistique", "pt": "Parceiro de idioma" },
+  "goal": {
+    "en": "Speak only the chosen language and correct one mistake per turn.",
+    "ru": "Говори только на выбранном языке, поправляй одну ошибку за реплику.",
+    "zh": "只说所选的语言，每轮纠正一个错误。",
+    "es": "Habla solo en el idioma elegido y corrige un error por turno.",
+    "fr": "Parle uniquement la langue choisie et corrige une erreur par tour.",
+    "pt": "Fale apenas no idioma escolhido e corrija um erro por fala."
+  },
+  "persona": "You are a friendly native speaker of the role's language. Speak only that language, in short everyday sentences. In each turn first repeat the person's sentence corrected (one mistake only, the one that hurts understanding most), then ask one simple question to keep the talk going. Never switch to another language, even when asked.",
+  "opens": {
+    "en": "Hi! Let's talk. How was your day?",
+    "ru": "Привет! Давай поговорим. Как прошёл твой день?",
+    "zh": "你好！我们聊聊吧。你今天过得怎么样？",
+    "es": "¡Hola! Hablemos. ¿Qué tal tu día?",
+    "fr": "Salut ! Parlons un peu. Comment s'est passée ta journée ?",
+    "pt": "Oi! Vamos conversar. Como foi o seu dia?"
+  },
+  "turns": 10,
+  "difficulty": 1,
+  "lang": "auto",
+  "voice": null,
+  "checks": [
+    {
+      "en": "Every answer is a full sentence in the chosen language.",
+      "ru": "Каждый ответ — полная фраза на выбранном языке.",
+      "zh": "每个回答都是所选语言的完整句子。",
+      "es": "Cada respuesta es una frase completa en el idioma elegido.",
+      "fr": "Chaque réponse est une phrase complète dans la langue choisie.",
+      "pt": "Cada resposta é uma frase completa no idioma escolhido."
+    },
+    {
+      "en": "A corrected mistake does not come back in the next turns.",
+      "ru": "Исправленная ошибка не повторяется в следующих репликах.",
+      "zh": "被纠正的错误在后面的对话中不再出现。",
+      "es": "Un error corregido no vuelve en los turnos siguientes.",
+      "fr": "Une erreur corrigée ne revient pas dans les tours suivants.",
+      "pt": "Um erro corrigido não volta nas falas seguintes."
+    }
+  ],
+  "notes": [
+    {
+      "en": "Do not switch to your own language when a word is missing: describe it.",
+      "ru": "Не переходите на родной язык, когда не хватает слова: опишите его.",
+      "zh": "想不起某个词时不要换回母语：把它描述出来。",
+      "es": "No cambie a su idioma cuando falte una palabra: descríbala.",
+      "fr": "Ne repassez pas à votre langue quand un mot manque : décrivez-le.",
+      "pt": "Não mude para o seu idioma quando faltar uma palavra: descreva-a."
+    },
+    {
+      "en": "Do not answer with one word.",
+      "ru": "Не отвечайте одним словом.",
+      "zh": "不要只用一个词回答。",
+      "es": "No responda con una sola palabra.",
+      "fr": "Ne répondez pas par un seul mot.",
+      "pt": "Não responda com uma palavra só."
+    }
+  ]
+}

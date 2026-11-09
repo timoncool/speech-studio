@@ -205,6 +205,9 @@ pub(super) fn compact_probe(mut value: Value) -> Value {
 pub(super) async fn status_summary() -> Value {
     let (jobs, setup, by_link) = tokio::join!(fetch("/jobs"), fetch("/setup/status"), fetch("/url/fetches"));
     let mut summary = json!({});
+    if let Some(role) = crate::speech::role_playing() {
+        summary["live_role"] = role;
+    }
     match jobs.and_then(|jobs| job_rows(&jobs)) {
         Ok(rows) => {
             let (done, working): (Vec<Value>, Vec<Value>) = rows.into_iter().partition(finished);

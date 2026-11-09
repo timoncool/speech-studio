@@ -7,6 +7,22 @@ export type TalkVoice = { engine: string; voice: string | null; params: SpeechPa
 export type HeardLine = { start: number; end: number; text: string };
 export type LiveHeard = { running: boolean; lines: HeardLine[]; partial: { start: number; text: string } | null; error: string | null; muted: boolean };
 
+/** A role for a Live conversation: a ready idea of who the agent plays, a file in the studio's roles folder. */
+export type LiveRole = {
+  id: string;
+  name: string;
+  goal?: string | null;
+  opens?: string | null;
+  turns?: number;
+  difficulty?: number;
+  checks?: string[];
+  notes?: string[];
+  problem?: string;
+  last_review?: { at: string; goal: string | null } | null;
+  turns_taken?: number;
+};
+export type LiveRoles = { folder: string; roles: LiveRole[]; playing: LiveRole | null };
+
 /** The spoken conversation: the microphone heard live, and what an agent says aloud through the studio. */
 export const talkApi = {
   listenStart: (lang: string, device?: string, engine?: string) => postCoded<{ pid: string }>("/speech/listen", { lang, device, engine }),
@@ -21,4 +37,6 @@ export const talkApi = {
   micTestStop: () => postCoded<{ seconds: number; peak: number }>("/record/test/stop", {}),
   session: (id: string) => getCoded<{ session: string; open: boolean; phrases: SayPhrase[] }>(`/speech/say/${encodeURIComponent(id)}`),
   silence: () => sendCoded<unknown>("DELETE", "/speech/say"),
+  roles: () => getCodedPolled<LiveRoles>("/speech/roles"),
+  setRole: (id: string | null) => postCoded<{ playing: LiveRole | null }>("/speech/role", { id }),
 };
