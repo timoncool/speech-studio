@@ -195,6 +195,8 @@ export default function ProjectEditor({ pid, onBack }: { pid: string; onBack: ()
   }, [projectEngine, setSpeechEngine]);
 
   const blocks = useMemo(() => (project ? blockList(project) : []), [project]);
+  // id -> flat index, so the block list does not do blocks.indexOf(b) per row (O(n^2) on 5000+ block books)
+  const blockIndex = useMemo(() => new Map(blocks.map((b, i) => [b.id, i])), [blocks]);
   const speakers = useMemo(() => [...new Set(blocks.map((b) => b.speaker).filter(Boolean))], [blocks]);
   const tintOf = (s: string) => SPEAKER_TINTS[Math.max(0, speakers.indexOf(s)) % SPEAKER_TINTS.length];
   const stateOf = (b: Block): BlockState => project?.status?.[b.id]?.state ?? "pending";
@@ -822,7 +824,7 @@ export default function ProjectEditor({ pid, onBack }: { pid: string; onBack: ()
               {project.chapters.length > 1 && <h2 className="mt-4 mb-2 text-[13px] font-semibold text-[var(--color-muted)]">{c.title || t("speech.chapter")}</h2>}
               <ol className="space-y-0.5">
                 {c.blocks.filter((b) => shownReview === "all" || (shownReview === "none" ? !b.review : b.review === shownReview)).map((b) => {
-                  const index = blocks.indexOf(b);
+                  const index = blockIndex.get(b.id) ?? 0;
                   const rendering = !!job && (job.ids === null ? ["pending", "stale", "failed"].includes(stateOf(b)) : job.ids.includes(b.id));
                   const note = notes[b.id];
                   return <BlockRow key={b.id} pid={pid} engine={engineOf(project, b)} projectEngine={project.settings.engine} projectLang={project.settings.lang} speakerEngine={project.cast_engines?.[b.speaker] || null} voice={voiceOf(project, b)} block={b} index={index} state={stateOf(b)} fit={project.status?.[b.id]?.fit} rendering={rendering} playing={playing === b.id} playingTake={playing === b.id ? playingTake : null} playhead={playing === b.id ? audio : undefined} simple={simple} variants={variantsFor(b)} inheritedParams={(project.settings.one_voice ? undefined : project.cast_params?.[b.speaker]) ?? project.settings.params} tint={tintOf(b.speaker)}

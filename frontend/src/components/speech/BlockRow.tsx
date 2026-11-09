@@ -407,7 +407,7 @@ export default function BlockRow({ pid, engine, projectEngine, projectLang, spea
     </div>
   );
   return (
-    <li id={`block-${block.id}`} ref={setNodeRef} onFocus={a.focus} onClick={a.focus} data-mcp-row={`block ${index + 1} ${block.speaker || "-"} ${shown}${take ? ` ${take.duration.toFixed(1)}s` : ""}${block.hidden ? " hidden" : ""}: ${block.text.slice(0, 60)}`} style={{ transform: CSS.Transform.toString(transform), transition }}
+    <li id={`block-${block.id}`} ref={setNodeRef} onFocus={a.focus} onClick={a.focus} data-mcp-row={`block ${index + 1} ${block.speaker || "-"} ${shown}${take ? ` ${take.duration.toFixed(1)}s` : ""}${block.hidden ? " hidden" : ""}: ${block.text.slice(0, 60)}`} style={{ transform: CSS.Transform.toString(transform), transition, contentVisibility: "auto", containIntrinsicSize: "auto 96px" }}
       className={`group rounded-xl border transition-colors ${playing ? "border-[var(--color-accent)]" : selected ? "border-[var(--color-accent)]/60 bg-[color-mix(in_oklab,var(--color-accent)_6%,transparent)]" : "border-transparent hover:border-[var(--color-border)]"} ${block.hidden ? "opacity-50" : ""} ${isDragging ? "relative z-10 bg-[var(--color-surface)] shadow-lg" : ""}`}>
       <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-x-3 gap-y-1 px-2 py-2 sm:flex sm:gap-3">
         <div className="flex flex-col items-center gap-1 pt-1 -mr-1">
