@@ -2,6 +2,8 @@
 
 #[macro_use]
 pub mod i18n;
+#[cfg(test)]
+mod alloc_meter;
 mod app;
 mod audio;
 mod engines;

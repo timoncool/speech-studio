@@ -1990,8 +1990,6 @@ pub fn export(p: &SpeechPaths, pid: &str, opts: &ExportOpts, progress: &dyn Fn(V
             .collect();
         let from = (a * SR as f64) as usize;
         let to = ((z * SR as f64) as usize).min(mix.len());
-        let joined = work.path().join(format!("part-{k}.wav"));
-        crate::audio::wavio::write_mono_f32(&joined, &mix[from..to], SR)?;
         let file = format!("{name}.{}", opts.format);
         let target = exports.join(&file);
         let meta = crate::audio::media::AudioMeta {
@@ -2012,21 +2010,22 @@ pub fn export(p: &SpeechPaths, pid: &str, opts: &ExportOpts, progress: &dyn Fn(V
         match opts.format.as_str() {
             // FLAC and MP3 as the music studios write them: libFLAC 24-bit and LAME from audio-post, tags by lofty
             "flac" | "mp3" if !(opts.format == "flac" && opts.quality.bits == Some(16)) => {
-                let part = mix[from..to].to_vec();
-                let stereo = audio_post::Stereo::new(part.clone(), part, SR);
-                let bytes = if opts.format == "mp3" {
+                let fail = |e: String| format!("{}: {e}", target.display());
+                let mut file = std::fs::File::options().read(true).write(true).create(true).truncate(true).open(&target).map_err(|e| fail(e.to_string()))?;
+                if opts.format == "mp3" {
                     let (rate, kbps) = if acx { (44_100, MP3_KBPS) } else { (opts.quality.rate.unwrap_or(48_000), opts.quality.kbps.unwrap_or(MP3_KBPS)) };
-                    audio_post::encode::mp3(&stereo.resampled(rate).map_err(|e| e.to_string())?, kbps)
+                    let mut sink = std::io::BufWriter::new(&mut file);
+                    audio_post::encode::mp3_dual_mono(&mix[from..to], SR, rate, kbps, &mut sink).map_err(|e| fail(e.to_string()))?;
+                    std::io::Write::flush(&mut sink).map_err(|e| fail(e.to_string()))?;
                 } else {
-                    match opts.quality.rate {
-                        Some(rate) => audio_post::encode::flac(&stereo.resampled(rate).map_err(|e| e.to_string())?),
-                        None => audio_post::encode::flac(&stereo),
-                    }
+                    audio_post::encode::flac_dual_mono(&mix[from..to], SR, opts.quality.rate.unwrap_or(SR), &mut file).map_err(|e| fail(e.to_string()))?;
                 }
-                .map_err(|e| e.to_string())?;
-                std::fs::write(&target, bytes).map_err(|e| format!("{}: {e}", target.display()))?;
             }
-            _ => crate::audio::media::encode_audio_meta(&joined, &target, &opts.format, acx, &meta, &opts.quality)?,
+            _ => {
+                let joined = work.path().join(format!("part-{k}.wav"));
+                crate::audio::wavio::write_mono_f32(&joined, &mix[from..to], SR)?;
+                crate::audio::media::encode_audio_meta(&joined, &target, &opts.format, acx, &meta, &opts.quality)?;
+            }
         }
         if crate::audio::tagging::taggable(&target) {
             let cover = meta.cover.as_ref().and_then(|c| std::fs::read(c).ok().map(|bytes| (if c.extension().is_some_and(|e| e.eq_ignore_ascii_case("png")) { "image/png" } else { "image/jpeg" }.to_string(), bytes)));
@@ -2378,9 +2377,9 @@ mod tests {
     }
 
     /// A whole book exported as the window exports it with «skip the unvoiced»: `BOOK` — the book's file, `BOOK_WORK` —
-    /// an empty folder for its project, cut into blocks as 0.3.5 cut it (scene breaks are blocks); every block with
-    /// words gets a take as long as its text read at `BOOK_CHARS_PER_SEC` letters a second (14), times `BOOK_SCALE` (1).
-    /// `BOOK_FORMAT` — the export's format (mp3).
+    /// an empty folder for its project, cut into blocks as 0.3.5 cut it (scene breaks are blocks); every hundredth
+    /// block is left unvoiced, every other block with words gets a take as long as its text read at `BOOK_CHARS_PER_SEC` letters a second (14), times `BOOK_SCALE` (1).
+    /// `BOOK_FORMAT` — the export's format (mp3), `BOOK_CHAPTERS` — only the book's first chapters.
     #[test]
     #[ignore]
     fn a_whole_book_exports_with_its_unvoiced_blocks_skipped() {
@@ -2392,7 +2391,8 @@ mod tests {
         let p = SpeechPaths { repo_root: work.clone(), workspace: work.join("ws"), voices_dir: work.join("voices"), models_root: work.join("models") };
         let parsed = crate::speech::book_import::parse(&book, &std::fs::read(&book).unwrap()).unwrap();
         let mut project = SpeechProject { name: parsed.title.clone(), ..Default::default() };
-        for c in &parsed.chapters {
+        let chapters: usize = std::env::var("BOOK_CHAPTERS").ok().and_then(|s| s.parse().ok()).unwrap_or(usize::MAX);
+        for c in parsed.chapters.iter().take(chapters) {
             let blocks = sp::split_text_lines(&c.text, "n", None).into_iter().map(|(speaker, text)| Block { id: sp::new_id(), speaker, text, ..Default::default() }).collect();
             project.chapters.push(sp::Chapter { id: sp::new_id(), title: c.title.clone(), blocks });
         }
@@ -2402,7 +2402,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let (mut voiced, mut left, mut audio) = (0, 0, 0.0);
         for b in project.chapters.iter_mut().flat_map(|c| c.blocks.iter_mut()) {
-            if crate::audio::qc::normalize(&b.text).is_empty() {
+            if crate::audio::qc::normalize(&b.text).is_empty() || (voiced + left) % 100 == 99 {
                 left += 1;
                 continue;
             }

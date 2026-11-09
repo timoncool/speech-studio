@@ -11,23 +11,26 @@ const TRUE_PEAK_RATE: u32 = 192_000;
 
 /// Интегральная громкость ITU-R BS.1770 (LUFS) моно-сигнала: K-weighting (high-shelf + high-pass
 /// биквады как в pyloudnorm) -> блоки 400мс с overlap 75% -> абсолютный гейт -70 + относительный -10.
-/// None если блоков не осталось (слишком коротко/тихо).
+/// None если блоков не осталось (слишком коротко/тихо). Отфильтрованный сигнал держится только в пределах блока.
 pub fn integrated_lufs(x: &[f32], sr: u32) -> Option<f64> {
     let hs = biquad_high_shelf(1681.9744509555319, 0.7071752369554196, 4.0, sr as f64);
     let hp = biquad_high_pass(38.13547087613982, 0.5003270373253953, sr as f64);
-    let y = apply_biquad(&apply_biquad(x, &hs), &hp);
     let block = (0.4 * sr as f64) as usize;
     let step = (0.1 * sr as f64) as usize;
-    if block == 0 || step == 0 || y.len() < block {
+    if block == 0 || step == 0 || x.len() < block {
         return None;
     }
+    let (mut shelf, mut pass) = (Biquad::new(&hs), Biquad::new(&hp));
+    let mut ring = vec![0.0f32; block];
     let mut zs: Vec<f64> = Vec::new();
-    let mut i = 0;
-    while i + block <= y.len() {
-        let ms: f64 = y[i..i + block].iter().map(|&v| (v as f64) * (v as f64)).sum::<f64>()
-            / block as f64;
-        zs.push(ms);
-        i += step;
+    for (n, &xn) in x.iter().enumerate() {
+        ring[n % block] = pass.next(shelf.next(xn));
+        let seen = n + 1;
+        if seen >= block && (seen - block) % step == 0 {
+            let start = seen % block;
+            let ms: f64 = ring[start..].iter().chain(&ring[..start]).map(|&v| (v as f64) * (v as f64)).sum::<f64>() / block as f64;
+            zs.push(ms);
+        }
     }
     if zs.is_empty() {
         return None;
@@ -48,21 +51,30 @@ pub fn integrated_lufs(x: &[f32], sr: u32) -> Option<f64> {
     Some(loud(mean_rel))
 }
 
-/// Биквад-фильтр прямой формы I (b/a нормированы на a0). Возвращает отфильтрованный сигнал.
-fn apply_biquad(x: &[f32], c: &[f64; 5]) -> Vec<f32> {
-    let [b0, b1, b2, a1, a2] = *c;
-    let (mut x1, mut x2, mut y1, mut y2) = (0.0f64, 0.0f64, 0.0f64, 0.0f64);
-    let mut out = Vec::with_capacity(x.len());
-    for &xn in x {
-        let xn = xn as f64;
-        let yn = b0 * xn + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
-        x2 = x1;
-        x1 = xn;
-        y2 = y1;
-        y1 = yn;
-        out.push(yn as f32);
+/// Биквад-фильтр прямой формы I (b/a нормированы на a0), по отсчёту.
+struct Biquad {
+    c: [f64; 5],
+    x1: f64,
+    x2: f64,
+    y1: f64,
+    y2: f64,
+}
+
+impl Biquad {
+    fn new(c: &[f64; 5]) -> Self {
+        Biquad { c: *c, x1: 0.0, x2: 0.0, y1: 0.0, y2: 0.0 }
     }
-    out
+
+    fn next(&mut self, xn: f32) -> f32 {
+        let [b0, b1, b2, a1, a2] = self.c;
+        let xn = xn as f64;
+        let yn = b0 * xn + b1 * self.x1 + b2 * self.x2 - a1 * self.y1 - a2 * self.y2;
+        self.x2 = self.x1;
+        self.x1 = xn;
+        self.y2 = self.y1;
+        self.y1 = yn;
+        yn as f32
+    }
 }
 
 /// High-shelf биквад (pyloudnorm K-weighting stage 1). Коэффы [b0,b1,b2,a1,a2] нормированы на a0.
@@ -108,20 +120,19 @@ pub struct Levelled {
 }
 
 /// Истинный пик в dBTP: сигнал передискретизируется до 192 кГц и выше (как BS.1770 для 48 кГц ×4; звуку 24 кГц нужно
-/// ×8) FFT-ресемплером rubato с ограничением полосы, берётся наибольший модуль.
+/// ×8) FFT-ресемплером с ограничением полосы, по кускам, берётся наибольший модуль.
 pub fn true_peak_db(x: &[f32], sr: u32) -> Result<f64, String> {
-    use audioadapter::Adapter;
-    use rubato::Resampler;
     if x.len() < 2 {
         return Ok(x.first().map_or(-120.0, |v| 20.0 * (v.abs() as f64).max(1e-6).log10()));
     }
-    let input = vec![x.iter().map(|&s| s as f64).collect::<Vec<_>>()];
-    let adapter = audioadapter_buffers::direct::SequentialSliceOfVecs::new(&input, 1, x.len()).map_err(|e| format!("true peak buffer: {e}"))?;
-    let factor = (TRUE_PEAK_RATE / sr.max(1)).max(4) as usize;
-    let mut up = rubato::Fft::<f64>::new(sr as usize, sr as usize * factor, 1024, 1, rubato::FixedSync::Both).map_err(|e| format!("true peak resampler: {e}"))?;
-    let out = up.process_all(&adapter, x.len(), None).map_err(|e| format!("true peak resampling: {e}"))?;
-    let peak = (0..out.frames()).filter_map(|i| out.read_sample(0, i)).fold(0.0f64, |m, v| m.max(v.abs()));
-    Ok(if peak <= 0.0 { -120.0 } else { 20.0 * peak.log10() })
+    let factor = (TRUE_PEAK_RATE / sr.max(1)).max(4);
+    let mut peak = 0.0f32;
+    audio_post::resample::mono_pieces(x, sr, sr * factor, |piece| {
+        peak = piece.iter().fold(peak, |m, v| m.max(v.abs()));
+        Ok(())
+    })
+    .map_err(|e| format!("true peak resampling: {e:#}"))?;
+    Ok(if peak <= 0.0 { -120.0 } else { 20.0 * (peak as f64).log10() })
 }
 
 /// Потолок фразы после выравнивания (Dub `VOICE_CEILING`).
@@ -222,6 +233,23 @@ mod tests {
         assert!(done.after > done.before, "brought up towards the target: {done:?}");
         assert!(word.iter().all(|v| v.abs() < 1.0));
         assert!(level(&mut vec![0.0f32; 4_000], sr, -14.0, -1.0, false).is_err(), "silence has nothing to level");
+    }
+
+    /// Levelling a whole book holds its pieces, not copies of it: the memory `level` takes beyond the programme does
+    /// not grow with it (an eight-hour book once took tens of gigabytes and the export crashed).
+    #[test]
+    #[ignore = "levels 12 minutes of sound: minutes in a debug build"]
+    fn levelling_takes_the_same_memory_for_a_longer_programme() {
+        let sr = 24_000;
+        let take = |minutes: usize| {
+            let mut x: Vec<f32> = (0..minutes * 12).flat_map(|_| speechlike(3.0, sr, 0.05).into_iter().chain(std::iter::repeat_n(0.0, sr as usize * 2))).collect();
+            crate::alloc_meter::peak_of(|| {
+                level(&mut x, sr, -14.0, -1.0, false).unwrap();
+            })
+        };
+        let (short, long) = (take(3), take(9));
+        eprintln!("levelling: 3 min {short} bytes, 9 min {long}");
+        assert!(long < short + short / 5, "3 min {short} bytes, 9 min {long}");
     }
 
     #[test]

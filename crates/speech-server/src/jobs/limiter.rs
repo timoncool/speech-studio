@@ -172,19 +172,80 @@ fn gain_curve(peak: &[f64], rate: u32, threshold: f64, config: &LimiterConfig) -
 }
 
 /// Моно-вариант студийного `limit`: выпрямленный пик берётся по одному каналу, остальное то же. Возвращает число
-/// сэмплов, которые без лимитера вышли бы за порог (телеметрия для журнала рендера).
+/// сэмплов, которые без лимитера вышли бы за порог (телеметрия для журнала рендера). Кривая гейна стоит несколько
+/// массивов f64 на сэмпл, поэтому длинный сигнал (аудиокнига) идёт кусками по `SEGMENT_SECS`.
 pub fn limit_mono(x: &mut [f32], rate: u32, threshold: f64, config: &LimiterConfig) -> usize {
-    if x.is_empty() {
-        return 0;
-    }
+    limit_segmented(x, rate, threshold, config, (SEGMENT_SECS * rate as f64) as usize)
+}
+
+/// Самый длинный кусок, по которому кривая гейна строится разом.
+const SEGMENT_SECS: f64 = 60.0;
+
+/// Куски режутся только там, где перед разрезом столько секунд ни один сэмпл не выше порога — релиз (`SPEECH`:
+/// фильтр 2 Гц, τ 80 мс) затух до ~1e-11, — и после него ещё `QUIET_AFTER_SECS`, дальше атаки и удержания: кривая
+/// по обе стороны разреза та же, что по всему сигналу.
+const QUIET_BEFORE_SECS: f64 = 2.0;
+const QUIET_AFTER_SECS: f64 = 0.25;
+
+fn limit_segmented(x: &mut [f32], rate: u32, threshold: f64, config: &LimiterConfig, segment: usize) -> usize {
     let over = x.iter().filter(|v| v.abs() as f64 > threshold).count();
+    let mut start = 0;
+    for end in piece_ends(x, rate, threshold, segment) {
+        limit_piece(&mut x[start..end], rate, threshold, config);
+        start = end;
+    }
+    over
+}
+
+/// Where each piece of `x` the limiter takes at once ends: at most two `segment`s long.
+fn piece_ends(x: &[f32], rate: u32, threshold: f64, segment: usize) -> Vec<usize> {
+    let segment = segment.max(1);
+    let (mut ends, mut start) = (Vec::new(), 0);
+    while start < x.len() {
+        let end = match x.len() - start {
+            left if left <= segment => x.len(),
+            left => {
+                let window = &x[start + segment..start + left.min(segment.saturating_mul(2))];
+                quiet_cut(window, rate, threshold, left <= segment.saturating_mul(2)).map_or(x.len(), |at| start + segment + at)
+            }
+        };
+        ends.push(end);
+        start = end;
+    }
+    ends
+}
+
+/// Where in `x` to cut: the first place with `QUIET_BEFORE_SECS` before it and `QUIET_AFTER_SECS` after it where no
+/// sample is above the threshold. A stretch over the threshold all the time (a loud preset on dense speech) has no such
+/// place; then the cut goes where the quiet before it is longest, the release there decayed the most. None — `x` is
+/// the signal's tail, to be limited with what comes before it.
+fn quiet_cut(x: &[f32], rate: u32, threshold: f64, tail: bool) -> Option<usize> {
+    let before = ((QUIET_BEFORE_SECS * rate as f64) as usize).max(1);
+    let after = ((QUIET_AFTER_SECS * rate as f64) as usize).max(1);
+    let (mut run, mut best) = (0, (0, x.len()));
+    for (i, v) in x.iter().enumerate() {
+        if v.abs() as f64 > threshold {
+            run = 0;
+            continue;
+        }
+        run += 1;
+        if run == before + after {
+            return Some(i + 1 - after);
+        }
+        if run > after && run - after > best.0 {
+            best = (run - after, i + 1 - after);
+        }
+    }
+    (!tail).then_some(best.1)
+}
+
+fn limit_piece(x: &mut [f32], rate: u32, threshold: f64, config: &LimiterConfig) {
     let peak: Vec<f64> = x.iter().map(|v| v.abs() as f64).collect();
     if let Some(gain) = gain_curve(&peak, rate, threshold, config) {
         for (v, g) in x.iter_mut().zip(gain) {
             *v *= g;
         }
     }
-    over
 }
 
 #[cfg(test)]
@@ -292,5 +353,79 @@ mod tests {
         let clip_gain: Vec<f64> = peak.iter().map(|&p| 0.985 / p.max(0.985)).collect();
         let clip_steps = clip_gain.windows(2).filter(|w| (w[1] - w[0]).abs() > 0.02).count();
         assert!(clip_steps > 0, "жёсткий клип на этой фразе должен давать скачки гейна");
+    }
+
+    /// How far the limited sound cut into pieces of `segment` samples is from the sound limited whole, and how many
+    /// pieces there were.
+    fn segmented_against_whole(x: &[f32], rate: u32, threshold: f64, segment: usize) -> (f32, usize) {
+        let mut whole = x.to_vec();
+        let mut pieces = x.to_vec();
+        assert_eq!(limit_segmented(&mut whole, rate, threshold, &SPEECH, usize::MAX), limit_segmented(&mut pieces, rate, threshold, &SPEECH, segment));
+        (whole.iter().zip(&pieces).fold(0.0f32, |m, (a, b)| m.max((a - b).abs())), piece_ends(x, rate, threshold, segment).len())
+    }
+
+    /// A long programme is limited piece by piece, cut only in its long pauses, and comes out as limited whole.
+    #[test]
+    fn a_long_programme_limited_in_pieces_is_the_programme_limited_whole() {
+        let mut x: Vec<f32> = Vec::new();
+        for n in 0..24 {
+            x.extend(phrase(0.8, 2.2));
+            x.extend(std::iter::repeat_n(0.0, SR as usize * if n % 4 == 3 { 5 } else { 1 } * 3 / 5));
+        }
+        let (diff, pieces) = segmented_against_whole(&x, SR, 0.985, SR as usize * 15);
+        assert!(pieces >= 3, "{pieces} pieces");
+        assert!(diff < 1e-6, "{diff}");
+    }
+
+    /// Speech over the threshold all the time has no quiet place to cut in; it is still limited in pieces, and the
+    /// pieces are cut where the quiet before them is longest.
+    #[test]
+    fn dense_loud_speech_is_cut_where_it_is_quietest() {
+        let x: Vec<f32> = (0..20).flat_map(|_| phrase(0.8, 2.2)).collect();
+        let (diff, pieces) = segmented_against_whole(&x, SR, 0.985, SR as usize * 6);
+        eprintln!("dense: {pieces} pieces, the largest difference {diff:e}");
+        assert!(pieces >= 3, "{pieces} pieces");
+        assert!(diff < 1e-3, "{diff}");
+    }
+
+    /// The memory the limiter takes does not grow with the programme once it is longer than two pieces.
+    #[test]
+    fn the_limiter_s_memory_does_not_grow_with_the_programme() {
+        let take = |minutes: usize| {
+            let mut x: Vec<f32> = (0..minutes * 30).flat_map(|_| phrase(0.8, 2.2)).collect();
+            crate::alloc_meter::peak_of(|| {
+                limit_mono(&mut x, SR, 0.985, &SPEECH);
+            })
+        };
+        let (short, long) = (take(3), take(9));
+        eprintln!("limiter: 3 min {short} bytes, 9 min {long}");
+        assert!(long < short + short / 5, "3 min {short} bytes, 9 min {long}");
+    }
+
+    /// The same on real takes: `TAKES_DIR` — a project's takes folder, its takes one after another with 300 ms
+    /// between them, raised to `TAKES_LUFS` (-14) and limited at -1.5 dBFS, as a loud export levels them.
+    #[test]
+    #[ignore]
+    fn real_takes_limited_in_pieces_are_the_takes_limited_whole() {
+        let dir = std::path::PathBuf::from(std::env::var("TAKES_DIR").expect("TAKES_DIR"));
+        let work = tempfile::tempdir().unwrap();
+        let mut x: Vec<f32> = Vec::new();
+        let mut files: Vec<_> = std::fs::read_dir(&dir).unwrap().filter_map(|e| e.ok().map(|e| e.path())).filter(|p| p.extension().is_some_and(|e| e == "flac" || e == "wav")).collect();
+        files.sort();
+        for (i, f) in files.iter().enumerate() {
+            let wav = work.path().join(format!("{i}.wav"));
+            crate::audio::media::extract_audio(f, &wav, 24_000, 1).unwrap();
+            x.extend(crate::audio::wavio::read_mono_f32(&wav).unwrap().0);
+            x.extend(std::iter::repeat_n(0.0, 7_200));
+        }
+        let lufs: f64 = std::env::var("TAKES_LUFS").ok().and_then(|s| s.parse().ok()).unwrap_or(-14.0);
+        let gain = 10f32.powf(((lufs - crate::audio::loudness::integrated_lufs(&x, 24_000).unwrap()) / 20.0) as f32);
+        x.iter_mut().for_each(|v| *v *= gain);
+        let threshold = 10f64.powf(-1.5 / 20.0);
+        eprintln!("{:.2} % of the samples over the threshold", 100.0 * x.iter().filter(|v| v.abs() as f64 > threshold).count() as f64 / x.len() as f64);
+        let (diff, pieces) = segmented_against_whole(&x, 24_000, threshold, 24_000 * 30);
+        eprintln!("{} takes, {:.1} min, {pieces} pieces, the largest difference {diff:e}", files.len(), x.len() as f64 / 24_000.0 / 60.0);
+        assert!(pieces >= 2, "{pieces} pieces");
+        assert!(diff < 1e-6, "{diff}");
     }
 }
