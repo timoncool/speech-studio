@@ -181,6 +181,7 @@ pub fn new_conversation() {
 }
 
 /// The event waiting for the agent's word, if one does.
+#[cfg(test)]
 pub fn pending() -> Option<u64> {
     floors().iter().rev().find(|f| f.decided.is_none()).map(|f| f.n)
 }

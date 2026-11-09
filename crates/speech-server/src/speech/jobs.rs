@@ -247,6 +247,7 @@ fn synth_block_cloud(p: &SpeechPaths, pid: &str, project: &SpeechProject, b: &Bl
     let (mut out, mut rate, started) = (Vec::new(), 1.0f64, std::time::Instant::now());
     let (mut cost, mut estimate) = (None::<f64>, None::<f64>);
     let live = crate::speech::live::Phrase::begin(pid, &b.id);
+    live.voiced(&p.workspace, &format!("{}|{voice}", project.engine_of(b)), voice_norm(project, Some(voice.as_str()).filter(|v| !v.is_empty())).lufs);
     for (k, piece) in stx::pieces(&prepared.text).into_iter().enumerate() {
         match piece {
             Piece::Pause(ms) => {
@@ -432,6 +433,8 @@ fn synth_block_with(p: &SpeechPaths, pid: &str, project: &SpeechProject, b: &Blo
         params.speed = (params.speed * ahead).min(SPEED_MAX);
     }
     let live = std::sync::Arc::new(crate::speech::live::Phrase::begin(pid, &b.id));
+    let said_in = preset.clone().or_else(|| voice.clone()).unwrap_or_default();
+    live.voiced(&p.workspace, &format!("{own}|{said_in}"), voice_norm(project, voice.as_deref()).lufs);
     let mut render = |params: &tts_host::Params, salt: u64, live: Option<&std::sync::Arc<crate::speech::live::Phrase>>| -> Result<(Vec<f32>, u64, f64), String> {
         let mut out: Vec<f32> = Vec::new();
         let (mut seed, mut temperature) = (0u64, params.temperature);

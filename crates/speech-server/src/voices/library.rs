@@ -55,6 +55,9 @@ pub struct VoiceCard {
     /// The speaker's year of birth and the recording's length in seconds, as its source gives them.
     pub birth_year: Option<u32>,
     pub duration_s: Option<f64>,
+    /// The reference's loudness, LUFS, measured when its sound last changed (None: not measured yet).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lufs: Option<f64>,
 }
 
 impl Default for VoiceCard {
@@ -78,6 +81,7 @@ impl Default for VoiceCard {
             description: String::new(),
             birth_year: None,
             duration_s: None,
+            lufs: None,
         }
     }
 }
@@ -410,6 +414,44 @@ pub fn import_audio(dir: &Path, base: &str, src: &Path, card: VoiceCard) -> Resu
 /// Заменить звук голоса очищенным, сохранив исходник в `.originals` (только первый: повторная очистка не
 /// затирает настоящий исходник уже очищенным звуком).
 pub fn replace_with_cleaned(dir: &Path, name: &str, cleaned: &Path) -> Result<(), String> {
+    replace_audio(dir, name, cleaned)?;
+    let mut card = read_card(dir, name)?;
+    card.cleaned = true;
+    card.lufs = None;
+    write_card(dir, name, &card)
+}
+
+/// A reference quieter than this (LUFS) is offered to be levelled: 6 dB under the −20 a voice added from a file gets.
+pub const QUIET_LUFS: f64 = -26.0;
+
+/// The voice's sound brought to the reference loudness (−20 LUFS, as a voice added from a file), its sound before kept in
+/// `.originals` as a cleaning keeps it. Answers the loudness it has now.
+pub fn level_voice(dir: &Path, name: &str) -> Result<f64, String> {
+    let audio = audio_path(dir, name).ok_or_else(|| format!("no voice named {name}"))?;
+    let work = tempfile::Builder::new().prefix("level-").tempdir().map_err(|e| e.to_string())?;
+    let source = work.path().join(audio.file_name().expect("a file name"));
+    std::fs::copy(&audio, &source).map_err(|e| format!("{}: {e}", source.display()))?;
+    replace_audio(dir, name, &source)?;
+    measure_level(dir, name)
+}
+
+/// The voice's loudness (LUFS of its reference), measured and kept on its card.
+pub fn measure_level(dir: &Path, name: &str) -> Result<f64, String> {
+    let audio = audio_path(dir, name).ok_or_else(|| format!("no voice named {name}"))?;
+    let work = tempfile::Builder::new().prefix("lufs-").tempdir().map_err(|e| e.to_string())?;
+    let wav = work.path().join("ref.wav");
+    crate::audio::media::extract_audio(&audio, &wav, 24_000, 1)?;
+    let (x, sr) = crate::audio::wavio::read_mono_f32(&wav)?;
+    let lufs = crate::audio::loudness::integrated_lufs(&x, sr).ok_or_else(|| t!("media-loudnorm-silent"))?;
+    let lufs = (lufs * 10.0).round() / 10.0;
+    let mut card = read_card(dir, name)?;
+    card.lufs = Some(lufs);
+    write_card(dir, name, &card)?;
+    Ok(lufs)
+}
+
+/// The voice's sound replaced by `src` brought to −20 LUFS, the first sound it had kept in `.originals`.
+fn replace_audio(dir: &Path, name: &str, src: &Path) -> Result<(), String> {
     let audio = audio_path(dir, name).ok_or_else(|| format!("no voice named {name}"))?;
     let originals = dir.join(ORIGINALS);
     std::fs::create_dir_all(&originals).map_err(|e| format!("{}: {e}", originals.display()))?;
@@ -419,17 +461,14 @@ pub fn replace_with_cleaned(dir: &Path, name: &str, cleaned: &Path) -> Result<()
     }
     let target = dir.join(format!("{name}.wav"));
     let part = staging_wav(dir, name)?;
-    if let Err(e) = crate::audio::media::loudnorm(cleaned, &part, -20.0, -2.0, 11.0) {
+    if let Err(e) = crate::audio::media::loudnorm(src, &part, -20.0, -2.0, 11.0) {
         let _ = std::fs::remove_file(&part);
         return Err(e);
     }
     if audio != target {
         std::fs::remove_file(&audio).map_err(|e| format!("{}: {e}", audio.display()))?;
     }
-    std::fs::rename(&part, &target).map_err(|e| format!("{}: {e}", target.display()))?;
-    let mut card = read_card(dir, name)?;
-    card.cleaned = true;
-    write_card(dir, name, &card)
+    std::fs::rename(&part, &target).map_err(|e| format!("{}: {e}", target.display()))
 }
 
 pub fn read_words(dir: &Path, name: &str) -> Option<Vec<crate::voices::ref_pick::Word>> {
@@ -507,6 +546,7 @@ pub fn restore_original(dir: &Path, name: &str) -> Result<(), String> {
     }
     let mut card = read_card(dir, name)?;
     card.cleaned = false;
+    card.lufs = None;
     write_card(dir, name, &card)
 }
 
@@ -538,6 +578,25 @@ mod tests {
         assert_eq!(default_voice(dir.path(), "de", true).as_deref(), Some("Bob"), "no voice of German: a favourite with its text");
         std::fs::remove_file(dir.path().join("Vera.txt")).unwrap();
         assert_eq!(default_voice(dir.path(), "ru", true).as_deref(), Some("Anna"), "no Russian voice with its text: one without is not left out");
+    }
+
+    /// A quiet reference is measured, levelled to the −20 LUFS a voice added from a file gets with its sound before kept
+    /// as the original, and brought back as it was.
+    #[test]
+    fn a_quiet_reference_is_levelled_and_its_original_kept() {
+        let dir = tempfile::tempdir().unwrap();
+        let quiet: Vec<f32> = (0..24_000 * 3).map(|i| 0.01 * (i as f32 * 2.0 * std::f32::consts::PI * 220.0 / 24_000.0).sin() * (0.6 + 0.4 * (i as f32 / 4_000.0).sin())).collect();
+        crate::audio::wavio::write_mono_f32(&dir.path().join("Тихий.wav"), &quiet, 24_000).unwrap();
+        write_card(dir.path(), "Тихий", &VoiceCard::default()).unwrap();
+        let before = measure_level(dir.path(), "Тихий").unwrap();
+        assert!(before < QUIET_LUFS, "{before}");
+        assert_eq!(read_card(dir.path(), "Тихий").unwrap().lufs, Some(before), "kept on the card");
+        let after = level_voice(dir.path(), "Тихий").unwrap();
+        assert!((after + 20.0).abs() < 1.5, "{after}");
+        assert!(original_path(dir.path(), "Тихий").is_some(), "the original is kept");
+        restore_original(dir.path(), "Тихий").unwrap();
+        assert_eq!(read_card(dir.path(), "Тихий").unwrap().lufs, None, "the original is measured again");
+        assert!((measure_level(dir.path(), "Тихий").unwrap() - before).abs() < 0.2);
     }
 
     #[test]

@@ -83,6 +83,17 @@ describe("live playback", () => {
     expect(fake.nodes[2].startedAt).toBeCloseTo(10.05);
   });
 
+  it("plays a quiet voice's piece up by the gain the studio measured for it", () => {
+    const fake = fakeContext();
+    const player = new LivePlayer("p1", () => fake.ctx);
+    player.handle({ kind: "chunk", project: "p1", block: "b1", sr: 4, data: piece([0.1, -0.05]), gain_db: 12 });
+    player.handle({ kind: "chunk", project: "p1", block: "b2", sr: 4, data: piece([0.1]), gain_db: 0 });
+    const k = 10 ** (12 / 20);
+    expect(fake.buffers[0].samples[0]).toBeCloseTo(0.1 * k, 5);
+    expect(fake.buffers[0].samples[1]).toBeCloseTo(-0.05 * k, 5);
+    expect(fake.buffers[1].samples[0]).toBeCloseTo(0.1, 6);
+  });
+
   it("remembers the setting, on by default", () => {
     localStorage.removeItem("speech-live-playback");
     expect(livePlaybackEnabled()).toBe(true);

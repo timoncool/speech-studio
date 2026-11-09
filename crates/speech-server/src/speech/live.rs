@@ -1,6 +1,7 @@
 //! A block's audio while it is being voiced: the pieces the engine streams go to `GET /speech/live` (SSE).
 
 use std::convert::Infallible;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
@@ -252,6 +253,11 @@ pub struct Phrase {
     heard_ms: Mutex<Option<u64>>,
     ended: AtomicBool,
     gate: Mutex<crate::audio::trim::PauseGate>,
+    /// The voice it is said in (`voiced`), its gain in the window in dB, and what the engine gave of it so far, at its
+    /// rate: measured when it ends, for the voice's next phrases.
+    voice: Mutex<Option<(PathBuf, String)>>,
+    gain_db: Mutex<f64>,
+    heard: Mutex<(Vec<f32>, u32)>,
 }
 
 impl Drop for Phrase {
@@ -272,9 +278,21 @@ impl Phrase {
             heard_ms: Mutex::new(None),
             ended: AtomicBool::new(false),
             gate: Mutex::new(Default::default()),
+            voice: Mutex::new(None),
+            gain_db: Mutex::new(0.0),
+            heard: Mutex::new((Vec::new(), 0)),
         };
         phrase.send("start", json!({}));
         phrase
+    }
+
+    /// The phrase is said in `voice` (an engine and a voice of it): it plays in the window as loud as the voice's
+    /// phrases measured before it ask for (`stream_gain_db`), or as `usual` (the voice's takes' loudness, LUFS) says
+    /// when none was; its own loudness is kept for the next ones, beside the studio's `workspace`.
+    pub fn voiced(&self, workspace: &Path, voice: &str, usual: Option<f64>) {
+        let lufs = voice_levels(workspace).get(voice).copied().or(usual);
+        *self.gain_db.lock().unwrap_or_else(|p| p.into_inner()) = lufs.map_or(0.0, stream_gain_db);
+        *self.voice.lock().unwrap_or_else(|p| p.into_inner()) = Some((workspace.to_path_buf(), voice.to_string()));
     }
 
     fn send(&self, kind: &str, extra: Value) {
@@ -304,6 +322,13 @@ impl Phrase {
                 *self.heard_ms.lock().unwrap_or_else(|p| p.into_inner()) = crate::app::since_arrival(&self.block);
             }
         }
+        {
+            let mut heard = self.heard.lock().unwrap_or_else(|p| p.into_inner());
+            if heard.1 == sr || heard.0.is_empty() {
+                heard.1 = sr;
+                heard.0.extend_from_slice(samples);
+            }
+        }
         // a phrase said aloud is heard without the long pauses an engine leaves inside it, as an export is
         if self.is_aloud() {
             let kept = self.gate.lock().unwrap_or_else(|p| p.into_inner()).pass(samples, sr);
@@ -317,11 +342,12 @@ impl Phrase {
         if channel().receiver_count() == 0 {
             return;
         }
+        let gain_db = *self.gain_db.lock().unwrap_or_else(|p| p.into_inner());
         if self.is_aloud() && player().is_some() {
-            aired(&self.project, &self.block, samples.len() as f64 / sr.max(1) as f64, rms(samples));
+            aired(&self.project, &self.block, samples.len() as f64 / sr.max(1) as f64, rms(samples) * 10f32.powf(gain_db as f32 / 20.0));
         }
         let bytes: Vec<u8> = samples.iter().flat_map(|s| s.to_le_bytes()).collect();
-        self.send("chunk", json!({ "sr": sr, "data": base64::engine::general_purpose::STANDARD.encode(bytes) }));
+        self.send("chunk", json!({ "sr": sr, "data": base64::engine::general_purpose::STANDARD.encode(bytes), "gain_db": gain_db }));
     }
 
     /// Silence the block's text asks for between its pieces; it is not the block's first sound.
@@ -333,6 +359,7 @@ impl Phrase {
 
     /// The take was defective and is said again: what was played of it is dropped.
     pub fn restart(&self) {
+        self.heard.lock().unwrap_or_else(|p| p.into_inner()).0.clear();
         self.send("restart", json!({}));
     }
 
@@ -358,7 +385,56 @@ impl Phrase {
 
     pub fn end(&self, ok: bool) {
         self.ended.store(true, Ordering::Relaxed);
+        if ok {
+            let voice = self.voice.lock().unwrap_or_else(|p| p.into_inner()).clone();
+            let heard = std::mem::take(&mut *self.heard.lock().unwrap_or_else(|p| p.into_inner()));
+            if let (Some((workspace, voice)), Some(lufs)) = (voice, crate::audio::loudness::integrated_lufs(&heard.0, heard.1.max(1))) {
+                keep_voice_level(&workspace, &voice, lufs);
+            }
+        }
         self.send("end", json!({ "ok": ok, "first_ms": self.first_ms() }));
+    }
+}
+
+/// The loudness the window brings a voice's stream up to, LUFS.
+pub const STREAM_TARGET_LUFS: f64 = -16.0;
+/// The most a voice's stream is raised, dB.
+pub const STREAM_GAIN_MAX_DB: f64 = 12.0;
+
+/// The gain in the window of a voice whose phrases measure `lufs`: up to `STREAM_TARGET_LUFS`, at most
+/// `STREAM_GAIN_MAX_DB`, never down.
+pub fn stream_gain_db(lufs: f64) -> f64 {
+    (STREAM_TARGET_LUFS - lufs).clamp(0.0, STREAM_GAIN_MAX_DB)
+}
+
+const VOICE_LEVELS: &str = ".voice-levels.json";
+
+/// The loudness of the phrases each voice said as they came (an engine and a voice of it: LUFS), kept in the workspace.
+fn voice_levels(workspace: &Path) -> std::collections::HashMap<String, f64> {
+    let path = workspace.join(VOICE_LEVELS);
+    match std::fs::read(&path) {
+        Ok(bytes) => serde_json::from_slice(&bytes).unwrap_or_else(|e| {
+            tracing::error!("[ERROR] {}: {e}", path.display());
+            Default::default()
+        }),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Default::default(),
+        Err(e) => {
+            tracing::error!("[ERROR] {}: {e}", path.display());
+            Default::default()
+        }
+    }
+}
+
+/// A phrase of `voice` measured `lufs`: the voice's level follows it halfway, so one odd phrase does not swing it.
+fn keep_voice_level(workspace: &Path, voice: &str, lufs: f64) {
+    static WRITE: Mutex<()> = Mutex::new(());
+    let _one = WRITE.lock().unwrap_or_else(|p| p.into_inner());
+    let mut levels = voice_levels(workspace);
+    let level = levels.get(voice).map_or(lufs, |was| (was + lufs) / 2.0);
+    levels.insert(voice.to_string(), level);
+    let path = workspace.join(VOICE_LEVELS);
+    if let Err(e) = serde_json::to_vec(&levels).map_err(|e| e.to_string()).and_then(|b| crate::platform::fs::write_atomic(&path, &b)) {
+        tracing::error!("[ERROR] the loudness of voice {voice} is not kept in {}: {e}", path.display());
     }
 }
 
@@ -482,5 +558,41 @@ mod tests {
         let bytes = base64::engine::general_purpose::STANDARD.decode(ev["data"].as_str().unwrap()).unwrap();
         assert_eq!(f32::from_le_bytes(bytes[..4].try_into().unwrap()), 0.25);
         assert_eq!(ev["sr"], 24_000);
+    }
+
+    /// A quiet voice's phrases measured −28 LUFS: its next phrase plays in the window 12 dB up; a loud one's (−13) as it
+    /// is; a voice heard for the first time goes by its takes' loudness, or as it is without one.
+    #[tokio::test]
+    async fn a_quiet_voice_plays_up_to_the_stream_s_level_from_its_next_phrase() {
+        let workspace = tempfile::tempdir().unwrap();
+        let tone = |lufs: f64| {
+            let x: Vec<f32> = (0..48_000).map(|i| 0.1 * (i as f32 * 2.0 * std::f32::consts::PI * 440.0 / 24_000.0).sin()).collect();
+            let at = crate::audio::loudness::integrated_lufs(&x, 24_000).unwrap();
+            let g = 10f32.powf(((lufs - at) / 20.0) as f32);
+            x.into_iter().map(|v| v * g).collect::<Vec<f32>>()
+        };
+        let mut rx = channel().subscribe();
+        let mut gain_of_next = |voice: &str, usual: Option<f64>| {
+            let next = Phrase::begin("p-gain", "b-next");
+            next.voiced(workspace.path(), voice, usual);
+            next.chunk(&[0.1], 24_000);
+            next.end(false);
+            loop {
+                let ev = rx.try_recv().unwrap();
+                if ev["kind"] == "chunk" && ev["block"] == "b-next" {
+                    return ev["gain_db"].as_f64().unwrap();
+                }
+            }
+        };
+        for (voice, lufs) in [("higgs|quiet", -28.0), ("higgs|loud", -13.0)] {
+            let first = Phrase::begin("p-gain", "b-first");
+            first.voiced(workspace.path(), voice, None);
+            first.chunk(&tone(lufs), 24_000);
+            first.end(true);
+        }
+        assert!((gain_of_next("higgs|quiet", None) - 12.0).abs() < 0.1);
+        assert_eq!(gain_of_next("higgs|loud", None), 0.0);
+        assert!((gain_of_next("higgs|new", Some(-22.0)) - 6.0).abs() < 1e-9, "by its takes' loudness");
+        assert_eq!(gain_of_next("higgs|unknown", None), 0.0);
     }
 }

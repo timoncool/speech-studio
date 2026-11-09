@@ -99,6 +99,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/voices/transcribe", post(voice_api::transcribe))
         .route("/voices/clean", post(voice_api::clean))
         .route("/voices/denoise", post(voice_api::denoise))
+        .route("/voices/level", post(voice_api::level))
         .route("/voices/design", post(voice_api::design))
         .route("/voices/design/sample", get(voice_api::design_sample))
         .route("/voices/design/keep", post(voice_api::design_keep))

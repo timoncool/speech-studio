@@ -14,7 +14,7 @@ export function setLivePlaybackEnabled(on: boolean): void {
 
 export type LiveEvent =
   | { kind: "start" | "restart"; project: string; block: string; aloud?: boolean; player?: number | null }
-  | { kind: "chunk"; project: string; block: string; sr: number; data: string; aloud?: boolean; player?: number | null }
+  | { kind: "chunk"; project: string; block: string; sr: number; data: string; gain_db?: number; aloud?: boolean; player?: number | null }
   | { kind: "end"; project: string; block: string; ok: boolean; first_ms: number | null; aloud?: boolean; player?: number | null }
   | { kind: "stop"; project: string; aloud: true }
   | { kind: "voice"; loading: string | null; aloud: true }
@@ -173,6 +173,10 @@ export class LivePlayer {
     }
     if (this.ctx.state === "suspended") void this.ctx.resume();
     const samples = samplesOf(ev.data);
+    if (ev.gain_db) {
+      const k = 10 ** (ev.gain_db / 20);
+      for (let i = 0; i < samples.length; i++) samples[i] *= k;
+    }
     const buffer = this.ctx.createBuffer(1, samples.length, ev.sr);
     buffer.copyToChannel(samples, 0);
     const node = this.ctx.createBufferSource();

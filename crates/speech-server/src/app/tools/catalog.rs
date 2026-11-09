@@ -461,6 +461,12 @@ pub(super) fn tools() -> &'static [Tool] {
                 call: |args| post("/voices/denoise".into(), json!({ "name": text(args, "name")?, "db": args.get("db").cloned().unwrap_or(Value::Null) })),
             },
             Tool {
+                name: "voice_level",
+                description: "A voice's reference loudness (lufs) and whether it is quiet (under -26 LUFS: its clones come out quiet). measure true only measures it; otherwise the reference is brought to -20 LUFS as a voice added from a file, the original kept (voice_restore brings it back).",
+                schema: || object(json!({ "name": { "type": "string", "description": "voice name from voices_list" }, "measure": { "type": "boolean" } }), &["name"]),
+                call: |args| post("/voices/level".into(), json!({ "name": text(args, "name")?, "measure": args.get("measure").cloned().unwrap_or(Value::Bool(false)) })),
+            },
+            Tool {
                 name: "voice_design",
                 description: "Make a voice from a description (Qwen3-TTS VoiceDesign): gender, age, timbre and manner in a sentence or two, best in English or Chinese, and a sample text in the language the voice will speak. A job, follow it with studio_wait: its result has the batch id and candidates (k, seconds); each sounds at /voices/design/sample?id=&k=. Keep one with voice_design_keep. Downloads the model (about 1.2 GB) the first time.",
                 schema: || object(json!({ "description": { "type": "string" }, "sample": { "type": "string" }, "lang": { "type": "string" }, "count": { "type": "integer", "minimum": 1, "maximum": 6 } }), &["description", "sample"]),

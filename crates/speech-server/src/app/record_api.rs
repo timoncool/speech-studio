@@ -151,6 +151,13 @@ pub(super) async fn record_stop(State(st): State<AppState>, body: Option<Json<Va
     if let Err(e) = voice_library::write_card(&st.voices_dir, &name, &card) {
         return internal_error(e);
     }
+    // a recording is levelled as a voice added from a file is, so its clones are not quiet; the recording itself is kept
+    let (dir, recorded) = (st.voices_dir.clone(), name.clone());
+    match tokio::task::spawn_blocking(move || voice_library::level_voice(&dir, &recorded)).await {
+        Ok(Ok(_)) => {}
+        Ok(Err(e)) => return internal_error(e),
+        Err(e) => return join_failure(e),
+    }
     let clean = body
         .get("clean")
         .and_then(Value::as_bool)

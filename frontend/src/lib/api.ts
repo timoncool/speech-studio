@@ -252,6 +252,8 @@ export type VoiceCard = {
   /** The speaker's year of birth and the recording's length in seconds, as its source gives them. */
   birth_year?: number | null;
   duration_s?: number | null;
+  /** The reference's loudness, LUFS; absent until measured. */
+  lufs?: number;
 };
 export type VoiceEntry = { name: string; audio: string; size: number; transcript: string | null; photo: string | null; original: boolean; card: VoiceCard };
 export type RefIssue = "long_pause" | "noisy" | "clipped" | "short";
@@ -490,6 +492,8 @@ export const api = {
   voiceDesignSampleUrl: (id: string, k: number) => `${BASE}/voices/design/sample?id=${encodeURIComponent(id)}&k=${k}`,
   voiceDesignKeep: (body: { id: string; k: number; name: string; description: string; sample: string; lang: string }) => postCoded<{ voice: VoiceEntry }>("/voices/design/keep", body),
   voiceRestore: (name: string) => postCoded<{ voice: VoiceEntry }>("/voices/restore", { name }),
+  /** The reference's loudness; `measure` only measures it, otherwise it is brought to -20 LUFS (the original kept). */
+  voiceLevel: (name: string, measure: boolean) => postCoded<{ name: string; lufs: number; quiet: boolean }>("/voices/level", { name, measure }),
   voiceRefCandidates: (name: string) => postCoded<{ name: string; max_len: number; duration: number; candidates: RefCandidate[] }>("/voices/ref-candidates", { name }),
   voiceRefApply: (name: string, start: number, end: number) => postCoded<{ voice: VoiceEntry }>("/voices/ref-apply", { name, start, end }),
   voiceImport: (files: File[], opts: { name?: string; clean: boolean; transcribe: boolean }) => {

@@ -13,14 +13,14 @@ pub(crate) use reference::prepare_reference;
 pub(crate) use jobs::{ensure_words, transcribe_in, VoicePaths};
 
 pub(crate) use library::{
-    default_voice, free_name, guess_card, import_audio, list, read_transcript, sanitize, write_card, write_transcript, write_words, Voice, VoiceCard,
+    default_voice, free_name, guess_card, import_audio, level_voice, list, read_transcript, sanitize, write_card, write_transcript, write_words, Voice, VoiceCard,
     AGES, GENDERS,
 };
 
 pub(crate) mod http {
     pub(crate) use super::api::{
         clean, delete, denoise, design, design_keep, design_sample, enqueue, export, export_zip, import, import_zip_mapped,
-        import_zip_route, list, listing, photo, ref_apply, ref_candidates, rename, restore, sample, set_card, set_photo, set_transcript,
+        import_zip_route, level, list, listing, photo, ref_apply, ref_candidates, rename, restore, sample, set_card, set_photo, set_transcript,
         transcribe,
     };
 }

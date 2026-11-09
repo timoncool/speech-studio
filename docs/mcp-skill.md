@@ -55,7 +55,8 @@ connected and the address to paste.
   `voice_transcript_set`; a voice from the user's microphone is recorded by the person in the voice library (no tool
   turns the microphone on): `voice_record_devices`, `voice_record_level` while it records, `voice_record_stop` keeps
   it. Cleaning a reference: `voice_clean` (voice from music, Roformer),
-  `voice_denoise` (noise, DPDFNet, `db` limits how far), `voice_restore`; its best piece: `voice_ref_candidates`,
+  `voice_denoise` (noise, DPDFNet, `db` limits how far), `voice_level` (its loudness; a quiet one, under -26 LUFS, is
+  brought to -20 so its clones are not quiet), `voice_restore`; its best piece: `voice_ref_candidates`,
   `voice_ref_apply`. A voice from a description: `voice_design` (description best in English or Chinese, a sample text,
   1-6 candidates; a job), `voice_design_sample` (a candidate as a file), then `voice_design_keep` (one candidate into the
   library). `voice_sample` gives a voice's reference as a file (`original` - before cleaning), `voice_photo_get` its photo.

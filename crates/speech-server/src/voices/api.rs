@@ -278,6 +278,29 @@ pub async fn denoise(State(st): State<AppState>, Json(body): Json<Value>) -> Res
     }
 }
 
+/// POST /voices/level {name, measure?} — the voice's reference loudness: `measure` only measures it (and keeps it on the
+/// card), otherwise the reference is brought to −20 LUFS as a voice added from a file, its sound before kept as the
+/// original («Restore the original» brings it back). Answers `lufs` and whether it is `quiet` (under −26 LUFS).
+pub async fn level(State(st): State<AppState>, Json(body): Json<Value>) -> Response {
+    let dir = st.voices_dir.clone();
+    let name = body_name(&body, "name");
+    if lib::audio_path(&dir, &name).is_none() {
+        return missing(&name);
+    }
+    let measure = body.get("measure").and_then(Value::as_bool).unwrap_or(false);
+    let n = name.clone();
+    match joined(tokio::task::spawn_blocking(move || if measure { lib::measure_level(&dir, &n) } else { lib::level_voice(&dir, &n) }).await) {
+        Ok(Ok(lufs)) => {
+            if !measure {
+                crate::app::publish(json!({ "changed": "voices" }));
+            }
+            Json(json!({ "name": name, "lufs": lufs, "quiet": lufs < lib::QUIET_LUFS })).into_response()
+        }
+        Ok(Err(e)) => bad(e),
+        Err(r) => r,
+    }
+}
+
 /// POST /voices/restore {name} — вернуть звук до очистки.
 pub async fn restore(State(st): State<AppState>, Json(body): Json<Value>) -> Response {
     let name = body_name(&body, "name");

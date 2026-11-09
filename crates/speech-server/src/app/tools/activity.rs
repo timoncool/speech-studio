@@ -34,6 +34,7 @@ pub(super) const JOURNAL: &[(&str, &str, &str)] = &[
     ("voice_transcribe", "transcribe", "voice"),
     ("voice_clean", "clean", "voice"),
     ("voice_denoise", "clean", "voice"),
+    ("voice_level", "update", "voice"),
     ("voice_design", "create", "voice"),
     ("voice_design_keep", "create", "voice"),
     ("voice_restore", "restore", "voice"),
