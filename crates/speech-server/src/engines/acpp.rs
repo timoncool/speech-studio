@@ -226,9 +226,25 @@ fn out_of_memory(error: &str) -> bool {
 
 /// Higgs Audio v3 on the server; dropping it frees its memory there.
 pub struct Higgs {
-    server: Arc<Server>,
+    server: std::sync::Mutex<Arc<Server>>,
     rate: u32,
     cancel: AtomicBool,
+    /// Where its server is started again from when it ends mid-phrase.
+    repo_root: PathBuf,
+    models_root: PathBuf,
+    build: Build,
+}
+
+/// `src` as Higgs's codec takes a reference (`media::ref_for_higgs`), made beside it once and again when it changes.
+fn higgs_reference(src: &Path) -> Result<PathBuf, String> {
+    let stem = src.file_stem().and_then(|s| s.to_str()).unwrap_or("ref");
+    let dst = src.with_file_name(format!("{stem}.higgs24k.wav"));
+    let modified = |p: &Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();
+    if dst.is_file() && modified(&dst) >= modified(src) {
+        return Ok(dst);
+    }
+    crate::audio::media::ref_for_higgs(src, &dst)?;
+    Ok(dst)
 }
 
 impl Higgs {
@@ -242,11 +258,15 @@ impl Higgs {
         let build = build_for(crate::engines::models::server_choice(models_root, "tts_backend"))?;
         let server = server(repo_root, models_root, build, HIGGS)?;
         let rate = server.speech_rate(HIGGS).map_err(|e| localize(&e))?;
-        Ok(Higgs { server, rate, cancel: AtomicBool::new(false) })
+        Ok(Higgs { server: std::sync::Mutex::new(server), rate, cancel: AtomicBool::new(false), repo_root: repo_root.to_path_buf(), models_root: models_root.to_path_buf(), build })
+    }
+
+    fn server(&self) -> Arc<Server> {
+        self.server.lock().unwrap_or_else(|p| p.into_inner()).clone()
     }
 
     pub fn backend(&self) -> Backend {
-        self.server.config().backend
+        self.server().config().backend
     }
 
     pub fn sample_rate(&self) -> u32 {
@@ -259,26 +279,38 @@ impl Higgs {
     }
 
     /// One phrase, every piece to `piece` as it comes; the whole phrase in the answer. Without a reference the
-    /// model speaks in its own voice.
+    /// model speaks in its own voice. A server that ended before the phrase's first piece is started again and asked
+    /// once more; one that ended later is told with what its log says.
     pub fn speak(&self, text: &str, reference: Option<&Path>, reference_text: Option<&str>, options: Map<String, Value>, piece: &mut dyn FnMut(&[f32])) -> Result<Vec<f32>, String> {
         self.cancel.store(false, Ordering::SeqCst);
+        let reference = reference.map(higgs_reference).transpose()?;
         let req = SpeechRequest {
             model: HIGGS.to_string(),
             input: text.to_string(),
-            voice_ref: reference.map(|p| VoiceRef::Path(p.to_path_buf())),
+            voice_ref: reference.map(VoiceRef::Path),
             reference_text: reference_text.filter(|t| !t.trim().is_empty()).map(str::to_string),
             language: None,
             options,
             stall: SPEECH_STALL,
         };
         let mut all = Vec::new();
-        self.server
-            .speech_stream(&req, &self.cancel, &mut |d| {
+        let mut ask = |server: &Server, all: &mut Vec<f32>| {
+            server.speech_stream(&req, &self.cancel, &mut |d| {
                 piece(d);
                 all.extend_from_slice(d);
                 Flow::Continue
             })
-            .map_err(|e| localize(&e))?;
+        };
+        let first = ask(&self.server(), &mut all);
+        let Err(e) = first else { return Ok(all) };
+        let Err(died) = self.server().check_alive() else { return Err(localize(&e)) };
+        if !all.is_empty() {
+            return Err(localize(&died));
+        }
+        tracing::warn!("audiocpp_server ended before the phrase's first piece ({died}); started again for one more try");
+        let fresh = server(&self.repo_root, &self.models_root, self.build, HIGGS)?;
+        *self.server.lock().unwrap_or_else(|p| p.into_inner()) = fresh.clone();
+        ask(&fresh, &mut all).map_err(|again| format!("{} ({})", localize(&again), localize(&died)))?;
         Ok(all)
     }
 }
@@ -298,5 +330,41 @@ mod tests {
         assert!(out_of_memory("audiocpp_server answered 500 (internal): failed to allocate Higgs TTS AR prefill graph"));
         assert!(out_of_memory("cudaMalloc(1048576): CUDA error 2 (out of memory)"));
         assert!(!out_of_memory("audiocpp_server sent nothing for 120 s"));
+    }
+
+    /// The frame counts of Higgs's codec encoders (audio.cpp `higgs_audio_tts/codec.cpp`) for a reference of `n` samples
+    /// at 24 kHz, as the server resamples it to 16 kHz for the semantic one: a length `ref_for_higgs` gives agrees; a
+    /// reference under a second, as it is cut, mostly does not.
+    #[test]
+    fn a_reference_of_whole_hops_gives_both_encoders_the_same_frames() {
+        let conv = |len: i64, k: i64, s: i64, p: i64| (len + 2 * p - k) / s + 1;
+        let semantic = |n16: i64| {
+            let mut f = n16 + 2 * 160;
+            for (k, s) in [(10, 5), (3, 2), (3, 2), (3, 2), (3, 2), (2, 2), (2, 2)] {
+                f = conv(f, k, s, 0);
+            }
+            (f + 1) / 2
+        };
+        let acoustic = |n24: i64| {
+            let mut f = conv(n24, 7, 1, 3);
+            for r in [8, 5, 4, 2, 3] {
+                f = conv(f, 2 * r, r, (r + 1) / 2);
+            }
+            conv(f, 3, 1, 1)
+        };
+        // the server's check: the acoustic count, or that of the input padded by half a hop each side, is the semantic one
+        let agrees = |n24: i64, n16: i64| {
+            let n24 = n24.max(24_000);
+            acoustic(n24) == semantic(n16) || acoustic(n24 + 960) == semantic(n16)
+        };
+        for secs in [0.3, 1.0, 2.37, 5.5, 9.99, 12.0, 29.7] {
+            let n = crate::audio::media::higgs_ref_samples(secs) as i64;
+            assert!(n % 960 == 0 && n >= 24_000);
+            assert!(agrees(n, n * 2 / 3), "{secs} s: {n} samples, acoustic {} semantic {}", acoustic(n), semantic(n * 2 / 3));
+        }
+        // a reference under a second, as it is cut: the codec pads only its acoustic side to a second, and refuses it
+        let at = |n: i64, to: i64| (n * to + 22_050) / 44_100;
+        let refused = (8_820..44_100).filter(|n| !agrees(at(*n, 24_000), at(*n, 16_000))).count();
+        assert!(refused > 30_000, "most references under a second are refused as they are: {refused}");
     }
 }

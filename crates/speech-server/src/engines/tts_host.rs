@@ -784,6 +784,29 @@ fn usable_rank(kind: &str) -> Option<u8> {
     }
 }
 
+/// Seconds of work an engine took on this machine per second of speech expected, lately: a slow card or the processor
+/// takes many times what a fast card does, and its phrase is not cut off as hung for that.
+static PACE: Mutex<Vec<(String, f64)>> = Mutex::new(Vec::new());
+
+/// How long a phrase of `expected` seconds may take `engine` before it is taken for hung: eight times the speech, three
+/// times what this engine took here lately when that is longer, 45 s at least, half an hour at most.
+fn guard_timeout(engine: &str, expected: f64) -> Duration {
+    let lately = PACE.lock().unwrap_or_else(|p| p.into_inner()).iter().find(|(e, _)| e == engine).map_or(0.0, |(_, p)| *p);
+    Duration::from_secs_f64((expected.max(0.5) * (8.0f64).max(3.0 * lately)).clamp(45.0, 1800.0))
+}
+
+/// `engine` took `took` for a phrase of `expected` seconds; `finished` — it gave its answer, else it ran out of time,
+/// and took at least that much: the next phrase then waits half as long again.
+fn note_pace(engine: &str, expected: f64, took: Duration, finished: bool) {
+    let pace = took.as_secs_f64() / expected.max(0.5) * if finished { 1.0 } else { 1.5 };
+    let mut all = PACE.lock().unwrap_or_else(|p| p.into_inner());
+    match all.iter_mut().find(|(e, _)| e == engine) {
+        Some((_, p)) if finished => *p = (*p + pace) / 2.0,
+        Some((_, p)) => *p = p.max(pace),
+        None => all.push((engine.to_string(), pace)),
+    }
+}
+
 /// Синтез фразы с повтором дефектного дубля: фиксированный сид — одна попытка, случайный — до трёх. Первая идёт на
 /// запрошенных настройках (низкая температура у некоторых голосов звучит лучше всего), а повтор — на рекомендуемых
 /// дефолтах движка: на совсем низкой температуре движок уходит за конец фразы каждый раз. Фраза, которая звучит вслух
@@ -793,7 +816,6 @@ pub fn synth(engine: &Tts, req: &Request) -> Result<Synth, String> {
     let expected = expected_secs(req.text, req.lang);
     let chars = req.text.chars().filter(|c| c.is_alphanumeric()).count();
     let cap = if req.params.max_tokens > 0 { req.params.max_tokens as usize } else { token_cap(chars, pace_lang(req.text, req.lang)) as usize };
-    let timeout = Duration::from_secs(((expected * 8.0).ceil() as u64).max(45));
     let fixed = req.params.seed_mode != "random";
     let aloud = req.live.as_ref().is_some_and(|l| l.is_aloud());
     let tries = if fixed || aloud { 1 } else { 3 };
@@ -832,8 +854,13 @@ pub fn synth(engine: &Tts, req: &Request) -> Result<Synth, String> {
                 live.restart();
             }
         }
+        let timeout = guard_timeout(engine.name(), expected);
         let started = Instant::now();
-        let (mut samples, sr) = match run_guarded(engine, call, timeout, req.live.clone()) {
+        let ran = run_guarded(engine, call, timeout, req.live.clone());
+        if ran.is_ok() || started.elapsed() >= timeout {
+            note_pace(engine.name(), expected, started.elapsed(), ran.is_ok());
+        }
+        let (mut samples, sr) = match ran {
             Ok(made) => made,
             // a later attempt failing leaves the take an earlier one kept: the block is not left without a voice
             Err(e) if kept.is_some() && !e.starts_with(ENGINE_STUCK) && e != crate::jobs::CANCELLED => {
@@ -1008,6 +1035,21 @@ mod tests {
         let short = expected_secs("Да.", "ru");
         let long = expected_secs(&"слово ".repeat(40), "ru");
         assert!(short < 1.0 && long > 15.0);
+    }
+
+    /// A phrase waits for its engine as long as that engine takes on this machine: 45 s for a short one at first, three
+    /// times its pace once it is known, and half as long again as a phrase that ran out of time.
+    #[test]
+    fn the_wait_for_a_phrase_follows_the_engine_s_pace_here() {
+        let engine = "test engine of the pace";
+        assert_eq!(guard_timeout(engine, 2.0), Duration::from_secs(45));
+        assert_eq!(guard_timeout(engine, 10.0), Duration::from_secs(80), "eight times a long phrase");
+        note_pace(engine, 2.0, Duration::from_secs(40), true);
+        assert_eq!(guard_timeout(engine, 2.0), Duration::from_secs(120), "a slow card: 20 s of work a second, three times that");
+        let hung = "test engine that ran out of time";
+        note_pace(hung, 1.0, Duration::from_secs(45), false);
+        assert_eq!(guard_timeout(hung, 1.0), Duration::from_secs_f64(202.5), "the next phrase waits half as long again, thrice");
+        assert_eq!(guard_timeout("test engine on a fast card", 600.0), Duration::from_secs(1800), "half an hour at most");
     }
 
     #[test]
