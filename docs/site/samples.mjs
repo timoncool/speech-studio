@@ -6,6 +6,7 @@ export const ENGINES = {
   "drama3": "Fish Audio Drama 3",
   "qwen3-tts": "Qwen3-TTS",
   "qwen3-tts-ru": "Qwen3-TTS + ru stress LoRA",
+  "audio8": "Audio8 TTS",
   "supertonic": "Supertonic 3"
 };
 
@@ -83,6 +84,12 @@ export const GROUPS = [
             "kind": "clone"
           },
           {
+            "file": "ru-pushkin-audio8-ru-male-gabidullin-ruslan.mp3",
+            "engine": "audio8",
+            "voice": "RU_Male_Gabidullin_ruslan",
+            "kind": "clone"
+          },
+          {
             "file": "ru-pushkin-supertonic-m1.mp3",
             "engine": "supertonic",
             "voice": "M1",
@@ -114,6 +121,12 @@ export const GROUPS = [
           {
             "file": "ru-pushkin-qwen3-tts-ru-ru-female-ingridolerinskaya-judy.mp3",
             "engine": "qwen3-tts-ru",
+            "voice": "RU_Female_IngridOlerinskaya_Judy",
+            "kind": "clone"
+          },
+          {
+            "file": "ru-pushkin-audio8-ru-female-ingridolerinskaya-judy.mp3",
+            "engine": "audio8",
             "voice": "RU_Female_IngridOlerinskaya_Judy",
             "kind": "clone"
           },
@@ -154,6 +167,12 @@ export const GROUPS = [
             "kind": "clone"
           },
           {
+            "file": "en-sonnet18-audio8-ru-male-gabidullin-ruslan.mp3",
+            "engine": "audio8",
+            "voice": "RU_Male_Gabidullin_ruslan",
+            "kind": "clone"
+          },
+          {
             "file": "en-sonnet18-supertonic-m1.mp3",
             "engine": "supertonic",
             "voice": "M1",
@@ -179,6 +198,12 @@ export const GROUPS = [
           {
             "file": "en-sonnet18-qwen3-tts-ru-female-ingridolerinskaya-judy.mp3",
             "engine": "qwen3-tts",
+            "voice": "RU_Female_IngridOlerinskaya_Judy",
+            "kind": "clone"
+          },
+          {
+            "file": "en-sonnet18-audio8-ru-female-ingridolerinskaya-judy.mp3",
+            "engine": "audio8",
             "voice": "RU_Female_IngridOlerinskaya_Judy",
             "kind": "clone"
           },
@@ -219,6 +244,12 @@ export const GROUPS = [
             "kind": "clone"
           },
           {
+            "file": "es-becquer-audio8-ru-male-gabidullin-ruslan.mp3",
+            "engine": "audio8",
+            "voice": "RU_Male_Gabidullin_ruslan",
+            "kind": "clone"
+          },
+          {
             "file": "es-becquer-supertonic-m1.mp3",
             "engine": "supertonic",
             "voice": "M1",
@@ -244,6 +275,12 @@ export const GROUPS = [
           {
             "file": "es-becquer-qwen3-tts-ru-female-ingridolerinskaya-judy.mp3",
             "engine": "qwen3-tts",
+            "voice": "RU_Female_IngridOlerinskaya_Judy",
+            "kind": "clone"
+          },
+          {
+            "file": "es-becquer-audio8-ru-female-ingridolerinskaya-judy.mp3",
+            "engine": "audio8",
             "voice": "RU_Female_IngridOlerinskaya_Judy",
             "kind": "clone"
           },
@@ -284,6 +321,12 @@ export const GROUPS = [
             "kind": "clone"
           },
           {
+            "file": "fr-verlaine-audio8-ru-male-gabidullin-ruslan.mp3",
+            "engine": "audio8",
+            "voice": "RU_Male_Gabidullin_ruslan",
+            "kind": "clone"
+          },
+          {
             "file": "fr-verlaine-supertonic-m1.mp3",
             "engine": "supertonic",
             "voice": "M1",
@@ -309,6 +352,12 @@ export const GROUPS = [
           {
             "file": "fr-verlaine-qwen3-tts-ru-female-ingridolerinskaya-judy.mp3",
             "engine": "qwen3-tts",
+            "voice": "RU_Female_IngridOlerinskaya_Judy",
+            "kind": "clone"
+          },
+          {
+            "file": "fr-verlaine-audio8-ru-female-ingridolerinskaya-judy.mp3",
+            "engine": "audio8",
             "voice": "RU_Female_IngridOlerinskaya_Judy",
             "kind": "clone"
           },
@@ -349,6 +398,12 @@ export const GROUPS = [
             "kind": "clone"
           },
           {
+            "file": "pt-camoes-audio8-ru-male-gabidullin-ruslan.mp3",
+            "engine": "audio8",
+            "voice": "RU_Male_Gabidullin_ruslan",
+            "kind": "clone"
+          },
+          {
             "file": "pt-camoes-supertonic-m1.mp3",
             "engine": "supertonic",
             "voice": "M1",
@@ -374,6 +429,12 @@ export const GROUPS = [
           {
             "file": "pt-camoes-qwen3-tts-ru-female-ingridolerinskaya-judy.mp3",
             "engine": "qwen3-tts",
+            "voice": "RU_Female_IngridOlerinskaya_Judy",
+            "kind": "clone"
+          },
+          {
+            "file": "pt-camoes-audio8-ru-female-ingridolerinskaya-judy.mp3",
+            "engine": "audio8",
             "voice": "RU_Female_IngridOlerinskaya_Judy",
             "kind": "clone"
           },
@@ -406,6 +467,12 @@ export const GROUPS = [
             "engine": "drama3",
             "voice": "RU_Male_Gabidullin_ruslan",
             "kind": "clone"
+          },
+          {
+            "file": "zh-libai-audio8-ru-male-gabidullin-ruslan.mp3",
+            "engine": "audio8",
+            "voice": "RU_Male_Gabidullin_ruslan",
+            "kind": "clone"
           }
         ]
       },
@@ -415,6 +482,12 @@ export const GROUPS = [
           {
             "file": "zh-libai-higgs-ru-female-ingridolerinskaya-judy.mp3",
             "engine": "higgs",
+            "voice": "RU_Female_IngridOlerinskaya_Judy",
+            "kind": "clone"
+          },
+          {
+            "file": "zh-libai-audio8-ru-female-ingridolerinskaya-judy.mp3",
+            "engine": "audio8",
             "voice": "RU_Female_IngridOlerinskaya_Judy",
             "kind": "clone"
           }

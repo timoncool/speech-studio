@@ -188,7 +188,7 @@ fn text_of(lang: &str) -> Text {
 fn name_of(id: &str) -> Option<&'static str> {
     Some(match id {
         "higgs" => "Higgs Audio v3 Q8_0",
-        "higgs-engine" => "audio.cpp server, CUDA 13 (Higgs, Supertonic, Parakeet, Nemotron, CrisperWhisper, diarization)",
+        "higgs-engine" => "audio.cpp server, CUDA 13 (Higgs, Audio8, Supertonic, Parakeet, Nemotron, CrisperWhisper, diarization)",
         "audiocpp-cuda12" => "audio.cpp server, CUDA 12.9 (cards and drivers CUDA 13 left)",
         "audiocpp-vulkan" => "audio.cpp server, Vulkan",
         "audiocpp-cpu" => "audio.cpp server, CPU",
@@ -221,6 +221,7 @@ fn name_of(id: &str) -> Option<&'static str> {
         "cuda12-runtime" => "CUDA 12.9 runtime (cudart, cuBLAS, cuFFT)",
         "cudnn" => "cuDNN 9",
         "drama3" => "Fish Audio Drama 3 Q4 + drama_engine (6 GB+ GPU, 32 GB RAM under 24 GB)",
+        "audio8" => "Audio8 TTS Realistic-Air Q8_0",
         "supertonic3" => "Supertonic 3 int8",
         "qwen3-tts-engine" => "Qwen3-TTS engine (qwen.dll) and codec",
         "qwen3-tts-cuda13" => "Qwen3-TTS CUDA 13 module",
@@ -241,6 +242,8 @@ fn name_of(id: &str) -> Option<&'static str> {
         "silero-vad" => "Silero VAD v6.2",
         "langid" => "VoxLingua107 language identification Q8_0",
         "dpdfnet" => "DPDFNet 48 kHz (noise suppression)",
+        "voice-gate" => "Voice gate (ReDimNet2-B3)",
+        "wake-word" => "Wake word (PhoneticXeus int8)",
         _ => return None,
     })
 }

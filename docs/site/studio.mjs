@@ -17,5 +17,5 @@ export const STUDIO = {
     { feature: 7, shot: '07-agent' },
   ],
   faq: { stress: 1, mcp: 7 },
-  arch: "React UI ─┐\n          ├─ Speech Studio.exe   (Tauri window + Rust/axum speech-server)\nRust axum ┘        │\n                   ├─ Drama 3, Qwen3-TTS   (C++/CUDA, GGUF)\n                   ├─ Parakeet Ultra, Silero VAD   (transcribe.cpp, GGUF)\n                   ├─ RUAccent, DPDFNet   (ONNX Runtime)\n                   └─ audiocpp_server   (Higgs, Supertonic, Parakeet, Nemotron, CrisperWhisper, diarization)",
+  arch: "React UI ─┐\n          ├─ Speech Studio.exe   (Tauri window + Rust/axum speech-server)\nRust axum ┘        │\n                   ├─ Drama 3, Qwen3-TTS   (C++/CUDA, GGUF)\n                   ├─ Parakeet Ultra, Silero VAD   (transcribe.cpp, GGUF)\n                   ├─ RUAccent, DPDFNet   (ONNX Runtime)\n                   └─ audiocpp_server   (Higgs, Audio8, Supertonic, Parakeet, Nemotron, CrisperWhisper, diarization)",
 };

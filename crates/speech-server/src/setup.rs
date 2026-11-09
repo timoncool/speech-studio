@@ -1886,7 +1886,7 @@ fn vram_estimate(id: &str) -> u64 {
         "parakeet-ultra" => gb(1.1),
         "asr-gguf-nemotron" => gb(1.5),
         "supertonic3" => gb(0.6),
-        "audio8" => gb(1.5),
+        "audio8" => gb(2.0),
         "qwen3-tts" => gb(2.8),
         "qwen3-tts-q8_0" => gb(3.7),
         "qwen3-tts-ru-stress" => gb(0.1),

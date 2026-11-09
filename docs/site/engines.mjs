@@ -2,12 +2,16 @@
 // same 17-second Russian text, the second run of each engine (its model loaded); Higgs in the audio.cpp engine on
 // 2026-10-22, three runs, its first sound not measured. speed: audio seconds per second of synthesis; firstMs: time to
 // the first sound in the window; vramGB: peak while speaking less the desktop's own use; diskGB: the model as
-// downloaded (Qwen3-TTS Q4_K_M and Higgs Q8_0, the defaults). null: not measured.
+// downloaded (Qwen3-TTS Q4_K_M and Higgs Q8_0, the defaults). null: not measured. Audio8 (Realistic-Air Q8_0) on
+// 2026-11-09 in a build of 0.4.0's code, an 18-second Russian text in a cloned voice, the second run; it answers a
+// phrase whole, so its first sound is the first phrase's own synthesis: 2.3 s on that text, 0.4-1.0 s for a phrase
+// of 1-6 seconds said in Live.
 export const ENGINE_BENCH = [
   { engine: 'supertonic', speed: 168, firstMs: 103, stream: 'phrase', diskGB: 0.1, vramGB: 1.0 },
   { engine: 'qwen3-tts', speed: 12, firstMs: 19, stream: 'yes', diskGB: 2.2, vramGB: 3.1 },
   { engine: 'qwen3-tts-ru', speed: 10, firstMs: 26, stream: 'yes', diskGB: 2.3, vramGB: 3.5 },
   { engine: 'drama3', speed: 7.0, firstMs: 326, stream: 'yes', diskGB: 21.4, vramGB: 21.9 },
+  { engine: 'audio8', speed: 5.8, firstMs: 2261, stream: 'phrase', diskGB: 1.5, vramGB: 2.0 },
   { engine: 'higgs', speed: 3.4, firstMs: null, stream: 'yes', diskGB: 5.3, vramGB: 7, vramApprox: true },
 ];
 
