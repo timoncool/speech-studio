@@ -44,6 +44,8 @@ pub struct Features {
     pub speech_frac: f64,
     /// Runs of three or more samples at full scale.
     pub clip_events: usize,
+    /// Share of the samples at full scale.
+    pub clip_share: f64,
     pub lufs: Option<f64>,
     /// The longest quiet stretch between the first and the last loud frame.
     pub max_pause_s: f64,
@@ -69,6 +71,7 @@ pub fn measure(x: &[f32], sr: u32, whistle: bool, repeat: bool) -> Features {
     }
     f.trimmed_s = crate::audio::trim::trim_edges(x, sr).0.len() as f64 / sr as f64;
     let mut run = 0usize;
+    f.clip_share = x.iter().filter(|v| v.abs() >= 0.999).count() as f64 / x.len() as f64;
     for v in x {
         if v.abs() >= 0.999 {
             run += 1;
@@ -231,13 +234,18 @@ pub struct Norm {
     pub lufs: Option<f64>,
 }
 
+/// Share of the samples at full scale from which a take is clipped: the level open-tts-eval fails a clip at (it warns
+/// from 0.001). A loud voice touches full scale for a few samples in a second and that is not heard: one such run used
+/// to mark the take defective and keep the project from export.
+pub const CLIP_SHARE: f64 = 0.01;
+
 /// The flags of `want` the take raises, as issue names (`clipping`, `little_speech`, `long_pause`, `edge`,
 /// `pause_noise`, `too_long`, `too_short`, `loud`, `quiet`, `whistle`, `audio_repeat`).
 pub fn flags(f: &Features, want: &[String], text: &str, norm: Norm) -> Vec<String> {
     let on = |k: &str| want.iter().any(|w| w == k);
     let mut out = Vec::new();
     let syl = syllables(text);
-    if on("clipping") && f.clip_events >= 1 {
+    if on("clipping") && f.clip_share >= CLIP_SHARE {
         out.push("clipping".into());
     }
     if on("little_speech") && f.raw_s >= 3.0 && f.speech_frac < 0.3 {
@@ -461,6 +469,9 @@ mod tests {
         let clean = flags(&measure(&x, SR, true, true), &["clipping".to_string(), "whistle".to_string(), "audio_repeat".to_string()], "Привет всем.", Norm::default());
         assert!(clean.is_empty(), "{clean:?}");
         x[100..110].iter_mut().for_each(|v| *v = 1.0);
+        assert!(flags(&measure(&x, SR, false, false), &["clipping".to_string()], "Привет.", Norm::default()).is_empty(), "ten samples at full scale in a second are not heard");
+        let n = x.len();
+        x.iter_mut().step_by(50).take(n / 50).for_each(|v| *v = 1.0);
         assert_eq!(flags(&measure(&x, SR, false, false), &["clipping".to_string()], "Привет.", Norm::default()), vec!["clipping"]);
     }
 }

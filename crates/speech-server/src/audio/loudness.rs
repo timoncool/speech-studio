@@ -159,7 +159,19 @@ pub const DUAL_MONO_DB: f64 = 3.0103;
 /// поэтому после него пик меряется по BS.1770, и при выходе за потолок порог опускается на превышение. С `dual_mono`
 /// громкость меряется как у моно на двух колонках.
 pub fn level(x: &mut [f32], sr: u32, target: f64, peak_db: f64, dual_mono: bool) -> Result<Levelled, String> {
-    let integrated_lufs = |x: &[f32], sr: u32| integrated_lufs(x, sr).map(|l| if dual_mono { l + DUAL_MONO_DB } else { l });
+    // a programme shorter than one gating block of BS.1770 (0.4 s: a single «Да.») has no integrated loudness; it is
+    // measured by the mean square of its loud samples on the same scale, as `level_piece` does, instead of refusing
+    // the export as silent
+    let integrated_lufs = |x: &[f32], sr: u32| {
+        integrated_lufs(x, sr)
+            .filter(|l| l.is_finite())
+            .or_else(|| {
+                let peak = x.iter().fold(0.0f32, |m, &v| m.max(v.abs()));
+                let loud: Vec<f64> = x.iter().filter(|v| peak >= 1e-4 && v.abs() > peak * 0.05).map(|&v| v as f64 * v as f64).collect();
+                (!loud.is_empty()).then(|| -0.691 + 10.0 * (loud.iter().sum::<f64>() / loud.len() as f64).max(1e-12).log10())
+            })
+            .map(|l| if dual_mono { l + DUAL_MONO_DB } else { l })
+    };
     let before = integrated_lufs(x, sr).ok_or_else(|| t!("media-loudnorm-silent"))?;
     let mut limit_db = peak_db - TRUE_PEAK_MARGIN_DB;
     let mut now = before;
@@ -198,6 +210,18 @@ mod tests {
                 amp * env * ((t * 220.0 * std::f32::consts::TAU).sin() * 0.6 + (t * 1330.0 * std::f32::consts::TAU).sin() * 0.3 + if i % 97 == 0 { 0.9 } else { 0.0 })
             })
             .collect()
+    }
+
+
+    /// A one-word programme shorter than a gating block is levelled, not refused as silent; real silence is refused.
+    #[test]
+    fn a_programme_of_one_short_word_is_levelled() {
+        let sr = 24_000;
+        let mut word = speechlike(0.3, sr, 0.05);
+        let done = level(&mut word, sr, -14.0, -1.0, false).expect("a short word has a level");
+        assert!(done.after > done.before, "brought up towards the target: {done:?}");
+        assert!(word.iter().all(|v| v.abs() < 1.0));
+        assert!(level(&mut vec![0.0f32; 4_000], sr, -14.0, -1.0, false).is_err(), "silence has nothing to level");
     }
 
     #[test]

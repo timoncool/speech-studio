@@ -458,44 +458,80 @@ fn token_cap(chars: usize, lang: &str) -> u32 {
     ((((runaway_secs(chars, lang) + 1.0) * FRAMES_PER_SEC).ceil() as u32) + CODEBOOK_DELAY).clamp(64, 2048)
 }
 
-/// Секунд звука на знак, выше которых фраза считается разнесённой (HiggsAudio-Studio: 0,13 с на знак + 3 с).
-const RUNAWAY_PER_CHAR: f64 = 0.13;
+/// Секунд звука на знак, выше которых фраза считается разнесённой: вдвое медленнее обычного чтения, плюс запас на
+/// короткие фразы. На 970 дублях установленной студии (09.11.2026) медиана 0,09–0,11 с на знак, p95 у Drama 3 и
+/// Qwen3-TTS 0,16–0,19, p99 до 0,25: прежний предел 0,13 (HiggsAudio-Studio) попадал в обычный разброс медленных
+/// голосов и браковал их на каждой попытке.
+const RUNAWAY_PER_CHAR: f64 = 0.2;
 const RUNAWAY_SLACK: f64 = 3.0;
+/// Секунд звука на знак, ниже которых фраза считается оборванной (22 знака в секунду; обычное чтение — 9–13).
+const CUTOFF_PER_CHAR: f64 = 0.045;
 /// Знаков в секунду у языка, на котором подобран предел разноса (русский): у языков, где знак звучит дольше
 /// (иероглиф — слог), предел на знак растёт во столько же раз.
 const RUNAWAY_CPS: f64 = 13.0;
-/// Доля отсчётов у полной шкалы, с которой звук считается клиппированным (open-tts-eval).
+/// Доля отсчётов у полной шкалы, с которой звук считается клиппированным: уровень, на котором open-tts-eval бракует
+/// клип (0,01; с 0,001 он только предупреждает).
 const CLIP_LEVEL: f32 = 0.999;
-const CLIP_SHARE: f64 = 0.001;
+const CLIP_SHARE: f64 = crate::audio::flags::CLIP_SHARE;
 /// Щелчок в конце: наибольший скачок последних 30 мс к уровню предыдущих 200 мс (open-tts-eval, порог 4).
 const CLICK_RATIO: f64 = 4.0;
+/// The rate the click is measured at, as open-tts-eval does: a sample step of the same sound shrinks as the rate grows,
+/// so one threshold holds only at one rate.
+const CLICK_RATE: usize = 24_000;
 
-/// Скачок в последних 30 мс относительно RMS 200 мс перед ними.
-fn tail_click(samples: &[f32], sr: usize) -> f64 {
-    let tail = sr * 30 / 1000;
-    let body = sr * 200 / 1000;
-    if samples.len() < tail + body + 1 {
-        return 0.0;
+
+/// The largest sample step in the last 30 ms, measured at [`CLICK_RATE`]: as a ratio to the RMS of the 200 ms before
+/// it, and as it is.
+fn tail_click(samples: &[f32], sr: usize) -> (f64, f64) {
+    let window = sr * 230 / 1000 + 1;
+    if sr == 0 || samples.len() < window {
+        return (0.0, 0.0);
     }
-    let end = samples.len();
-    let jump = samples[end - tail - 1..end].windows(2).map(|w| (w[1] - w[0]).abs() as f64).fold(0.0, f64::max);
-    let before = &samples[end - tail - body..end - tail];
-    let rms = (before.iter().map(|v| (*v as f64).powi(2)).sum::<f64>() / body as f64).sqrt();
-    if rms < 1e-4 { if jump > 0.05 { f64::INFINITY } else { 0.0 } } else { jump / rms }
+    let end = &samples[samples.len() - window..];
+    let at_rate: Vec<f32> = if sr == CLICK_RATE {
+        end.to_vec()
+    } else {
+        let n = (end.len() as u64 * CLICK_RATE as u64 / sr as u64) as usize;
+        (0..n)
+            .map(|i| {
+                let x = i as f64 * sr as f64 / CLICK_RATE as f64;
+                let (a, f) = (x.floor() as usize, x.fract() as f32);
+                let b = (a + 1).min(end.len() - 1);
+                end[a.min(end.len() - 1)] * (1.0 - f) + end[b] * f
+            })
+            .collect()
+    };
+    let tail = CLICK_RATE * 30 / 1000;
+    if at_rate.len() < tail + 2 {
+        return (0.0, 0.0);
+    }
+    let split = at_rate.len() - tail;
+    let jump = at_rate[split - 1..].windows(2).map(|w| (w[1] - w[0]).abs() as f64).fold(0.0, f64::max);
+    let before = &at_rate[..split];
+    let rms = (before.iter().map(|v| (*v as f64).powi(2)).sum::<f64>() / before.len() as f64).sqrt();
+    let ratio = if rms < 1e-4 { if jump > 0.05 { f64::INFINITY } else { 0.0 } } else { jump / rms };
+    (ratio, jump)
+}
+
+/// How much the asked `speed` stretches speech against the engine's usual pace (see `defect`).
+pub fn pace_of(speed: f64) -> f64 {
+    if speed.is_finite() && speed > 0.0 { crate::engines::supertonic::DEFAULT_SPEED / speed } else { 1.0 }
 }
 
 /// Дефект синтеза по сэмплам: разнос, обрыв, тишина, гул (пороги Dub, подобраны на 149 клипах QC-прогона),
-/// клиппинг и щелчок в конце (open-tts-eval).
-pub fn defect(samples: &[f32], sr: i32, chars: usize, lang: &str) -> Option<&'static str> {
+/// клиппинг и щелчок в конце (open-tts-eval). `pace` — во сколько раз заказанный темп растягивает речь (1 — обычный
+/// темп, 2 — вдвое медленнее, 0,5 — вдвое быстрее): пределы обрыва и разноса идут за ним.
+pub fn defect(samples: &[f32], sr: i32, chars: usize, lang: &str, pace: f64) -> Option<&'static str> {
     if sr <= 0 || samples.is_empty() {
         return Some("silence");
     }
     let srn = sr as usize;
     let dur = samples.len() as f64 / srn as f64;
-    if chars >= 1 && dur > runaway_secs(chars, lang) {
+    let pace = if pace.is_finite() && pace > 0.0 { pace } else { 1.0 };
+    if chars >= 1 && dur > runaway_secs(chars, lang) * pace.max(1.0) {
         return Some("runaway");
     }
-    if chars >= 4 && dur < chars as f64 * 0.045 {
+    if chars >= 4 && dur < chars as f64 * CUTOFF_PER_CHAR * pace.min(1.0) {
         return Some("cutoff");
     }
     let clipped = samples.iter().filter(|v| v.abs() >= CLIP_LEVEL).count() as f64 / samples.len() as f64;
@@ -517,10 +553,22 @@ pub fn defect(samples: &[f32], sr: i32, chars: usize, lang: &str) -> Option<&'st
     if range < 16.0 && silent < 0.03 {
         return Some("hum");
     }
-    if tail_click(samples, srn) > CLICK_RATIO {
-        return Some("click");
-    }
     None
+}
+
+/// A click at the take's end (open-tts-eval's measure: the largest step of the last 30 ms over the RMS of the 200 ms
+/// before it, at 24 kHz, above 4) is taken out by fading those 30 ms to nothing, the way TTS tools clean a take's end,
+/// instead of throwing the take away: the voice has died down there by the measure's own premise. True when it was.
+pub fn soften_tail_click(samples: &mut [f32], sr: usize) -> bool {
+    if tail_click(samples, sr).0 <= CLICK_RATIO {
+        return false;
+    }
+    let n = (sr * 30 / 1000).min(samples.len());
+    let start = samples.len() - n;
+    for (k, v) in samples[start..].iter_mut().enumerate() {
+        *v *= 1.0 - (k + 1) as f32 / n as f32;
+    }
+    true
 }
 
 pub fn defect_name(kind: &str) -> String {
@@ -723,6 +771,18 @@ fn drama_frames(expected: f64, max_tokens: u32) -> u32 {
     ((expected * drama::FRAMES_PER_SECOND * 2.0).ceil() as u32 + 32).clamp(64, DRAMA_MAX_LEN)
 }
 
+/// How bad a defective take is among the takes that still hold speech, the least bad first; None for a take with no
+/// speech in it (silence, a hum), which is never given to the person. A click at the end is faded out with the take's
+/// edges, clipping is heard but understood, a cut-off or drawn-out phrase may lack or add words — the check by ear
+/// (recognition of the take against its text) is what names those, as TTS quality tools do it.
+fn usable_rank(kind: &str) -> Option<u8> {
+    match kind {
+        "clipping" => Some(1),
+        "runaway" | "cutoff" => Some(2),
+        _ => None,
+    }
+}
+
 /// Синтез фразы с повтором дефектного дубля: фиксированный сид — одна попытка, случайный — до трёх. Первая идёт на
 /// запрошенных настройках (низкая температура у некоторых голосов звучит лучше всего), а повтор — на рекомендуемых
 /// дефолтах движка: на совсем низкой температуре движок уходит за конец фразы каждый раз. Фраза, которая звучит вслух
@@ -737,6 +797,7 @@ pub fn synth(engine: &Tts, req: &Request) -> Result<Synth, String> {
     let aloud = req.live.as_ref().is_some_and(|l| l.is_aloud());
     let tries = if fixed || aloud { 1 } else { 3 };
     let mut defects = Vec::new();
+    let mut kept: Option<(u8, Synth)> = None;
     for attempt in 0..tries {
         let seed = if fixed { req.params.seed } else { req.fresh_seed.wrapping_add(attempt as u64 * 7919) } % SEED_RANGE;
         // the first attempt keeps the asked sampling; a retry falls back to the engine's recommended sampling (#18).
@@ -771,15 +832,43 @@ pub fn synth(engine: &Tts, req: &Request) -> Result<Synth, String> {
             }
         }
         let started = Instant::now();
-        let (samples, sr) = run_guarded(engine, call, timeout, req.live.clone())?;
+        let (mut samples, sr) = run_guarded(engine, call, timeout, req.live.clone())?;
         let seconds = started.elapsed().as_secs_f64();
+        if !aloud && soften_tail_click(&mut samples, sr.max(0) as usize) {
+            tracing::info!("voicing: {} ended the take with a click, its last 30 ms are faded out", engine.name());
+        }
         if aloud {
             return Ok(Synth { samples, sr, seed, temperature, defects, seconds });
         }
-        match defect(&samples, sr, chars, pace_lang(req.text, req.lang)) {
+        match defect(&samples, sr, chars, pace_lang(req.text, req.lang), pace_of(p.speed)) {
             None => return Ok(Synth { samples, sr, seed, temperature, defects, seconds }),
-            Some(kind) => defects.push(kind),
+            Some(kind) => {
+                // each rejected take is named in the log with what it was measured by: a guard that turns takes away
+                // without a trace cannot be told from a broken engine
+                let (ratio, jump) = tail_click(&samples, sr.max(0) as usize);
+                tracing::warn!(
+                    "voicing guard: {} take {} of {tries} rejected as {kind}: {:.2} s for {chars} chars (limits {:.2}..{:.2} s), tail step {jump:.4} at ratio {ratio:.1}, seed {seed}, temperature {temperature}",
+                    engine.name(),
+                    attempt + 1,
+                    samples.len() as f64 / sr.max(1) as f64,
+                    chars as f64 * CUTOFF_PER_CHAR * pace_of(p.speed).min(1.0),
+                    runaway_secs(chars, pace_lang(req.text, req.lang)) * pace_of(p.speed).max(1.0),
+                );
+                defects.push(kind);
+                // a take that has speech in it is kept as a candidate: when every attempt is turned away the least
+                // damaged one is given with its defects named, instead of leaving the block without a voice
+                if let Some(rank) = usable_rank(kind) {
+                    if kept.as_ref().is_none_or(|(r, _)| rank < *r) {
+                        kept = Some((rank, Synth { samples, sr, seed, temperature, defects: Vec::new(), seconds }));
+                    }
+                }
+            }
         }
+    }
+    if let Some((_, mut take)) = kept {
+        tracing::warn!("voicing guard: {} gave no clean take in {tries} attempts ({}); the least damaged one is kept", engine.name(), defects.join(", "));
+        take.defects = defects;
+        return Ok(take);
     }
     Err(t!("tts-defective", defects = defects.iter().map(|d| defect_name(d)).collect::<Vec<_>>().join(", ")))
 }
@@ -796,12 +885,12 @@ mod tests {
     #[test]
     fn a_runaway_a_cut_off_and_silence_are_defects_and_speech_is_not() {
         let sr = 24_000;
-        assert_eq!(defect(&speech(30.0, sr), sr, 10, "ru"), Some("runaway"));
-        assert_eq!(defect(&speech(4.0, sr), sr, 10, "ru"), None, "0.13 s a char + 3 s is still speech");
-        assert_eq!(defect(&speech(4.5, sr), sr, 10, "ru"), Some("runaway"));
-        assert_eq!(defect(&speech(0.2, sr), sr, 40, "ru"), Some("cutoff"));
-        assert_eq!(defect(&vec![0.001; sr as usize * 2], sr, 20, "ru"), Some("silence"));
-        assert_eq!(defect(&speech(2.0, sr), sr, 25, "ru"), None);
+        assert_eq!(defect(&speech(30.0, sr), sr, 10, "ru", 1.0), Some("runaway"));
+        assert_eq!(defect(&speech(4.8, sr), sr, 10, "ru", 1.0), None, "0.2 s a char + 3 s is still speech");
+        assert_eq!(defect(&speech(5.5, sr), sr, 10, "ru", 1.0), Some("runaway"));
+        assert_eq!(defect(&speech(0.2, sr), sr, 40, "ru", 1.0), Some("cutoff"));
+        assert_eq!(defect(&vec![0.001; sr as usize * 2], sr, 20, "ru", 1.0), Some("silence"));
+        assert_eq!(defect(&speech(2.0, sr), sr, 25, "ru", 1.0), None);
     }
 
     /// A Chinese phrase in a project of language «auto» is paced as Chinese: 40 ideographs read in 9 s were a «runaway»
@@ -817,8 +906,9 @@ mod tests {
         assert_eq!(pace_lang("오늘 날씨가 좋네요", "auto"), "ko");
         assert_eq!(pace_lang("Сегодня в восемь вечера", "auto"), "ru");
         assert_eq!(pace_lang(zh, "en"), "en", "a language set by hand stands");
-        assert_eq!(defect(&speech(9.0, sr), sr, chars, pace_lang(zh, "auto")), None);
-        assert_eq!(defect(&speech(9.0, sr), sr, chars, "ru"), Some("runaway"));
+        assert_eq!(defect(&speech(9.0, sr), sr, chars, pace_lang(zh, "auto"), 1.0), None);
+        assert_eq!(defect(&speech(12.0, sr), sr, chars, pace_lang(zh, "auto"), 1.0), None);
+        assert_eq!(defect(&speech(12.0, sr), sr, chars, "ru", 1.0), Some("runaway"));
         assert!(expected_secs(zh, "auto") > 6.0);
     }
 
@@ -827,9 +917,9 @@ mod tests {
         let sr = 24_000;
         let line = "床前明月光，疑是地上霜。举头望明月，低头思故乡。";
         let chars = line.chars().filter(|c| c.is_alphanumeric()).count();
-        assert_eq!(defect(&speech(8.0, sr), sr, chars, "zh"), None, "20 syllables in 8 s is a calm reading");
-        assert_eq!(defect(&speech(8.0, sr), sr, chars, "ru"), Some("runaway"), "20 Russian letters in 8 s are not");
-        assert_eq!(defect(&speech(30.0, sr), sr, chars, "zh"), Some("runaway"));
+        assert_eq!(defect(&speech(8.0, sr), sr, chars, "zh", 1.0), None, "20 syllables in 8 s is a calm reading");
+        assert_eq!(defect(&speech(8.0, sr), sr, chars, "ru", 1.0), Some("runaway"), "20 Russian letters in 8 s are not");
+        assert_eq!(defect(&speech(30.0, sr), sr, chars, "zh", 1.0), Some("runaway"));
     }
 
     #[test]
@@ -840,37 +930,70 @@ mod tests {
         let spoken = crate::text::prep::prepare(raw, &opts).prepared.text;
         let count = |t: &str| t.chars().filter(|c| c.is_alphanumeric()).count();
         let take = speech(count(raw) as f64 * RUNAWAY_PER_CHAR + RUNAWAY_SLACK + 1.0, sr);
-        assert_eq!(defect(&take, sr, count(raw), "ru"), Some("runaway"), "the written digits are too short a yardstick");
-        assert_eq!(defect(&take, sr, count(&spoken), "ru"), None, "{spoken}");
+        assert_eq!(defect(&take, sr, count(raw), "ru", 1.0), Some("runaway"), "the written digits are too short a yardstick");
+        assert_eq!(defect(&take, sr, count(&spoken), "ru", 1.0), None, "{spoken}");
     }
 
     #[test]
-    fn clipping_and_a_click_at_the_end_are_defects() {
+    fn a_clipped_take_is_a_defect() {
         let sr = 24_000;
         let mut loud = speech(2.0, sr);
-        for v in loud.iter_mut().step_by(200) {
+        for v in loud.iter_mut().step_by(50) {
             *v = 1.0;
         }
-        assert_eq!(defect(&loud, sr, 25, "ru"), Some("clipping"));
-        let mut clicked = speech(2.0, sr);
-        let n = clicked.len();
-        for v in &mut clicked[n - 6_000..] {
-            *v = 0.01 * *v;
+        assert_eq!(defect(&loud, sr, 25, "ru", 1.0), Some("clipping"));
+        let mut touched = speech(2.0, sr);
+        touched[100..110].iter_mut().for_each(|v| *v = 1.0);
+        assert_eq!(defect(&touched, sr, 25, "ru", 1.0), None, "a few samples at full scale are not heard");
+    }
+
+    /// A click at the end of a take is faded out and the take is kept, at any sample rate; a take that ends clean is
+    /// left as the engine gave it.
+    #[test]
+    fn a_click_at_the_end_is_faded_out_and_the_take_kept() {
+        for sr in [24_000, 44_100, 48_000] {
+            let mut take = speech(2.0, sr);
+            let n = take.len();
+            for v in &mut take[n - sr as usize / 4..] {
+                *v = 0.01 * *v;
+            }
+            let clean = take.clone();
+            for v in &mut take[n - sr as usize / 100..n - sr as usize / 200] {
+                *v = 0.6;
+            }
+            assert!(tail_click(&take, sr as usize).0 > CLICK_RATIO, "{sr} Hz");
+            assert!(soften_tail_click(&mut take, sr as usize), "{sr} Hz");
+            assert!(tail_click(&take, sr as usize).1 < 0.3, "the step is taken down with the fade, {sr} Hz");
+            assert_eq!(take[n - 1], 0.0);
+            assert_eq!(take[..n - sr as usize * 30 / 1000], clean[..n - sr as usize * 30 / 1000], "the speech before the last 30 ms is untouched");
+            assert_eq!(defect(&take, sr, 25, "ru", 1.0), None);
+            let mut untouched = clean.clone();
+            assert!(!soften_tail_click(&mut untouched, sr as usize));
+            assert_eq!(untouched, clean);
         }
-        clicked[n - 100] = 0.9;
-        assert_eq!(defect(&clicked, sr, 25, "ru"), Some("click"));
+    }
+
+    /// Speech asked faster is shorter and asked slower is longer: the limits follow the asked pace.
+    #[test]
+    fn the_asked_pace_moves_the_limits() {
+        let sr = 24_000;
+        assert_eq!(defect(&speech(1.5, sr), sr, 40, "ru", 1.0), Some("cutoff"));
+        assert_eq!(defect(&speech(1.5, sr), sr, 40, "ru", 0.5), None, "twice as fast: 40 chars in 1.5 s is the asked pace");
+        assert_eq!(defect(&speech(14.0, sr), sr, 40, "ru", 1.0), Some("runaway"));
+        assert_eq!(defect(&speech(14.0, sr), sr, 40, "ru", 2.0), None, "twice as slow");
+        assert_eq!(pace_of(crate::engines::supertonic::DEFAULT_SPEED), 1.0);
     }
 
     #[test]
     fn a_steady_hum_is_a_defect() {
         let sr = 24_000;
         let hum: Vec<f32> = (0..sr as usize * 3).map(|i| 0.2 * ((i as f32) * 0.03).sin()).collect();
-        assert_eq!(defect(&hum, sr, 30, "ru"), Some("hum"));
+        assert_eq!(defect(&hum, sr, 30, "ru", 1.0), Some("hum"));
     }
 
     #[test]
     fn the_token_cap_follows_the_expected_length() {
-        assert_eq!(token_cap(10, "ru"), ((10.0 * 0.13 + 3.0 + 1.0) * 25.0f64).ceil() as u32 + 8, "frames of 40 ms to a second past the runaway");
+        assert_eq!(token_cap(10, "ru"), ((10.0 * RUNAWAY_PER_CHAR + RUNAWAY_SLACK + 1.0) * FRAMES_PER_SEC).ceil() as u32 + 8, "frames of 40 ms to a second past the runaway");
         assert_eq!(token_cap(2_000, "ru"), 2048);
         assert!(token_cap(40, "zh") > token_cap(40, "ru"), "an ideograph is a syllable");
         let short = expected_secs("Да.", "ru");

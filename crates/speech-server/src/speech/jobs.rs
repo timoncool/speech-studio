@@ -877,7 +877,7 @@ fn sound_flags(take: &Take, spoken: &str, lang: &str, file: &Path, want: &[Strin
     let mut raised = crate::audio::flags::flags(&features, want, spoken, norm);
     if on("defect") {
         let chars = stx::visible(spoken).chars().filter(|c| c.is_alphanumeric()).count();
-        if let Some(d) = tts_host::defect(&samples, SR as i32, chars, lang) {
+        if let Some(d) = tts_host::defect(&samples, SR as i32, chars, lang, 1.0) {
             raised.insert(0, d.to_string());
         }
     }

@@ -9,9 +9,21 @@ release notes on GitHub are taken from the release's section.
 ### Added
 
 - **Audio8 TTS Realistic-Air — a compact multilingual voice with zero-shot cloning** (Settings → Models → Voicing): a new voicing engine beside Higgs and Supertonic — the Audio8 Realistic-Air 0.6B model (Q8_0, 1.5 GB) on the audio.cpp server. It speaks 23 languages, Russian among them, with its own stress, clones a voice from a reference clip and its exact transcript, and answers a phrase at a time at 44.1 kHz. Download it in Models; Higgs stays the default.
+- **Speech metrics for the agent in Live** — `voice_metrics` gives the person's words a minute, pauses of 500 and 1000 ms, filler words (Russian and English, more in fillers.json), how soon they answer and their speech and silence; `voice_lines` gives their phrases with each word's time; a Live phrase carries word timings when the recogniser gives them.
+- **The agent sees when its speech stalls** — `say_state` gives for each phrase the silence heard before it because it was not ready in time (`queue_wait_ms`) and how many such pauses were over 300 ms.
+- **Echo protection in Live** — the agent no longer hears itself from the speakers: by default the microphone is not heard while the studio's sound is far louder than it, and you speaking over it are heard at once; or by your voice (voice gate), or by words only.
+
+### Changed
+
+- **In Live the agent decides when you speak over it** — the studio turns its voice down and the agent stops or goes on (`voice_floor`, `say_continue`); with no word from it within 1.2 s the studio stops by itself. The setting "When you speak over the agent" in Live's voice tab chooses the agent, an immediate stop or none. A phrase cut off while it played is shown as interrupted.
 
 ### Fixed
 
+- **Recognition no longer fails after voicing with Qwen3-TTS** ([#28](https://github.com/timoncool/speech-studio/issues/28)): «transcribe.dll: LoadLibraryExW failed» came when the recognition engine was loaded after Qwen3-TTS — both carried a ggml library of the same name, and Windows gave the second engine the first one's. The recognition engine (transcribe.cpp 0.2.1) now names its own, so the two no longer meet in either order, on Windows and Linux.
+- **Blocks no longer stay unvoiced or keep a project from export because of a too strict sound check**: a take was called «clipped» for a single run of three samples at full scale — now from 1 % of the samples, the level speech-quality tools fail a clip at — and such a take kept the whole project from export («blocks keep the export back»). A click at the end of a take is faded out instead of the take being thrown away. A phrase counts as «drawn out» only when it is twice as slow as normal reading (slow voices were turned away on every attempt), and the limits follow the speed you asked for. When every attempt still comes out with a defect, the least damaged take is kept and marked for you to listen to, instead of «No block was voiced». Every take turned away is written to the log with what it was measured by.
+- **A project of one short word exports**: «The sound is quiet: nothing to bring to the loudness» came for a programme shorter than 0.4 s.
+- **The voice gate recognises its owner again** — your voice print was taken together with the silence around the recording and turned most of your phrases away; it is now taken from your speech only. Record your voice again in Settings, voice gate: an old print is not used until you do.
+- **Live no longer loses what the person says** — the agent gets every phrase heard (`heard` is the number of lines there are to get); the studio's own voice heard back through the microphone is marked as echo, told by when its phrase sounded rather than by shared words, and a stop pressed in the window ends with the conversation.
 - **Qwen3-TTS downloads whole from the Models screen**: the engine's build for the video card is shown beside the engine, so the engine no longer stays "not fully downloaded" after its files are there.
 - **The first start on a Mac no longer stops with an error** before the recognition runtime is downloaded.
 
