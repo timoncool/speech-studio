@@ -367,4 +367,59 @@ mod tests {
         let refused = (8_820..44_100).filter(|n| !agrees(at(*n, 24_000), at(*n, 16_000))).count();
         assert!(refused > 30_000, "most references under a second are refused as they are: {refused}");
     }
+
+    /// Higgs on a real server, before and after: `HIGGS_ROOT` — a studio root with the server under `tools` and Higgs
+    /// under `models`, `HIGGS_REF` — a voice recording. A reference of 0.6 s at 44.1 kHz given as it is cut, and given as
+    /// `speak` prepares it; a server killed before a phrase, then asked through `speak`; a phrase cancelled as it goes.
+    #[test]
+    #[ignore = "needs the audio.cpp server, Higgs and a card"]
+    fn higgs_on_a_real_server_before_and_after() {
+        use std::sync::atomic::Ordering;
+        // a test process has no job object of the studio: the servers it starts outlive it unless stopped here
+        struct StopServers;
+        impl Drop for StopServers {
+            fn drop(&mut self) {
+                acpp_server::SERVERS.stop_all();
+            }
+        }
+        let _servers = StopServers;
+        let root = std::path::PathBuf::from(std::env::var("HIGGS_ROOT").expect("HIGGS_ROOT"));
+        let voice = std::path::PathBuf::from(std::env::var("HIGGS_REF").expect("HIGGS_REF"));
+        let work = tempfile::tempdir_in(&root).unwrap();
+        let short = work.path().join("short.wav");
+        let ok = std::process::Command::new("ffmpeg").args(["-v", "error", "-y", "-ss", "1", "-t", "0.6", "-i"]).arg(&voice).args(["-ac", "1", "-ar", "44100", "-c:a", "pcm_s16le"]).arg(&short).status().unwrap();
+        assert!(ok.success());
+        let higgs = super::Higgs::load(&root, &root.join("models")).unwrap();
+        let text = "Проверка голоса на коротком образце.";
+        let opts = || serde_json::json!({ "seed": 7, "temperature": 0.7 }).as_object().unwrap().clone();
+        let req = super::SpeechRequest {
+            model: super::HIGGS.to_string(),
+            input: text.to_string(),
+            voice_ref: Some(super::VoiceRef::Path(short.clone())),
+            reference_text: None,
+            language: None,
+            options: opts(),
+            stall: super::SPEECH_STALL,
+        };
+        let raw = higgs.server().speech_stream(&req, &std::sync::atomic::AtomicBool::new(false), &mut |_| super::Flow::Continue);
+        eprintln!("before: the 0.6 s reference as it is cut: {:?}", raw.as_ref().map(|d| d.samples).map_err(|e| e.to_string()));
+        let started = std::time::Instant::now();
+        let prepared = higgs.speak(text, Some(&short), None, opts(), &mut |_| {});
+        eprintln!("after: the same reference prepared: {:?} in {:.1} s", prepared.as_ref().map(Vec::len), started.elapsed().as_secs_f64());
+        let pid = higgs.server().pid();
+        higgs.server().kill();
+        let started = std::time::Instant::now();
+        let again = higgs.speak(text, None, None, opts(), &mut |_| {});
+        eprintln!("server {pid} killed before a phrase: {:?} in {:.1} s, server now {}", again.as_ref().map(Vec::len), started.elapsed().as_secs_f64(), higgs.server().pid());
+        let started = std::time::Instant::now();
+        let mut pieces = 0;
+        let cancelled = higgs.speak(&"Длинная фраза для отмены посреди синтеза. ".repeat(6), None, None, opts(), &mut |_| {
+            pieces += 1;
+            if pieces == 3 {
+                higgs.cancel.store(true, Ordering::SeqCst);
+            }
+        });
+        eprintln!("cancelled at the third piece: {:?} after {:.1} s", cancelled.as_ref().map(Vec::len), started.elapsed().as_secs_f64());
+        assert!(prepared.is_ok() && again.is_ok());
+    }
 }
