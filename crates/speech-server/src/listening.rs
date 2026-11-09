@@ -31,7 +31,9 @@ pub(crate) mod watching {
     pub(crate) use super::watch::{resume, Dependencies};
 }
 pub(crate) mod recognition {
-    pub(crate) use super::live::{engine, mute, muted, state, switch, type_line};
+    pub(crate) use super::live::{engine, heard_at, mute, muted, state, switch, type_line};
+    #[cfg(test)]
+    pub(crate) use super::live::{conversation_for_test, end_for_test, TEST_SLOT};
 }
 pub(crate) mod subtitles {
     pub(crate) use super::export::{render_rows, Opts, Row};

@@ -27,6 +27,7 @@ mod storage;
 mod validation;
 pub(crate) use crate::platform::workspace::project_file as project_path;
 pub(crate) use preparation::voice_tag;
+pub(crate) use say::is_echo;
 pub(crate) use storage::{edit, load, save};
 pub(crate) use validation::validate;
 

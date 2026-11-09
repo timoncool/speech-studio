@@ -62,7 +62,71 @@ pub fn asr_switched(engine: &str, label: &str) {
 
 /// The window stops playing `project` now and drops what it queued.
 pub fn silence(project: &str) {
+    cut_airing(project);
     let _ = channel().send(json!({ "kind": "stop", "project": project, "aloud": true }));
+}
+
+/// How long the sound said aloud stays on record after it was heard.
+const AIRED_SECS: u64 = 120;
+
+/// When a block said aloud sounds from the window, as the server sent it: the window plays the pieces one after
+/// another, so a piece sounds from the later of its sending and the end of the piece before it.
+#[derive(Clone)]
+pub struct Aired {
+    pub project: String,
+    pub block: String,
+    pub from: Instant,
+    pub to: Instant,
+}
+
+struct Airing {
+    blocks: Vec<Aired>,
+    /// Where the sound the window has queued ends.
+    until: Option<Instant>,
+}
+
+fn airing() -> std::sync::MutexGuard<'static, Airing> {
+    static AIR: OnceLock<Mutex<Airing>> = OnceLock::new();
+    AIR.get_or_init(|| Mutex::new(Airing { blocks: Vec::new(), until: None })).lock().unwrap_or_else(|p| p.into_inner())
+}
+
+/// `secs` more of `block`'s sound sent to the window to play now.
+fn aired(project: &str, block: &str, secs: f64) {
+    let now = Instant::now();
+    let mut air = airing();
+    let from = air.until.filter(|u| *u > now).unwrap_or(now);
+    let to = from + std::time::Duration::from_secs_f64(secs.max(0.0));
+    air.until = Some(to);
+    air.blocks.retain(|a| now.saturating_duration_since(a.to).as_secs() < AIRED_SECS);
+    match air.blocks.iter_mut().rev().find(|a| a.block == block) {
+        Some(a) => a.to = to,
+        None => air.blocks.push(Aired { project: project.into(), block: block.into(), from, to }),
+    }
+}
+
+/// The window dropped `project`'s sound: what it had queued does not sound.
+fn cut_airing(project: &str) {
+    let now = Instant::now();
+    let mut air = airing();
+    for a in air.blocks.iter_mut().filter(|a| a.project == project) {
+        a.to = a.to.min(now);
+        a.from = a.from.min(a.to);
+    }
+    let latest = air.blocks.iter().map(|a| a.to).max();
+    air.until = latest.filter(|u| *u > now);
+}
+
+/// The blocks said aloud lately with when each sounded, the earliest first.
+pub fn aired_blocks() -> Vec<Aired> {
+    let mut blocks = airing().blocks.clone();
+    blocks.sort_by_key(|a| a.from);
+    blocks
+}
+
+#[cfg(test)]
+pub fn air_for_test(project: &str, block: &str, from: Instant, to: Instant) {
+    let mut air = airing();
+    air.blocks.push(Aired { project: project.into(), block: block.into(), from, to });
 }
 
 /// The windows that play what is said aloud, by connection, in the order they opened: only the first plays it, so a
@@ -172,6 +236,9 @@ impl Phrase {
     fn play(&self, samples: &[f32], sr: u32) {
         if channel().receiver_count() == 0 {
             return;
+        }
+        if self.is_aloud() && player().is_some() {
+            aired(&self.project, &self.block, samples.len() as f64 / sr.max(1) as f64);
         }
         let bytes: Vec<u8> = samples.iter().flat_map(|s| s.to_le_bytes()).collect();
         self.send("chunk", json!({ "sr": sr, "data": base64::engine::general_purpose::STANDARD.encode(bytes) }));

@@ -38,24 +38,50 @@ const INTERRUPTED_SECS: u64 = 3600;
 
 static SESSIONS: LazyLock<Mutex<HashMap<String, Session>>> = LazyLock::new(Default::default);
 
-/// What the studio said aloud lately, when and in which session: a microphone hearing it back is the studio's own
-/// voice, not a person, and a window may still be playing it after its session has ended.
-static SAID: LazyLock<Mutex<Vec<(std::time::Instant, String, String)>>> = LazyLock::new(Default::default);
+/// What the studio said aloud lately: when, in which session, as which block and its text. A microphone hearing it back
+/// is the studio's own voice, not a person, and a window may still be playing it after its session has ended.
+static SAID: LazyLock<Mutex<Vec<(std::time::Instant, String, String, String)>>> = LazyLock::new(Default::default);
 
-/// How long a phrase said aloud may still come back through the microphone.
+/// How long after its text came a session's phrase may still be playing in a window.
 const ECHO_SECS: u64 = 30;
 
-/// Whether `heard` is the studio's own recent speech coming back: most of its words are in what it said lately.
-pub fn is_echo(heard: &str) -> bool {
+/// How long the text of a phrase said aloud is kept to tell its echo: a queue may sound it well after it came.
+const SAID_KEEP_SECS: u64 = 120;
+
+/// How far around the time the studio's phrase sounded a line heard may be its echo: the room sends it back a moment
+/// late, and the recording's clock and the sound's agree only as closely as the window got the pieces.
+const ECHO_SLACK: std::time::Duration = std::time::Duration::from_millis(1500);
+
+/// Whether `heard`, said from `from` to `to`, is the studio's own speech coming back: it was heard while a phrase of the
+/// studio sounded, and most of its words are that phrase's, in its order. A person repeating the studio's words after
+/// it has finished is not its echo.
+pub fn is_echo(heard: &str, from: std::time::Instant, to: std::time::Instant) -> bool {
     let words = crate::audio::qc::normalize(heard);
     if words.is_empty() {
         return false;
     }
-    let mut said = SAID.lock().unwrap_or_else(|p| p.into_inner());
-    said.retain(|(at, _, _)| at.elapsed().as_secs() < ECHO_SECS);
-    let spoken: std::collections::HashSet<String> = said.iter().flat_map(|(_, _, t)| crate::audio::qc::normalize(t)).collect();
-    let known = words.iter().filter(|w| spoken.contains(*w)).count();
-    known * 3 >= words.len() * 2
+    let texts: HashMap<String, String> = SAID.lock().unwrap_or_else(|p| p.into_inner()).iter().map(|(_, _, block, text)| (block.clone(), text.clone())).collect();
+    let spoken: Vec<String> = super::live::aired_blocks()
+        .into_iter()
+        .filter(|a| a.from <= to + ECHO_SLACK && a.to + ECHO_SLACK >= from)
+        .filter_map(|a| texts.get(&a.block).map(|t| crate::audio::qc::normalize(t)))
+        .flatten()
+        .collect();
+    in_order(&words, &spoken) * 3 >= words.len() * 2
+}
+
+/// How many of `a`'s words `b` has in the same order (the longest common subsequence).
+fn in_order(a: &[String], b: &[String]) -> usize {
+    let mut row = vec![0usize; b.len() + 1];
+    for x in a {
+        let mut diagonal = 0;
+        for (j, y) in b.iter().enumerate() {
+            let above = row[j + 1];
+            row[j + 1] = if x == y { diagonal + 1 } else { above.max(row[j]) };
+            diagonal = above;
+        }
+    }
+    row[b.len()]
 }
 
 /// Words a listener says without taking the floor (backchannels): heard alone, they do not stop the studio's speech.
@@ -79,9 +105,8 @@ pub fn interrupt(workspace: &std::path::Path, queue: &jobs::JobQueue) -> bool {
     // the open sessions, and the ended ones whose last phrases a window may still be playing
     let mut open: Vec<String> = sessions().keys().cloned().collect();
     {
-        let mut said = SAID.lock().unwrap_or_else(|p| p.into_inner());
-        said.retain(|(at, _, _)| at.elapsed().as_secs() < ECHO_SECS);
-        for (_, sid, _) in said.iter() {
+        let said = SAID.lock().unwrap_or_else(|p| p.into_inner());
+        for (_, sid, _, _) in said.iter().filter(|(at, _, _, _)| at.elapsed().as_secs() < ECHO_SECS) {
             if !open.contains(sid) {
                 open.push(sid.clone());
             }
@@ -339,7 +364,11 @@ async fn voice(paths: SpeechPaths, queue: jobs::JobQueue, sid: String, phrases: 
         Ok(ids) => ids,
         Err(e) => return refuse(StatusCode::INTERNAL_SERVER_ERROR, "save_failed", e),
     };
-    SAID.lock().unwrap_or_else(|p| p.into_inner()).extend(phrases.iter().map(|p| (std::time::Instant::now(), sid.clone(), p.clone())));
+    {
+        let mut said = SAID.lock().unwrap_or_else(|p| p.into_inner());
+        said.retain(|(at, _, _, _)| at.elapsed().as_secs() < SAID_KEEP_SECS);
+        said.extend(ids.iter().zip(&phrases).map(|(id, p)| (std::time::Instant::now(), sid.clone(), id.clone(), p.clone())));
+    }
     let started = super::synthesis::enqueue(&paths, &queue, sid.clone(), json!({ "ids": ids, "aloud": true })).await;
     if !started.status().is_success() {
         return started;
@@ -422,15 +451,17 @@ static LISTENING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool:
 /// the person's next phrase, said or typed.
 static HUSHED_AT: Mutex<Option<usize>> = Mutex::new(None);
 
+/// How many phrases the person has said or typed in the running conversation, the studio's own voice heard back left out.
 fn heard_count() -> usize {
-    crate::listening::recognition::state()["lines"].as_array().map_or(0, Vec::len)
+    person_lines(&crate::listening::recognition::state()).0.iter().filter(|l| l["echo"] != true).count()
 }
 
-/// Whether the person stopped the speech and has not spoken or typed since.
+/// Whether the person stopped the speech and has not spoken or typed since. Fewer phrases than then: the conversation
+/// was started again, and a new one does not keep the old one's stop.
 fn hushed() -> bool {
     let mut at = HUSHED_AT.lock().unwrap_or_else(|p| p.into_inner());
     match *at {
-        Some(n) if heard_count() <= n => true,
+        Some(n) if heard_count() == n => true,
         Some(_) => {
             *at = None;
             false
@@ -474,6 +505,7 @@ pub async fn listen_start(State(st): State<AppState>, headers: HeaderMap, body: 
     if !started.status().is_success() {
         return started;
     }
+    *HUSHED_AT.lock().unwrap_or_else(|p| p.into_inner()) = None;
     watch_interruptions(st.workspace, st.jobs);
     crate::voice_gate::arm(gate_on);
     started
@@ -501,7 +533,9 @@ fn watch_interruptions(workspace: std::path::PathBuf, queue: jobs::JobQueue) {
         while LISTENING.load(std::sync::atomic::Ordering::Relaxed) {
             let state = crate::listening::recognition::state();
             let partial = state["partial"]["text"].as_str().unwrap_or_default().to_string();
-            if takes_the_floor(&partial) && !is_echo(&partial) {
+            let now = std::time::Instant::now();
+            let began = state["partial"]["start"].as_f64().and_then(crate::listening::recognition::heard_at).unwrap_or(now);
+            if takes_the_floor(&partial) && !is_echo(&partial, began, now) {
                 let words = crate::audio::qc::normalize(&partial).len();
                 // cut the studio off only once the person is really speaking over it: a cough is a short static partial
                 // that never grows, so it no longer stops the agent mid-answer
@@ -551,30 +585,40 @@ pub async fn listen_text(Json(body): Json<Value>) -> Response {
     }
 }
 
-/// GET /speech/listen/next?after=N&seconds=S — the person's phrases after the first N, waiting up to S seconds (at most 55)
-/// for one; the studio's own voice heard back is left out.
+/// The lines the agent gets from the recogniser's `state`, numbered from 1 in that list, and how many the voice gate held
+/// back: every line but those the gate judged another voice (or heard before the wake word); what the person typed is
+/// always theirs. The studio's own voice heard back stays in the list, marked `echo`. The list only grows, so a number
+/// once given always names the same line.
+fn person_lines(state: &Value) -> (Vec<Value>, usize) {
+    let all = state["lines"].as_array().map(Vec::as_slice).unwrap_or_default();
+    let mut gated = 0;
+    let mut lines = Vec::new();
+    for l in all {
+        if l["typed"] != true && l["owner"] == false {
+            gated += 1;
+            continue;
+        }
+        lines.push(json!({ "n": lines.len() + 1, "text": l["text"], "start": l["start"], "end": l["end"], "echo": l["echo"] == true, "typed": l["typed"] == true }));
+    }
+    (lines, gated)
+}
+
+/// GET /speech/listen/next?after=N&seconds=S — the person's lines after the first N, waiting up to S seconds (at most 55)
+/// for one; `heard` is how many lines there are to get, so the next call asks after it.
 pub async fn listen_next(axum::extract::Query(q): axum::extract::Query<HashMap<String, String>>) -> Json<Value> {
     let after: usize = q.get("after").and_then(|v| v.parse().ok()).unwrap_or(0);
     let seconds: u64 = q.get("seconds").and_then(|v| v.parse().ok()).unwrap_or(30).min(55);
     let until = std::time::Instant::now() + std::time::Duration::from_secs(seconds);
     loop {
         let state = crate::listening::recognition::state();
-        let all = state["lines"].as_array().cloned().unwrap_or_default();
-        // under the voice gate, only the owner's phrases reach the agent (what the person typed is always theirs)
-        let gate = crate::voice_gate::is_armed();
-        let fresh: Vec<Value> = all
-            .iter()
-            .enumerate()
-            .skip(after)
-            .filter(|(_, l)| l["typed"] == true || !is_echo(l["text"].as_str().unwrap_or_default()))
-            .filter(|(_, l)| !gate || l["typed"] == true || l["owner"].as_bool() != Some(false))
-            .map(|(n, l)| json!({ "n": n + 1, "text": l["text"], "start": l["start"], "end": l["end"] }))
-            .collect();
+        let (lines, gated) = person_lines(&state);
+        let heard = lines.len();
+        let fresh: Vec<Value> = lines.into_iter().skip(after).collect();
         let running = state["running"].as_bool().unwrap_or(false);
         // a recogniser that broke hears nothing more: the agent learns it now, not after the wait
         let broken = !state["error"].is_null();
         if !fresh.is_empty() || !running || broken || std::time::Instant::now() >= until {
-            return Json(json!({ "lines": fresh, "heard": all.len(), "partial": state["partial"], "listening": running, "error": state["error"] }));
+            return Json(json!({ "lines": fresh, "heard": heard, "gated": gated, "partial": state["partial"], "listening": running, "error": state["error"] }));
         }
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
@@ -657,6 +701,7 @@ pub fn guard_mic(workspace: std::path::PathBuf) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::{Duration, Instant};
 
     #[test]
     fn finished_phrases_are_cut_and_the_rest_waits() {
@@ -694,6 +739,7 @@ mod tests {
 
     #[tokio::test]
     async fn an_agent_mutes_the_microphone_but_never_turns_it_back_on() {
+        let _slot = crate::listening::recognition::TEST_SLOT.lock().unwrap_or_else(|p| p.into_inner());
         let mut agent = HeaderMap::new();
         agent.insert("x-speech-agent", "1".parse().unwrap());
         let unmute = listen_mute(agent.clone(), Json(json!({ "muted": false }))).await;
@@ -718,10 +764,82 @@ mod tests {
 
     #[test]
     fn the_studio_hearing_its_own_phrase_is_echo_and_a_person_is_not() {
-        SAID.lock().unwrap().push((std::time::Instant::now(), "s".into(), "Старинный замок построили в тысяча восемьсот восемьдесят седьмом году.".into()));
-        assert!(is_echo("замок построили в тысяча восемьсот"));
-        assert!(!is_echo("подожди, а кто его построил"));
-        assert!(!is_echo(""));
+        let now = Instant::now();
+        let ago = |s: u64| now - Duration::from_secs(s);
+        SAID.lock().unwrap().push((ago(12), "s-castle".into(), "b-castle".into(), "Старинный замок построили в тысяча восемьсот восемьдесят седьмом году.".into()));
+        super::super::live::air_for_test("s-castle", "b-castle", ago(10), ago(5));
+        assert!(is_echo("замок построили в тысяча восемьсот", ago(9), ago(6)), "heard while the phrase sounded, in its words");
+        assert!(!is_echo("подожди, а кто его построил", ago(9), ago(6)), "the person speaking over the phrase");
+        assert!(!is_echo("замок построили в тысяча восемьсот", ago(1), now), "the person repeating the studio's words after it");
+        assert!(!is_echo("", ago(9), ago(6)));
+    }
+
+    /// Lines heard in a conversation whose second 0 was a minute ago, while the studio said a phrase from its 20th to
+    /// its 26th second (scenarios 4 and 9 of TZ-LIVE-TRAINER).
+    fn eight_phrases(now: Instant) -> Instant {
+        let zero = now - Duration::from_secs(60);
+        SAID.lock().unwrap().push((zero + Duration::from_secs(19), "s-eight".into(), "b-eight".into(), "Сегодня мы поговорим о том, как устроен голосовой тренажёр.".into()));
+        super::super::live::air_for_test("s-eight", "b-eight", zero + Duration::from_secs(20), zero + Duration::from_secs(26));
+        crate::listening::recognition::conversation_for_test(
+            zero,
+            &[
+                (1.0, 3.0, "Привет, как дела", false, true),
+                (4.0, 6.0, "Расскажи про тренажёр", false, true),
+                (21.0, 24.0, "мы поговорим о том как устроен голосовой тренажёр", false, true),
+                (22.0, 24.5, "подожди, а сколько это стоит", false, true),
+                (30.0, 32.0, "Как устроен голосовой тренажёр", false, true),
+                (33.0, 35.0, "это телевизор за стеной", false, false),
+                (36.0, 38.0, "да, понятно", false, true),
+                (39.0, 41.0, "А что дальше", false, true),
+                (41.0, 41.0, "напечатал вопрос", true, true),
+            ],
+        );
+        zero
+    }
+
+    async fn next(after: usize) -> Value {
+        let q = HashMap::from([("after".to_string(), after.to_string()), ("seconds".to_string(), "0".to_string())]);
+        listen_next(axum::extract::Query(q)).await.0
+    }
+
+    #[tokio::test]
+    async fn every_line_heard_reaches_the_agent_and_echo_is_a_mark_not_a_gap() {
+        let _slot = crate::listening::recognition::TEST_SLOT.lock().unwrap_or_else(|p| p.into_inner());
+        eight_phrases(Instant::now());
+        let all = next(0).await;
+        let lines = all["lines"].as_array().unwrap();
+        assert_eq!(all["heard"], lines.len(), "heard counts the lines there are to get: {all}");
+        assert_eq!(lines.len(), 8, "every line but the one the voice gate held back: {all}");
+        assert_eq!(all["gated"], 1);
+        let numbers: Vec<u64> = lines.iter().map(|l| l["n"].as_u64().unwrap()).collect();
+        assert_eq!(numbers, (1..=8).collect::<Vec<u64>>());
+        let echo: Vec<bool> = lines.iter().map(|l| l["echo"] == true).collect();
+        assert_eq!(echo, [false, false, true, false, false, false, false, false], "only the studio's phrase heard back while it sounded: {all}");
+        assert_eq!(lines[4]["text"], "Как устроен голосовой тренажёр", "the person repeating the studio's words after it is the person");
+        assert_eq!(lines[7]["typed"], true);
+        for after in 0..=8 {
+            let got = next(after).await;
+            assert_eq!(got["heard"], 8);
+            assert_eq!(got["lines"].as_array().unwrap().len(), 8 - after, "after {after}: {got}");
+        }
+        crate::listening::recognition::end_for_test();
+    }
+
+    #[tokio::test]
+    async fn a_stop_in_the_window_holds_until_the_person_speaks_and_ends_with_the_conversation() {
+        let _slot = crate::listening::recognition::TEST_SLOT.lock().unwrap_or_else(|p| p.into_inner());
+        let zero = eight_phrases(Instant::now());
+        assert_eq!(heard_count(), 7, "the person's lines, the studio's echo left out");
+        *HUSHED_AT.lock().unwrap() = Some(heard_count());
+        assert!(hushed(), "the person stopped the speech and said nothing since");
+        // the microphone turned off and on: a new conversation, nothing heard in it yet
+        crate::listening::recognition::conversation_for_test(zero, &[]);
+        assert!(!hushed(), "a new conversation does not keep the old one's stop");
+        assert_eq!(*HUSHED_AT.lock().unwrap(), None);
+        *HUSHED_AT.lock().unwrap() = Some(heard_count());
+        crate::listening::recognition::conversation_for_test(zero, &[(1.0, 2.0, "дальше", false, true)]);
+        assert!(!hushed(), "the person's next phrase lets the agent speak");
+        crate::listening::recognition::end_for_test();
     }
 
     #[test]

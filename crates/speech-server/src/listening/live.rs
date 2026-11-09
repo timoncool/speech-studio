@@ -40,6 +40,10 @@ struct Live {
     typed: std::collections::HashSet<usize>,
     /// The places in `lines` the voice gate judged NOT the owner's voice (only when a gated conversation is armed).
     foreign: std::collections::HashSet<usize>,
+    /// The places in `lines` heard while the studio's own phrase sounded and saying that phrase: its voice heard back.
+    echo: std::collections::HashSet<usize>,
+    /// The moment the recording's second 0 was.
+    zero: std::time::Instant,
     /// The recogniser that hears now, as the window names it, and the language asked of it.
     engine: String,
     lang: String,
@@ -70,6 +74,8 @@ pub fn start(repo_root: &Path, models_root: &Path, lang: &str, engine: &str) -> 
         muted: false,
         typed: Default::default(),
         foreign: Default::default(),
+        echo: Default::default(),
+        zero: std::time::Instant::now(),
         engine: choice.label(),
         lang: lang.to_string(),
         stop: stop.clone(),
@@ -155,13 +161,45 @@ pub fn state() -> Value {
     match live().lock().unwrap_or_else(|p| p.into_inner()).as_ref() {
         Some(l) => json!({
             "running": !l.stop.load(Ordering::Relaxed),
-            "lines": l.lines.iter().enumerate().map(|(n, (a, z, text))| json!({ "start": a, "end": z, "text": text, "typed": l.typed.contains(&n), "owner": !l.foreign.contains(&n) })).collect::<Vec<_>>(),
+            "lines": l.lines.iter().enumerate().map(|(n, (a, z, text))| json!({ "start": a, "end": z, "text": text, "typed": l.typed.contains(&n), "owner": !l.foreign.contains(&n), "echo": l.echo.contains(&n) })).collect::<Vec<_>>(),
             "partial": l.partial.as_ref().map(|(a, text)| json!({ "start": a, "text": text })),
             "error": l.error,
             "muted": l.muted,
         }),
         None => json!({ "running": false, "lines": [], "partial": null, "error": null, "muted": false }),
     }
+}
+
+/// The moment `secs` of the running recording was heard; None with no conversation.
+pub fn heard_at(secs: f64) -> Option<std::time::Instant> {
+    with(|l| l.zero + Duration::from_secs_f64(secs.max(0.0)))
+}
+
+/// Serialises the tests that put a conversation of their own into the one live slot.
+#[cfg(test)]
+pub static TEST_SLOT: Mutex<()> = Mutex::new(());
+
+/// A conversation that heard `lines` (start, end, text, typed, the owner's voice), its second 0 being `zero`, for tests.
+#[cfg(test)]
+pub fn conversation_for_test(zero: std::time::Instant, lines: &[(f64, f64, &str, bool, bool)]) {
+    let mut l = Live { lines: Vec::new(), partial: None, error: None, muted: false, typed: Default::default(), foreign: Default::default(), echo: Default::default(), zero, engine: String::new(), lang: "ru".into(), stop: Arc::new(AtomicBool::new(false)), worker: None };
+    for (n, (a, z, text, typed, owner)) in lines.iter().enumerate() {
+        if *typed {
+            l.typed.insert(n);
+        } else if crate::speech::is_echo(text, zero + Duration::from_secs_f64(*a), zero + Duration::from_secs_f64(*z)) {
+            l.echo.insert(n);
+        }
+        if !*owner {
+            l.foreign.insert(n);
+        }
+        l.lines.push((*a, *z, text.to_string()));
+    }
+    *live().lock().unwrap_or_else(|p| p.into_inner()) = Some(l);
+}
+
+#[cfg(test)]
+pub fn end_for_test() {
+    *live().lock().unwrap_or_else(|p| p.into_inner()) = None;
 }
 
 pub fn finish() -> Result<Vec<Heard>, String> {
@@ -314,6 +352,10 @@ fn listen(choice: crate::engines::models::AsrChoice, models_root: &Path, lang: &
             let owner = crate::voice_gate::gate_line(models_root, &audio[from_a.min(to_z)..to_z]);
             with(|l| {
                 let n = l.lines.len();
+                let (from, to) = (l.zero + Duration::from_secs_f64(line.0.max(0.0)), l.zero + Duration::from_secs_f64(line.1.max(0.0)));
+                if crate::speech::is_echo(&line.2, from, to) {
+                    l.echo.insert(n);
+                }
                 l.lines.push(line);
                 if owner == Some(false) {
                     l.foreign.insert(n);
@@ -352,7 +394,7 @@ mod tests {
         let lang = std::env::var("LIVE_LANG").unwrap_or_else(|_| "ru".into());
         let choice = crate::app::recognition::choice(&root, &models, &lang, "test").unwrap();
         std::env::set_var("DUB_ASR_BACKEND", crate::engines::models::stage_backend(&models, "asr_backend"));
-        *live().lock().unwrap() = Some(Live { lines: Vec::new(), partial: None, error: None, muted: false, typed: Default::default(), foreign: Default::default(), engine: String::new(), lang: lang.clone(), stop: Arc::new(AtomicBool::new(false)), worker: None });
+        *live().lock().unwrap() = Some(Live { lines: Vec::new(), partial: None, error: None, muted: false, typed: Default::default(), foreign: Default::default(), echo: Default::default(), zero: std::time::Instant::now(), engine: String::new(), lang: lang.clone(), stop: Arc::new(AtomicBool::new(false)), worker: None });
         let (to, from) = channel::<Vec<f32>>();
         let feeder = std::thread::spawn(move || {
             for chunk in x.chunks((sr / 10) as usize) {

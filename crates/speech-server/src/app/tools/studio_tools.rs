@@ -361,7 +361,7 @@ pub(super) fn tools() -> Vec<Tool> {
         },
         Tool {
             name: "voice_listen",
-            description: "Wait for what the person says next: the phrases heard after the first `after` (the `heard` of the last answer, 0 at first), each ended by a pause, waiting up to seconds (at most 55; an answer with no lines and listening true means wait again). partial is what they are saying right now.",
+            description: "Wait for what the person says next: the lines after the first `after` (the `heard` of the last answer, 0 at first), each ended by a pause and numbered n from 1, waiting up to seconds (at most 55; an answer with no lines and listening true means wait again). heard is how many lines there are to get, so no line is ever skipped. A line with echo true is the studio's own phrase heard back through the microphone while it sounded: do not answer it. typed true: the person typed it. gated is how many phrases the voice gate held back as not the owner's voice (or said before the wake word). partial is what they are saying right now.",
             schema: || object(json!({ "after": { "type": "integer", "minimum": 0 }, "seconds": seconds() }), &[]),
             call: |args| get(format!("/speech/listen/next{}", query(&[("after", args.get("after").and_then(Value::as_u64).map(|v| v.to_string())), ("seconds", args.get("seconds").and_then(Value::as_u64).map(|v| v.to_string()))]))),
         },
