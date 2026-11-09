@@ -79,7 +79,7 @@ mod tests {
     use crate::voices::VoiceCard;
 
     fn voice(name: &str, gender: &str, age: &str, lang: &str) -> Voice {
-        Voice { name: name.into(), audio: String::new(), size: 0, transcript: None, photo: None, original: false, card: VoiceCard { gender: gender.into(), age: age.into(), lang: lang.into(), ..Default::default() } }
+        Voice { name: name.into(), audio: String::new(), size: 0, transcript: None, photo: None, original: false, quiet: false, card: VoiceCard { gender: gender.into(), age: age.into(), lang: lang.into(), ..Default::default() } }
     }
 
     #[test]

@@ -13,9 +13,6 @@ import RefTrim from "./RefTrim";
 import { DENOISE_LEVELS } from "../../lib/listen";
 import Hint, { Tip } from "../Hint";
 
-/** A reference quieter than this (LUFS) is offered to be levelled, as the studio decides it. */
-const QUIET_LUFS = -26;
-
 const GENDERS: VoiceGender[] = ["", "female", "male"];
 const AGES: VoiceAge[] = ["", "child", "teen", "adult", "senior"];
 const CONSENTS: VoiceConsent[] = ["", "own", "permitted", "public"];
@@ -118,15 +115,15 @@ export default function VoiceEditor({ voice, all, onClose, onChanged, onRenamed,
     setTranscript(r.voice.transcript ?? "");
     setTrimming(false);
   });
-  const [measured, setMeasured] = useState<{ name: string; lufs: number } | null>(null);
-  const lufs = voice.card.lufs ?? (measured?.name === voice.name ? measured.lufs : undefined);
+  const [measured, setMeasured] = useState<{ name: string; lufs: number; quiet: boolean } | null>(null);
+  const level = voice.card.lufs != null ? { lufs: voice.card.lufs, quiet: !!voice.quiet } : measured?.name === voice.name ? measured : null;
   useEffect(() => {
     if (voice.card.lufs != null) return;
     let live = true;
-    api.voiceLevel(voice.name, true).then((r) => { if (live) setMeasured({ name: r.name, lufs: r.lufs }); }, (e: unknown) => { if (live) setError(errorText(e)); });
+    api.voiceLevel(voice.name, true).then((r) => { if (live) setMeasured(r); }, (e: unknown) => { if (live) setError(errorText(e)); });
     return () => { live = false; };
   }, [voice.name, voice.card.lufs, voice.size]);
-  const levelUp = () => run("level", async () => { const r = await api.voiceLevel(voice.name, false); setMeasured({ name: r.name, lufs: r.lufs }); });
+  const levelUp = () => run("level", async () => { setMeasured(await api.voiceLevel(voice.name, false)); });
   const restore = () => run("restore", async () => { const r = await api.voiceRestore(voice.name); onChanged(r.voice); setTranscript(r.voice.transcript ?? ""); setPieces(null); });
   const photo = (f: File) => run("photo", async () => { onChanged((await api.voicePhoto(voice.name, f)).voice); setPhotoRev((n) => n + 1); });
   const dirty = name.trim() !== voice.name || tags !== voice.card.tags.join(", ") || source !== voice.card.source || lang !== voice.card.lang || transcript.trim() !== (voice.transcript ?? "");
@@ -261,10 +258,10 @@ export default function VoiceEditor({ voice, all, onClose, onChanged, onRenamed,
             </ul>
           )}
         </div>
-        {lufs != null && (
+        {level && (
           <div className="flex items-center gap-2 text-[12px]">
-            <span className={`mono tabnum ${lufs < QUIET_LUFS ? "text-[var(--color-warn)]" : "text-[var(--color-muted)]"}`}>{t("voices.level", { lufs: lufs.toFixed(1) })}</span>
-            {lufs < QUIET_LUFS && (
+            <span className={`mono tabnum ${level.quiet ? "text-[var(--color-warn)]" : "text-[var(--color-muted)]"}`}>{t("voices.refLevel", { lufs: level.lufs.toFixed(1) })}</span>
+            {level.quiet && (
               <Tip text={t("voices.levelHint")}><button onClick={levelUp} disabled={!!busy} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-[var(--color-border)] text-[12px] hover:border-[var(--color-accent)] disabled:opacity-40">
                 {busy === "level" ? <Loader2 size={12} className="animate-spin" /> : <Volume2 size={12} />}{t("voices.levelUp")}
               </button></Tip>

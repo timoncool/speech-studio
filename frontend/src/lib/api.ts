@@ -255,7 +255,9 @@ export type VoiceCard = {
   /** The reference's loudness, LUFS; absent until measured. */
   lufs?: number;
 };
-export type VoiceEntry = { name: string; audio: string; size: number; transcript: string | null; photo: string | null; original: boolean; card: VoiceCard };
+export type VoiceEntry = { name: string; audio: string; size: number; transcript: string | null; photo: string | null; original: boolean;
+  /** Its reference is measured quiet: its clones would come out quiet. */
+  quiet?: boolean; card: VoiceCard };
 export type RefIssue = "long_pause" | "noisy" | "clipped" | "short";
 export type RefCandidate = { start: number; end: number; duration: number; max_pause: number; snr_db: number; clipping: number; text: string; score: number; issues: RefIssue[] };
 export type VoiceListing = { voices: VoiceEntry[]; broken: { name: string; error: string }[] };
@@ -475,7 +477,7 @@ export const api = {
   recordDevices: () => getJson<{ devices: string[] }>("/record/devices"),
   recordLevel: () => getPolled<{ level: number }>("/record/level"),
   recordStart: (name: string, device?: string) => postJson<{ ok: boolean; name?: string; error?: string }>("/record/start", { name, device }),
-  recordStop: (opts: { clean: boolean; transcribe: boolean }) => postCoded<VoiceListing & { name: string; job_id: string | null }>("/record/stop", opts),
+  recordStop: (opts: { clean: boolean; transcribe: boolean }) => postCoded<VoiceListing & { name: string; job_id: string | null; level_problem?: string | null }>("/record/stop", opts),
   voicesDownloadPack: () => fetch(`${BASE}/voices/download-pack`, { method: "POST" }).then(j<{ job_id: string }>),
   voicesCatalog: () => getCoded<{ voices: { name: string; gender: string; url: string }[] }>("/voices/catalog"),
   voicesGet: (name: string) => postJson<{ ok: boolean; voices?: VoiceEntry[]; error?: string }>("/voices/get", { name }),

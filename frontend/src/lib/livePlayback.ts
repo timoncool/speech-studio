@@ -61,6 +61,18 @@ function samplesOf(data: string): Float32Array<ArrayBuffer> {
   return new Float32Array(bytes.buffer, 0, bytes.length >> 2);
 }
 
+/** The loudest a raised piece's sample may be. */
+const PIECE_CEILING = 0.985;
+
+/** `samples` raised by `db`; a piece whose peak would pass `PIECE_CEILING` is raised less, the whole piece alike. */
+export function raise(samples: Float32Array, db: number): void {
+  let peak = 0;
+  for (const v of samples) peak = Math.max(peak, Math.abs(v));
+  const k = Math.min(10 ** (db / 20), peak > 0 ? PIECE_CEILING / peak : Infinity);
+  if (k <= 1) return;
+  for (let i = 0; i < samples.length; i++) samples[i] *= k;
+}
+
 /** Plays pieces back to back as they arrive: one project's blocks (`pid`), or with `null` whatever is voiced aloud on
  * any screen (an agent speaking through the studio); a restarted take or a stop drops what was queued. */
 export class LivePlayer {
@@ -173,10 +185,7 @@ export class LivePlayer {
     }
     if (this.ctx.state === "suspended") void this.ctx.resume();
     const samples = samplesOf(ev.data);
-    if (ev.gain_db) {
-      const k = 10 ** (ev.gain_db / 20);
-      for (let i = 0; i < samples.length; i++) samples[i] *= k;
-    }
+    if (ev.gain_db) raise(samples, ev.gain_db);
     const buffer = this.ctx.createBuffer(1, samples.length, ev.sr);
     buffer.copyToChannel(samples, 0);
     const node = this.ctx.createBufferSource();

@@ -151,13 +151,17 @@ pub(super) async fn record_stop(State(st): State<AppState>, body: Option<Json<Va
     if let Err(e) = voice_library::write_card(&st.voices_dir, &name, &card) {
         return internal_error(e);
     }
-    // a recording is levelled as a voice added from a file is, so its clones are not quiet; the recording itself is kept
+    // a recording is levelled as a voice added from a file is, so its clones are not quiet; the recording itself is kept.
+    // One with too little speech to measure is kept as it was recorded, and the answer says why it was not levelled.
     let (dir, recorded) = (st.voices_dir.clone(), name.clone());
-    match tokio::task::spawn_blocking(move || voice_library::level_voice(&dir, &recorded)).await {
-        Ok(Ok(_)) => {}
-        Ok(Err(e)) => return internal_error(e),
+    let level_problem = match tokio::task::spawn_blocking(move || voice_library::level_voice(&dir, &recorded)).await {
+        Ok(Ok(_)) => None,
+        Ok(Err(e)) => {
+            tracing::warn!("record: {name} is kept as recorded, not levelled: {e}");
+            Some(t!("record-not-levelled", error = e))
+        }
         Err(e) => return join_failure(e),
-    }
+    };
     let clean = body
         .get("clean")
         .and_then(Value::as_bool)
@@ -208,6 +212,7 @@ pub(super) async fn record_stop(State(st): State<AppState>, body: Option<Json<Va
     let mut out = voice_api::listing(&st.voices_dir);
     out["name"] = json!(name);
     out["job_id"] = job.unwrap_or(Value::Null);
+    out["level_problem"] = json!(level_problem);
     Json(out).into_response()
 }
 

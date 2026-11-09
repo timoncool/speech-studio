@@ -94,6 +94,8 @@ pub struct Voice {
     pub transcript: Option<String>,
     pub photo: Option<String>,
     pub original: bool,
+    /// Its reference is measured quieter than `QUIET_LUFS`: its clones would come out quiet.
+    pub quiet: bool,
     pub card: VoiceCard,
 }
 
@@ -242,6 +244,7 @@ pub fn write_transcript(dir: &Path, name: &str, text: &str) -> Result<(), String
 
 pub fn get(dir: &Path, name: &str) -> Result<Voice, String> {
     let (audio, ext) = with_ext(dir, name, &AUDIO_EXTS).ok_or_else(|| format!("no voice named {name}"))?;
+    let card = read_card(dir, name)?;
     Ok(Voice {
         name: name.to_string(),
         audio: ext,
@@ -249,7 +252,8 @@ pub fn get(dir: &Path, name: &str) -> Result<Voice, String> {
         transcript: read_transcript(dir, name),
         photo: with_ext(dir, name, &PHOTO_EXTS).map(|(_, e)| e),
         original: original_path(dir, name).is_some(),
-        card: read_card(dir, name)?,
+        quiet: card.lufs.is_some_and(|l| l < QUIET_LUFS),
+        card,
     })
 }
 
@@ -425,8 +429,10 @@ pub fn replace_with_cleaned(dir: &Path, name: &str, cleaned: &Path) -> Result<()
 pub const QUIET_LUFS: f64 = -26.0;
 
 /// The voice's sound brought to the reference loudness (−20 LUFS, as a voice added from a file), its sound before kept in
-/// `.originals` as a cleaning keeps it. Answers the loudness it has now.
+/// `.originals` as a cleaning keeps it. Answers the loudness it has now. A sound with too little speech to measure is
+/// refused untouched: raised to the target, its noise would be.
 pub fn level_voice(dir: &Path, name: &str) -> Result<f64, String> {
+    measure_level(dir, name)?;
     let audio = audio_path(dir, name).ok_or_else(|| format!("no voice named {name}"))?;
     let work = tempfile::Builder::new().prefix("level-").tempdir().map_err(|e| e.to_string())?;
     let source = work.path().join(audio.file_name().expect("a file name"));
@@ -597,6 +603,20 @@ mod tests {
         restore_original(dir.path(), "Тихий").unwrap();
         assert_eq!(read_card(dir.path(), "Тихий").unwrap().lufs, None, "the original is measured again");
         assert!((measure_level(dir.path(), "Тихий").unwrap() - before).abs() < 0.2);
+    }
+
+    /// A reference with too little speech to measure is not levelled: raised to the target its noise would be, so it is
+    /// refused untouched, nothing kept as an original.
+    #[test]
+    fn a_reference_too_quiet_to_measure_is_left_as_it_is() {
+        let dir = tempfile::tempdir().unwrap();
+        let hiss: Vec<f32> = (0..24_000 * 2).map(|i| 1e-4 * (((i * 7919) % 1000) as f32 / 500.0 - 1.0)).collect();
+        crate::audio::wavio::write_mono_f32(&dir.path().join("Шорох.wav"), &hiss, 24_000).unwrap();
+        write_card(dir.path(), "Шорох", &VoiceCard::default()).unwrap();
+        let before = std::fs::read(dir.path().join("Шорох.wav")).unwrap();
+        assert!(level_voice(dir.path(), "Шорох").is_err());
+        assert!(std::fs::read(dir.path().join("Шорох.wav")).unwrap() == before, "the sound is as it was");
+        assert!(original_path(dir.path(), "Шорох").is_none());
     }
 
     #[test]

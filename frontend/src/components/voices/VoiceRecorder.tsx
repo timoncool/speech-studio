@@ -49,7 +49,8 @@ export default function VoiceRecorder({ clean, onClose, onRecorded }: { clean: b
     try {
       const r = await api.recordStop({ clean, transcribe: true });
       onRecorded(r.name);
-      onClose();
+      if (r.level_problem) setError(r.level_problem);
+      else onClose();
       if (r.job_id) await followJob(r.job_id, clean ? "voice_clean" : "voice_transcript").catch(() => undefined);
     } catch (e) { setError(errorText(e)); }
   };

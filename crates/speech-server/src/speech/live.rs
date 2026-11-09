@@ -288,10 +288,10 @@ impl Phrase {
 
     /// The phrase is said in `voice` (an engine and a voice of it): it plays in the window as loud as the voice's
     /// phrases measured before it ask for (`stream_gain_db`), or as `usual` (the voice's takes' loudness, LUFS) says
-    /// when none was; its own loudness is kept for the next ones, beside the studio's `workspace`.
+    /// when none was; its own loudness and peak are kept for the next ones, beside the studio's `workspace`.
     pub fn voiced(&self, workspace: &Path, voice: &str, usual: Option<f64>) {
-        let lufs = voice_levels(workspace).get(voice).copied().or(usual);
-        *self.gain_db.lock().unwrap_or_else(|p| p.into_inner()) = lufs.map_or(0.0, stream_gain_db);
+        let level = voice_levels(workspace).get(voice).copied().or(usual.map(|lufs| VoiceLevel { lufs, peak_db: None }));
+        *self.gain_db.lock().unwrap_or_else(|p| p.into_inner()) = level.map_or(0.0, stream_gain_db);
         *self.voice.lock().unwrap_or_else(|p| p.into_inner()) = Some((workspace.to_path_buf(), voice.to_string()));
     }
 
@@ -389,7 +389,9 @@ impl Phrase {
             let voice = self.voice.lock().unwrap_or_else(|p| p.into_inner()).clone();
             let heard = std::mem::take(&mut *self.heard.lock().unwrap_or_else(|p| p.into_inner()));
             if let (Some((workspace, voice)), Some(lufs)) = (voice, crate::audio::loudness::integrated_lufs(&heard.0, heard.1.max(1))) {
-                keep_voice_level(&workspace, &voice, lufs);
+                let peak = heard.0.iter().fold(0.0f32, |m, v| m.max(v.abs()));
+                let peak_db = (peak > 0.0).then(|| 20.0 * (peak as f64).log10());
+                keep_voice_level(&workspace, &voice, VoiceLevel { lufs, peak_db });
             }
         }
         self.send("end", json!({ "ok": ok, "first_ms": self.first_ms() }));
@@ -401,23 +403,28 @@ pub const STREAM_TARGET_LUFS: f64 = -16.0;
 /// The most a voice's stream is raised, dB.
 pub const STREAM_GAIN_MAX_DB: f64 = 12.0;
 
-/// The gain in the window of a voice whose phrases measure `lufs`: up to `STREAM_TARGET_LUFS`, at most
-/// `STREAM_GAIN_MAX_DB`, never down.
-pub fn stream_gain_db(lufs: f64) -> f64 {
-    (STREAM_TARGET_LUFS - lufs).clamp(0.0, STREAM_GAIN_MAX_DB)
+/// The gain in the window of a voice whose phrases measure `level`: up to `STREAM_TARGET_LUFS`, at most
+/// `STREAM_GAIN_MAX_DB`, its peaks kept under `STREAM_PEAK_DB`, never down.
+pub fn stream_gain_db(level: VoiceLevel) -> f64 {
+    let room = level.peak_db.map_or(f64::INFINITY, |p| STREAM_PEAK_DB - p);
+    (STREAM_TARGET_LUFS - level.lufs).min(STREAM_GAIN_MAX_DB).min(room).max(0.0)
 }
+
+/// The loudest a raised phrase's peak may come, dBFS.
+pub const STREAM_PEAK_DB: f64 = -1.0;
 
 const VOICE_LEVELS: &str = ".voice-levels.json";
 
-/// The loudness of the phrases each voice said as they came (an engine and a voice of it: LUFS), kept in the workspace.
-fn voice_levels(workspace: &Path) -> std::collections::HashMap<String, f64> {
+/// The loudness of the phrases each voice said as they came (an engine and a voice of it), kept in the workspace.
+fn voice_levels(workspace: &Path) -> std::collections::HashMap<String, VoiceLevel> {
     let path = workspace.join(VOICE_LEVELS);
-    match std::fs::read(&path) {
-        Ok(bytes) => serde_json::from_slice(&bytes).unwrap_or_else(|e| {
-            tracing::error!("[ERROR] {}: {e}", path.display());
-            Default::default()
-        }),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Default::default(),
+    let read = match std::fs::read(&path) {
+        Ok(bytes) => serde_json::from_slice::<std::collections::HashMap<String, StoredLevel>>(&bytes).map_err(|e| e.to_string()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Default::default()),
+        Err(e) => Err(e.to_string()),
+    };
+    match read {
+        Ok(levels) => levels.into_iter().map(|(voice, level)| (voice, level.into())).collect(),
         Err(e) => {
             tracing::error!("[ERROR] {}: {e}", path.display());
             Default::default()
@@ -425,12 +432,45 @@ fn voice_levels(workspace: &Path) -> std::collections::HashMap<String, f64> {
     }
 }
 
-/// A phrase of `voice` measured `lufs`: the voice's level follows it halfway, so one odd phrase does not swing it.
-fn keep_voice_level(workspace: &Path, voice: &str, lufs: f64) {
+/// A voice's phrases measured: their loudness, LUFS, and their sample peak, dBFS (None: not measured).
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct VoiceLevel {
+    pub lufs: f64,
+    pub peak_db: Option<f64>,
+}
+
+/// A level as kept: an earlier version kept the loudness alone.
+#[derive(serde::Deserialize)]
+#[serde(untagged)]
+enum StoredLevel {
+    Level(VoiceLevel),
+    Lufs(f64),
+}
+
+impl From<StoredLevel> for VoiceLevel {
+    fn from(s: StoredLevel) -> Self {
+        match s {
+            StoredLevel::Level(l) => l,
+            StoredLevel::Lufs(lufs) => VoiceLevel { lufs, peak_db: None },
+        }
+    }
+}
+
+/// A phrase of `voice` measured `now`: the voice's level follows it halfway, so one odd phrase does not swing it.
+fn keep_voice_level(workspace: &Path, voice: &str, now: VoiceLevel) {
     static WRITE: Mutex<()> = Mutex::new(());
     let _one = WRITE.lock().unwrap_or_else(|p| p.into_inner());
     let mut levels = voice_levels(workspace);
-    let level = levels.get(voice).map_or(lufs, |was| (was + lufs) / 2.0);
+    let level = match levels.get(voice) {
+        Some(was) => VoiceLevel {
+            lufs: (was.lufs + now.lufs) / 2.0,
+            peak_db: match (was.peak_db, now.peak_db) {
+                (Some(a), Some(b)) => Some((a + b) / 2.0),
+                (a, b) => b.or(a),
+            },
+        },
+        None => now,
+    };
     levels.insert(voice.to_string(), level);
     let path = workspace.join(VOICE_LEVELS);
     if let Err(e) = serde_json::to_vec(&levels).map_err(|e| e.to_string()).and_then(|b| crate::platform::fs::write_atomic(&path, &b)) {
@@ -584,13 +624,19 @@ mod tests {
                 }
             }
         };
-        for (voice, lufs) in [("higgs|quiet", -28.0), ("higgs|loud", -13.0)] {
+        for (voice, lufs, spike) in [("higgs|quiet", -28.0, false), ("higgs|loud", -13.0, false), ("higgs|spiky", -28.0, true)] {
             let first = Phrase::begin("p-gain", "b-first");
             first.voiced(workspace.path(), voice, None);
-            first.chunk(&tone(lufs), 24_000);
+            let mut x = tone(lufs);
+            if spike {
+                x[1_000] = 0.5;
+            }
+            first.chunk(&x, 24_000);
             first.end(true);
         }
         assert!((gain_of_next("higgs|quiet", None) - 12.0).abs() < 0.1);
+        let spiky = gain_of_next("higgs|spiky", None);
+        assert!((spiky - 5.02).abs() < 0.01, "a peak at -6.02 dBFS leaves 5.02 dB under -1 dBFS: {spiky}");
         assert_eq!(gain_of_next("higgs|loud", None), 0.0);
         assert!((gain_of_next("higgs|new", Some(-22.0)) - 6.0).abs() < 1e-9, "by its takes' loudness");
         assert_eq!(gain_of_next("higgs|unknown", None), 0.0);
