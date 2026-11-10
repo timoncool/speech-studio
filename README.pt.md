@@ -86,7 +86,7 @@ Exemplos de todos os motores e vozes, com a acentuação russa antes e depois, e
 
 - **O texto como linha do tempo** — blocos com falantes, tomadas (até cinco), controle de desatualizados, desfazer e refazer, arrastar para reordenar, buscar e substituir com regex, notas e marcadores.
 - **Controle de qualidade** — cada tomada é reconhecida de volta e comparada palavra a palavra, além de checar clipping, silêncio, corte, estalo no fim, frase repetida, cauda longa, música ou ruído no lugar da fala e semelhança com a voz de referência; várias tomadas com a melhor escolhida.
-- **Diálogos e podcasts** — linhas `Ana:` e `[Ana]` viram personagens, o diretor escreve um podcast sobre um tema para N falantes, pausas negativas criam interrupções e a **linha do tempo** mostra cada sobreposição com cortar, juntar ou manter.
+- **Diálogos e podcasts** — linhas `Ana:` e `[Ana]` viram personagens, o diretor escreve um podcast sobre um tema para N falantes, continua um roteiro dentro de um projeto aberto ou reescreve as falas selecionadas, pausas negativas criam interrupções e a **linha do tempo** mostra cada sobreposição com cortar, juntar ou manter.
 - **Audiolivros** — EPUB, FB2, PDF, DOCX, HTML, Markdown e TXT com prévia dos capítulos, elenco pelo diretor, M4B com capítulos e capa, partes para livros longos e checagem de volume ACX.
 - **Legendas como projeto** — falas de SRT, VTT e ASS locutadas no seu tempo: o ritmo sobe antes, uma tomada que não cabe é refeita e depois vêm a aceleração e o empréstimo do silêncio anterior.
 - **Checagem antes de exportar** — blocos sem áudio, desatualizados, com falha, com o arquivo alterado ou mais longos que a fala são listados antes da exportação; só a duração pode ser liberada.

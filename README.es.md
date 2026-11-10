@@ -86,7 +86,7 @@ Ejemplos de todos los motores y voces, con los acentos rusos antes y después, e
 
 - **El texto como línea de tiempo**: bloques con hablantes, tomas (hasta cinco), control de obsoletos, deshacer y rehacer, arrastrar para reordenar, buscar y reemplazar con regex, notas y marcadores.
 - **Control de calidad**: cada toma se reconoce de vuelta y se compara palabra a palabra, además de comprobar saturación, silencio, corte, chasquido final, frase repetida, cola larga, música o ruido en vez de voz y parecido con la voz de referencia; varias tomas con la mejor elegida.
-- **Diálogos y pódcasts**: las líneas `Ana:` y `[Ana]` se vuelven personajes, el director escribe un pódcast sobre un tema para N hablantes, las pausas negativas crean interrupciones y la **línea de tiempo** muestra cada solapamiento con cortar, unir o mantener.
+- **Diálogos y pódcasts**: las líneas `Ana:` y `[Ana]` se vuelven personajes, el director escribe un pódcast sobre un tema para N hablantes, continúa un guion dentro de un proyecto abierto o reescribe las líneas seleccionadas, las pausas negativas crean interrupciones y la **línea de tiempo** muestra cada solapamiento con cortar, unir o mantener.
 - **Audiolibros**: EPUB, FB2, PDF, DOCX, HTML, Markdown y TXT con vista previa de capítulos, reparto por el director, M4B con capítulos y portada, partes para libros largos y comprobación de volumen ACX.
 - **Subtítulos como proyecto**: las líneas de SRT, VTT y ASS se locutan en su tiempo: el tempo se sube de antemano, una toma que no cabe se repite y después se acelera y se toma prestado el silencio previo.
 - **Comprobación antes de exportar**: se listan los bloques sin audio, obsoletos, fallidos, con el archivo cambiado o más largos que su réplica; solo la duración puede dejarse pasar.

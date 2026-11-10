@@ -86,7 +86,7 @@ Examples of every engine and voice, with Russian stress before and after, are on
 
 - **Text as the timeline** — blocks with speakers, takes (up to five), stale tracking, undo and redo, drag to reorder, search and replace with regex, notes and markers.
 - **Quality control** — every take recognised back and compared word by word, plus checks for clipping, silence, cut-off, a click at the end, a repeated phrase, a long tail, music or noise instead of speech, and similarity to the reference voice; several takes with the best one picked.
-- **Dialog and podcasts** — `Anna:` and `[Anna]` lines become characters, the director writes a podcast on a topic for N speakers, negative pauses make interruptions, and the **timeline** shows every overlap with cut, join or keep.
+- **Dialog and podcasts** — `Anna:` and `[Anna]` lines become characters, the director writes a podcast on a topic for N speakers, continues a script inside an open project or rewrites the lines you select, negative pauses make interruptions, and the **timeline** shows every overlap with cut, join or keep.
 - **Audiobooks** — EPUB, FB2, PDF, DOCX, HTML, Markdown and TXT with chapter preview, cast by the director, M4B with chapters and cover, parts for long books, ACX loudness check.
 - **Subtitles as a project** — SRT, VTT and ASS lines voiced into their cues: the tempo raised ahead, a retry when a take doesn't fit, then stretching and borrowing the silence before the line.
 - **Export check** — blocks missing, stale, failed, with a changed file or too long for their cue are listed before export; only the length may be allowed through.
