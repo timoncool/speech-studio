@@ -172,7 +172,9 @@ mod tests {
         assert_eq!(super::pick_ort(&candidates, true).as_ref(), candidates.first(), "CUDA works: the GPU build");
         assert_eq!(super::pick_ort(&candidates, false).as_ref(), candidates.last(), "no CUDA: the processor build");
         std::fs::remove_file(candidates.last().unwrap()).unwrap();
-        assert_eq!(super::pick_ort(&candidates, false).as_ref(), candidates.first(), "the only build there");
+        // a platform with one build of ONNX Runtime (a Mac) has none left; where there are two, the GPU build is
+        let left = (candidates.len() > 1).then(|| candidates.first()).flatten();
+        assert_eq!(super::pick_ort(&candidates, false).as_ref(), left, "the only build there");
     }
 
     /// A runtime that does not load is named by its file with what to do; another error of it is told as it is.
