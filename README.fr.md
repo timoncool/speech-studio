@@ -328,7 +328,6 @@ L’application demande les actualités au serveur de l’auteur au démarrage p
 | Projet | Ce que c’est |
 |--------|----------|
 | [Dub Studio](https://github.com/timoncool/dub-studio) | Doublage vidéo par IA : voix clonées, sous-titres traduits et texte à l’écran |
-| [Higgs Ultimate](https://github.com/timoncool/Higgs-Ultimate) | Synthèse vocale et clonage de voix natifs (Higgs Audio v3) |
 | [ACE-Step Studio](https://github.com/timoncool/ACE-Step-Studio) | Studio de musique IA — chansons, voix, reprises, clips |
 | [YuE2 Studio](https://github.com/timoncool/YuE2-Studio) | Générateur de chansons avec partition modifiable |
 | [MiniMax Music3 Studio](https://github.com/timoncool/MiniMax-Music3-Studio) | Studio de musique natif local/cloud avec MiniMax Music 3 |

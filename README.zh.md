@@ -328,7 +328,6 @@ Linux x86-64 的 .deb 和 AppImage 为**实验性**：同一份代码，配上�
 | 项目 | 简介 |
 |--------|----------|
 | [Dub Studio](https://github.com/timoncool/dub-studio) | AI 视频配音：克隆声音、翻译字幕和画面文字 |
-| [Higgs Ultimate](https://github.com/timoncool/Higgs-Ultimate) | 原生语音合成与声音克隆（Higgs Audio v3） |
 | [ACE-Step Studio](https://github.com/timoncool/ACE-Step-Studio) | AI 音乐工作室——歌曲、人声、翻唱、MV |
 | [YuE2 Studio](https://github.com/timoncool/YuE2-Studio) | 带可编辑乐谱的 AI 歌曲生成器 |
 | [MiniMax Music3 Studio](https://github.com/timoncool/MiniMax-Music3-Studio) | 基于 MiniMax Music 3 的本地/云端原生音乐工作室 |
