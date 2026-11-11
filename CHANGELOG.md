@@ -14,6 +14,7 @@ release notes on GitHub are taken from the release's section.
 ### Fixed
 
 - **A clone from a quiet voice speaks at speech level** ([#34](https://github.com/timoncool/speech-studio/issues/34)): Higgs speaks at the level of its reference, so a voice recorded far below speech level is raised to −23 dBFS before cloning (its peaks kept under full scale); the voice file itself stays as it is.
+- **An ONNX Runtime that does not load is told, not a crash of the task**: when the library cannot be loaded (a missing Visual C++ runtime, error 1114), recognition, noise suppression and stresses say which file and what to install instead of failing inside the engine.
 - **Dragging at an interface scale other than 100 %**: a clip on the project timeline and a floating panel follow the mouse at 90–150 % instead of running ahead of it or lagging behind.
 
 ## 0.5.0 — 2026-11-10

@@ -165,9 +165,23 @@ mod tests {
     /// A runtime that does not load is named by its file with what to do; another error of it is told as it is.
     #[test]
     fn a_runtime_that_does_not_load_is_named_with_what_to_do() {
-        let told = super::ort_failure("ONNX Runtime: failed to load from `onnxruntime.dll`: LoadLibraryExW failed (source 1114)");
+        let told = super::ort_failure("ONNX Runtime C:\\s\\onnxruntime.dll: failed to load from `C:\\s\\onnxruntime.dll`: LoadLibraryExW failed (source 1114)");
         assert!(told.contains("Visual C++") && told.contains("1114"), "{told}");
         assert!(!super::ort_failure("model is broken").contains("Visual C++"));
+    }
+
+    /// The error ort itself gives for a file that does not load, as dub_core::runtime::ort_env passes it on, is told
+    /// with what to do.
+    #[test]
+    fn the_load_error_of_ort_is_told_with_what_to_do() {
+        let dir = tempfile::tempdir().unwrap();
+        let fake = dir.path().join(dub_core::runtime::ORT_LIBRARY);
+        std::fs::write(&fake, b"not a library").unwrap();
+        let error = match ort::init_from(&fake) {
+            Ok(_) => panic!("a file that is no library loaded"),
+            Err(e) => format!("ONNX Runtime {}: {e}", fake.display()),
+        };
+        assert!(super::ort_failure(&error).contains("Visual C++"), "{error}");
     }
 }
 
