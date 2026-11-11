@@ -806,7 +806,9 @@ fn voice_block(p: &SpeechPaths, pid: &str, id: &str, count: u32, source: &str, p
                     Ok(ignored)
                 }
                 Err(e) => {
-                    block.error = Some(sp::BlockError { key, text: e.clone() });
+                    if e != crate::jobs::CANCELLED {
+                        block.error = Some(sp::BlockError { key, text: e.clone() });
+                    }
                     Err(e)
                 }
             })

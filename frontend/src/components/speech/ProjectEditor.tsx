@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowLeft, BookOpen, BookUp, ChartGantt, Download, Drama, History, ListOrdered, Loader2, MessagesSquare, PenLine, Redo2, Search, Settings2, Sparkles, SpellCheck, Square, Undo2, Users, Wand2, X, ListChecks } from "lucide-react";
-import { api, ApiError } from "../../lib/api";
+import { api, ApiError, JobCancelledError } from "../../lib/api";
 import type { VoiceAge, VoiceGender } from "../../lib/api";
 import { activeTake, engineOf, fxOf, newId, VOICE_FX, spliceChars, SPEAKER_TINTS, speechApi, stressDoubts, voiceOf, type Block, type BlockState, type SpeechProject, type QueuedSynth, type StressWord, type BookPreview } from "../../lib/speech";
 import { openSettings } from "../../lib/settingsNav";
@@ -130,7 +130,7 @@ export default function ProjectEditor({ pid, onBack }: { pid: string; onBack: ()
         const { job_id } = await speechApi.castChapter(pid, c.id);
         await followJob(job_id, "cast");
       }
-    } catch (e) { setJobError(errorText(e)); } finally { setCasting(false); }
+    } catch (e) { if (!(e instanceof JobCancelledError)) setJobError(errorText(e)); } finally { setCasting(false); }
   };
   const [enriching, setEnriching] = useState(false);
   const [shownReview, setShownReview] = useState<"all" | "none" | "approved" | "fix">("all");
@@ -143,7 +143,7 @@ export default function ProjectEditor({ pid, onBack }: { pid: string; onBack: ()
       await flush();
       const { job_id } = await speechApi.enrich(pid, ids, mode);
       setEnriched({ ...((await followJob(job_id, "enrich")) as { changes: EnrichChange[]; refused: number }), mode });
-    } catch (e) { setJobError(errorText(e)); } finally { setEnriching(false); }
+    } catch (e) { if (!(e instanceof JobCancelledError)) setJobError(errorText(e)); } finally { setEnriching(false); }
   };
   const [asking, setAsking] = useState<{ mode: "extend" | "rewrite"; error: string | null } | null>(null);
   /** The director asked inside the project: the script's next lines are added after the last block, the chosen blocks
@@ -169,7 +169,7 @@ export default function ProjectEditor({ pid, onBack }: { pid: string; onBack: ()
         });
       }
       setAsking(null);
-    } catch (e) { setAsking({ mode, error: errorText(e) }); } finally { setEnriching(false); }
+    } catch (e) { if (!(e instanceof JobCancelledError)) setAsking({ mode, error: errorText(e) }); } finally { setEnriching(false); }
   };
   const [selected, setSelected] = useState<string[]>([]);
   const [recast, setRecast] = useState<{ speaker: string; to: string | null } | null>(null);
@@ -400,6 +400,7 @@ export default function ProjectEditor({ pid, onBack }: { pid: string; onBack: ()
       setJob({ id: job_id, ids: scope.ids ?? null });
       await followJob(job_id, "synth");
     } catch (e) {
+      if (e instanceof JobCancelledError) return;
       setJobError(errorText(e));
       if (e instanceof ApiError && e.code === "no_voice") {
         setCastOpen(true);
