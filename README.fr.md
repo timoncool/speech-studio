@@ -339,7 +339,7 @@ Les contributeurs sont les bienvenus : corrections des builds **macOS et Linux**
 
 ## Auteurs
 
-- **Nerual Dreming** — [Telegram](https://t.me/nerual_dreming) | [neuro-cartel.com](https://neuro-cartel.com) | fondateur d’[ArtGeneration.me](https://artgeneration.me)
+- **Nerual Dreming** — [Telegram](https://t.me/nerual_dreming) | [X](https://x.com/nerualdreming) | [neuro-cartel.com](https://neuro-cartel.com) | fondateur d’[ArtGeneration.me](https://artgeneration.me)
 - **Neuro-Soft** — [Telegram](https://t.me/neuroport) | applications IA portables
 
 ## Remerciements

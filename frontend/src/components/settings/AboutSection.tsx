@@ -93,6 +93,7 @@ export default function AboutSection() {
           <a href={DONATE.dalink} target="_blank" rel="noreferrer" className={link}>{t("help.card")}</a>
           <a href={DONATE.boosty} target="_blank" rel="noreferrer" className={link}>{t("help.boostySub")}</a>
           <a href={DONATE.telegram} target="_blank" rel="noreferrer" className={link}>Telegram</a>
+          <a href={DONATE.x} target="_blank" rel="noreferrer" className={link}>X</a>
         </div>
       </section>
     </div>
