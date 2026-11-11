@@ -57,6 +57,21 @@ pub fn write_mono_f32(path: &Path, data: &[f32], sample_rate: u32) -> Result<(),
     Ok(())
 }
 
+
+/// PCM f32 as a PCM16 WAV in memory (a basic PCM header, which every engine of the studio reads as a reference).
+pub fn encode_wav(samples: &[f32], sample_rate: i32, channels: i32) -> Vec<u8> {
+    let spec = WavSpec { channels: channels.max(1) as u16, sample_rate: sample_rate.max(1) as u32, bits_per_sample: 16, sample_format: SampleFormat::Int };
+    let mut out = std::io::Cursor::new(Vec::with_capacity(44 + samples.len() * 2));
+    {
+        let mut w = WavWriter::new(&mut out, spec).expect("a WAV header into memory");
+        for &x in samples {
+            w.write_sample((x.clamp(-1.0, 1.0) * 32767.0) as i16).expect("a sample into memory");
+        }
+        w.finalize().expect("a WAV into memory");
+    }
+    out.into_inner()
+}
+
 /// Linear resampling to 16 kHz: enough for the speech detector and the language id, the recogniser gets the same.
 pub fn to_16k(x: &[f32], sr: u32) -> Vec<f32> {
     if sr == 16_000 || x.is_empty() {

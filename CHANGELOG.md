@@ -11,6 +11,10 @@ release notes on GitHub are taken from the release's section.
 - **ONNX Runtime 1.31.1 and llama.cpp b12248**: recognition, diarization, noise suppression, stresses and the voice gate run on ONNX Runtime 1.31.1, the assistant on llama.cpp b12248; the start screen offers them as a components update and removes ONNX Runtime 1.28.2. Noise suppression, speech marking and Russian numbers in words are the same code as Dub Studio's.
 - **A model server that cannot be reached is named**: when every attempt to reach a cloud or a local model server fails to connect, the error names its host and points to Settings → Network, and a provider's 409 conflict is tried again as a rate limit is.
 
+### Fixed
+
+- **A clone from a quiet voice speaks at speech level** ([#34](https://github.com/timoncool/speech-studio/issues/34)): Higgs speaks at the level of its reference, so a voice recorded far below speech level is raised to −23 dBFS before cloning (its peaks kept under full scale); the voice file itself stays as it is.
+
 ## 0.5.0 — 2026-11-10
 
 ### Added

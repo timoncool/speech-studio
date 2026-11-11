@@ -272,18 +272,45 @@ pub struct Higgs {
     build: Build,
 }
 
-/// `src` as Higgs's codec takes a reference (`media::ref_for_higgs`), kept in the studio's own cache under `cache`, by
-/// the source's path, size and time: never beside the source (a library folder, a project, a neighbour's file).
+/// `src` as Higgs's codec takes a reference (`media::ref_for_higgs`), a quiet one raised to speech level, kept in the
+/// studio's own cache under `cache`, by the source's path, size and time: never beside the source (a library folder, a
+/// project, a neighbour's file). The key carries the level, so a reference cached at another level is made anew.
 fn higgs_reference(cache: &Path, src: &Path) -> Result<PathBuf, String> {
     let meta = std::fs::metadata(src).map_err(|e| format!("{}: {e}", src.display()))?;
     let stamp = meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_nanos());
-    let key = blake3::hash(format!("{}|{}|{stamp}", src.display(), meta.len()).as_bytes()).to_hex()[..16].to_string();
+    let key = blake3::hash(format!("{}|{}|{stamp}|{REF_LEVEL_RMS}", src.display(), meta.len()).as_bytes()).to_hex()[..16].to_string();
     std::fs::create_dir_all(cache).map_err(|e| format!("{}: {e}", cache.display()))?;
     let dst = cache.join(format!("{key}.wav"));
     if !dst.is_file() {
-        crate::audio::media::ref_for_higgs(src, &dst)?;
+        let shaped = cache.join(format!("{key}.shaped.wav"));
+        crate::audio::media::ref_for_higgs(src, &shaped)?;
+        let (mut x, sr) = crate::audio::wavio::read_mono_f32(&shaped)?;
+        raise_quiet_reference(&mut x);
+        dub_core::atomic::write(&dst, &crate::audio::wavio::encode_wav(&x, sr as i32, 1)).map_err(|e| format!("{}: {e}", dst.display()))?;
+        std::fs::remove_file(&shaped).map_err(|e| format!("{}: {e}", shaped.display()))?;
     }
     Ok(dst)
+}
+
+/// RMS of a clone reference below which it is raised to it (−23 dBFS, the level of speech read for a recording):
+/// Higgs speaks at the level of its reference, and a take of a speaker recorded far below it is too quiet to tell from
+/// silence. A reference at or above the level is left as it is.
+const REF_LEVEL_RMS: f32 = 0.0708;
+
+/// Raises a quiet reference to [`REF_LEVEL_RMS`], its peaks kept under full scale.
+fn raise_quiet_reference(x: &mut [f32]) {
+    if x.is_empty() {
+        return;
+    }
+    let rms = (x.iter().map(|v| (*v as f64).powi(2)).sum::<f64>() / x.len() as f64).sqrt() as f32;
+    let peak = x.iter().fold(0.0f32, |m, v| m.max(v.abs()));
+    if rms <= 0.0 || rms >= REF_LEVEL_RMS {
+        return;
+    }
+    let gain = (REF_LEVEL_RMS / rms).min(0.99 / peak);
+    if gain > 1.0 {
+        x.iter_mut().for_each(|v| *v *= gain);
+    }
 }
 
 /// Where the references prepared for Higgs are kept.
@@ -508,6 +535,42 @@ mod tests {
         super::prune_higgs_cache(&cache, std::time::Duration::ZERO);
         assert!(!first.is_file(), "one made longer ago than the cache keeps leaves it");
         assert!(super::higgs_reference(&cache, &voices.join("Анна.wav")).unwrap().is_file(), "and is made again when asked for");
+    }
+
+
+    /// A speaker recorded far below speech level gives Higgs a reference raised to it (Higgs speaks at its reference's
+    /// level, and a take of −43 dB was refused as silence on every attempt); a reference at speech level stays as it is.
+    #[test]
+    fn a_quiet_reference_is_raised_to_speech_level_and_a_normal_one_is_kept() {
+        let rms = |x: &[f32]| (x.iter().map(|v| (*v as f64).powi(2)).sum::<f64>() / x.len() as f64).sqrt() as f32;
+        let mut quiet: Vec<f32> = (0..24_000).map(|i| 0.01 * (i as f32 * 0.05).sin()).collect();
+        super::raise_quiet_reference(&mut quiet);
+        assert!((rms(&quiet) - super::REF_LEVEL_RMS).abs() < 1e-3, "{}", rms(&quiet));
+        let normal: Vec<f32> = (0..24_000).map(|i| 0.3 * (i as f32 * 0.05).sin()).collect();
+        let mut kept = normal.clone();
+        super::raise_quiet_reference(&mut kept);
+        assert_eq!(kept, normal);
+        let mut spiky = vec![0.001f32; 24_000];
+        spiky[100] = 0.5;
+        super::raise_quiet_reference(&mut spiky);
+        assert!(spiky.iter().all(|v| v.abs() <= 0.99), "peaks stay under full scale");
+    }
+
+    /// A quiet voice in the library reaches Higgs at speech level through the cache, and nothing is left beside the
+    /// prepared reference.
+    #[test]
+    fn a_quiet_voice_reaches_higgs_at_speech_level() {
+        let root = tempfile::tempdir().unwrap();
+        let src = root.path().join("тихий.wav");
+        let tone: Vec<f32> = (0..44_100 * 2).map(|i| 0.01 * (i as f32 * 0.03).sin()).collect();
+        crate::audio::wavio::write_mono_f32(&src, &tone, 44_100).unwrap();
+        let cache = super::higgs_cache(root.path());
+        let made = super::higgs_reference(&cache, &src).unwrap();
+        let (x, sr) = crate::audio::wavio::read_mono_f32(&made).unwrap();
+        assert_eq!(sr, 24_000);
+        let rms = (x.iter().map(|v| (*v as f64).powi(2)).sum::<f64>() / x.len() as f64).sqrt() as f32;
+        assert!(rms > 0.05, "raised: {rms}");
+        assert_eq!(std::fs::read_dir(&cache).unwrap().count(), 1, "only the reference is kept");
     }
 
     /// How long one Smart Turn decision takes on the server of the voicing build (`SMART_ROOT` — a studio root with the
