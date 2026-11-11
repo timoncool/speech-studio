@@ -8,7 +8,7 @@ release notes on GitHub are taken from the release's section.
 
 ### Changed
 
-- **ONNX Runtime 1.31.1 and llama.cpp b12248**: recognition, diarization, noise suppression, stresses and the voice gate run on ONNX Runtime 1.31.1, the assistant on llama.cpp b12248; the start screen offers them as a components update and removes ONNX Runtime 1.28.2. Noise suppression, speech marking and Russian numbers in words are the same code as Dub Studio's.
+- **ONNX Runtime 1.31.1 and llama.cpp b12248**: recognition, diarization, noise suppression, stresses and the voice gate run on ONNX Runtime 1.31.1, the assistant on llama.cpp b12248, downloads by link on yt-dlp 2026.10.26; the start screen offers them as a components update and removes ONNX Runtime 1.28.2. Noise suppression, speech marking and Russian numbers in words are the same code as Dub Studio's.
 - **A model server that cannot be reached is named**: when every attempt to reach a cloud or a local model server fails to connect, the error names its host and points to Settings → Network, and a provider's 409 conflict is tried again as a rate limit is.
 
 ### Fixed

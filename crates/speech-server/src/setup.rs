@@ -16,7 +16,7 @@
 //!   • модели — прямые файлы HF (higgs-q8_0/*, gemma-4 + mmproj, parakeet-tdt int8, nemotron 3
 //!     diarization, roformer voc_fv6-Q8_0);
 //!   • сайдкары/движки — zip-релизы GitHub (BSRoformer.cpp v0.1.0, llama.cpp b12248 win-cuda-13.5,
-//!     onnxruntime 1.31.1, ffmpeg BtbN, deno 2.9.8) + audiocpp_engine.dll (своя сборка с sm_75, GitHub timoncool/Higgs-Ultimate) + yt-dlp.exe 2026.10.21;
+//!     onnxruntime 1.31.1, ffmpeg BtbN, deno 2.9.8) + audiocpp_engine.dll (своя сборка с sm_75, GitHub timoncool/Higgs-Ultimate) + yt-dlp.exe 2026.10.26;
 //!   • CUDA-runtime — PyPI-wheel'ы NVIDIA (cudart 13.4.92 / cublas 13.8.0.4 / cuDNN 9.27.0.42) + redist cuFFT
 //!     12.4.0.43, распаковка *.dll плоско;
 //!   • VC++ runtime + OCR-модели — БАНДЛ (кладутся в релиз рядом с exe, как VC++ в Higgs); не качаются,
@@ -280,9 +280,9 @@ mod platform {
     // onnxruntime_providers_cuda.dll (сборка cuda13) грузит именно cufft64_12.dll — без него CUDA-EP не
     // грузится («CUDA not enabled»). cuFFT сохраняет soname 12 даже в CUDA 13. Извлекается как *.dll плоско.
     const REDIST_CUFFT: &str = "https://developer.download.nvidia.com/compute/cuda/redist/libcufft/windows-x86_64/libcufft-windows-x86_64-12.4.0.43-archive.zip";
-    // GitHub: yt-dlp 2026.10.21 (yt-dlp/yt-dlp, SHA-256 из SHA2-256SUMS релиза) — загрузка видео по ссылке. Это опора:
+    // GitHub: yt-dlp 2026.10.26 (yt-dlp/yt-dlp, SHA-256 из SHA2-256SUMS релиза) — загрузка видео по ссылке. Это опора:
     // более свежие версии ставит рядом ytdlp::update, при их провале работает эта.
-    const GH_YTDLP: &str = "https://github.com/yt-dlp/yt-dlp/releases/download/2026.10.21/yt-dlp.exe";
+    const GH_YTDLP: &str = "https://github.com/yt-dlp/yt-dlp/releases/download/2026.10.26/yt-dlp.exe";
     // GitHub: deno 2.9.8 (denoland/deno) — JS-рантайм, без которого yt-dlp не решает задачи YouTube (yt-dlp-ejs уже внутри
     // yt-dlp.exe; вики yt-dlp EJS: deno не ниже 2.3.0).
     const GH_DENO: &str = "https://github.com/denoland/deno/releases/download/v2.9.8/deno-x86_64-pc-windows-msvc.zip";
@@ -474,13 +474,13 @@ mod platform {
     };
 
     pub const YTDLP: Parts = Parts {
-        size: 60_797_583,
+        size: 66_493_216,
         files: &[
-            FileSpec { url: GH_YTDLP, dest_rel: "tools/yt-dlp/yt-dlp.exe", size: 17_880_111, sha256: "33121d192d706e62f684a06f80918e3f3a8ba52ac3a65213b6951c39c7d9f555", extract: Extract::None },
+            FileSpec { url: GH_YTDLP, dest_rel: "tools/yt-dlp/yt-dlp.exe", size: 23_575_744, sha256: "f5389d3698ecde4ef06f4e6b1ce0294fe9ac1396228c8990b8d3416d6d177a7d", extract: Extract::None },
             FileSpec { url: GH_DENO, dest_rel: "tools/yt-dlp/_deno.zip", size: 42_917_472, sha256: "cba84b26e0df5ae7f74fc66b86a95b866872a86292ebd84fa1e959927edd93bf", extract: Extract::Flat },
         ],
         markers: &[
-            Marker { rel: "tools/yt-dlp/yt-dlp.exe", expect: 17_880_111 },
+            Marker { rel: "tools/yt-dlp/yt-dlp.exe", expect: 23_575_744 },
             Marker { rel: "tools/yt-dlp/deno.exe", expect: 98_081_568 },
         ],
     };
@@ -707,13 +707,13 @@ mod platform {
     };
 
     pub const YTDLP: Parts = Parts {
-        size: 82_532_144,
+        size: 83_130_032,
         files: &[
-            FileSpec { url: "https://github.com/yt-dlp/yt-dlp/releases/download/2026.10.21/yt-dlp_linux", dest_rel: "tools/yt-dlp/yt-dlp", size: 40_569_080, sha256: "d8bd33fca9d5b23bd5b9952b3fca36db5c46331933fda9f598a3da14ce2c243f", extract: Extract::None },
+            FileSpec { url: "https://github.com/yt-dlp/yt-dlp/releases/download/2026.10.26/yt-dlp_linux", dest_rel: "tools/yt-dlp/yt-dlp", size: 41_166_968, sha256: "767ba9dce7052aa196f8b12652f433d76de128ba168966fa84b6394d5e6c6795", extract: Extract::None },
             FileSpec { url: "https://github.com/denoland/deno/releases/download/v2.9.8/deno-x86_64-unknown-linux-gnu.zip", dest_rel: "tools/yt-dlp/_deno.zip", size: 41_963_064, sha256: "e890975bc2549807bbcc0b584ffafda72cc7c93349dd99c80483dd784f6c4609", extract: Extract::Flat },
         ],
         markers: &[
-            Marker { rel: "tools/yt-dlp/yt-dlp", expect: 40_569_080 },
+            Marker { rel: "tools/yt-dlp/yt-dlp", expect: 41_166_968 },
             Marker { rel: "tools/yt-dlp/deno", expect: 96_055_992 },
         ],
     };
@@ -851,13 +851,13 @@ mod platform {
     };
 
     pub const YTDLP: Parts = Parts {
-        size: 75_951_531,
+        size: 76_237_099,
         files: &[
-            FileSpec { url: "https://github.com/yt-dlp/yt-dlp/releases/download/2026.10.21/yt-dlp_macos", dest_rel: "tools/yt-dlp/yt-dlp", size: 37_180_736, sha256: "7a6fe71d7d680f1fb0ac18d4949873d77db2859e90017c0f44bd94b23be4ee40", extract: Extract::None },
+            FileSpec { url: "https://github.com/yt-dlp/yt-dlp/releases/download/2026.10.26/yt-dlp_macos", dest_rel: "tools/yt-dlp/yt-dlp", size: 37_466_304, sha256: "0f922c15ccc0b83eefa1c8bc9104e434318c4bf16e408e1ee93b7745a6efe0aa", extract: Extract::None },
             FileSpec { url: "https://github.com/denoland/deno/releases/download/v2.9.8/deno-aarch64-apple-darwin.zip", dest_rel: "tools/yt-dlp/_deno.zip", size: 38_770_795, sha256: "9f0bf660393da2eaff044cdc7444cb08c73f235849b61d224d825a194ce7c98e", extract: Extract::Flat },
         ],
         markers: &[
-            Marker { rel: "tools/yt-dlp/yt-dlp", expect: 37_180_736 },
+            Marker { rel: "tools/yt-dlp/yt-dlp", expect: 37_466_304 },
             Marker { rel: "tools/yt-dlp/deno", expect: 81_512_928 },
         ],
     };
