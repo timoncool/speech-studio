@@ -28,10 +28,10 @@ const FIXED_ENTRY_POINTS: &[(&str, &str)] = &[
     ("transcribe-engine-vulkan", "models/transcribe-engine-vulkan/transcribe.dll"),
     ("transcribe-engine-vulkan", "models/transcribe-engine-vulkan/ggml-cpu-x64.dll"),
     ("transcribe-engine-vulkan", "models/transcribe-engine-vulkan/ggml-vulkan.dll"),
-    ("onnxruntime", "models/runtime/onnxruntime-win-x64-1.28.2/lib/onnxruntime.dll"),
+    ("onnxruntime", "models/runtime/onnxruntime-win-x64-1.31.1/lib/onnxruntime.dll"),
     (
         "onnxruntime-gpu",
-        "models/runtime/onnxruntime-win-x64-gpu_cuda13-1.28.2/lib/onnxruntime_providers_cuda.dll",
+        "models/runtime/onnxruntime-win-x64-gpu_cuda13-1.31.1/lib/onnxruntime_providers_cuda.dll",
     ),
     ("cudnn", "models/higgs-engine/cudnn64_9.dll"),
     ("cudnn", "models/higgs-engine/cudnn_graph64_9.dll"),

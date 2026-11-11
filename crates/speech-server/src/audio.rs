@@ -3,7 +3,6 @@ pub(crate) mod flags;
 pub(crate) mod media;
 pub(crate) mod wavio;
 pub(crate) mod loudness;
-pub(crate) mod denoise;
 pub(crate) mod qc;
 pub(crate) mod tagging;
 pub(crate) mod trim;

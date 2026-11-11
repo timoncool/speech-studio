@@ -15,8 +15,8 @@
 //! Классы источников:
 //!   • модели — прямые файлы HF (higgs-q8_0/*, gemma-4 + mmproj, parakeet-tdt int8, nemotron 3
 //!     diarization, roformer voc_fv6-Q8_0);
-//!   • сайдкары/движки — zip-релизы GitHub (BSRoformer.cpp v0.1.0, llama.cpp b11900 win-cuda-13.4,
-//!     onnxruntime 1.28.2, ffmpeg BtbN, deno 2.9.8) + audiocpp_engine.dll (своя сборка с sm_75, GitHub timoncool/Higgs-Ultimate) + yt-dlp.exe 2026.10.21;
+//!   • сайдкары/движки — zip-релизы GitHub (BSRoformer.cpp v0.1.0, llama.cpp b12248 win-cuda-13.5,
+//!     onnxruntime 1.31.1, ffmpeg BtbN, deno 2.9.8) + audiocpp_engine.dll (своя сборка с sm_75, GitHub timoncool/Higgs-Ultimate) + yt-dlp.exe 2026.10.21;
 //!   • CUDA-runtime — PyPI-wheel'ы NVIDIA (cudart 13.4.92 / cublas 13.8.0.4 / cuDNN 9.27.0.42) + redist cuFFT
 //!     12.4.0.43, распаковка *.dll плоско;
 //!   • VC++ runtime + OCR-модели — БАНДЛ (кладутся в релиз рядом с exe, как VC++ в Higgs); не качаются,
@@ -74,7 +74,7 @@ pub enum Extract {
     /// Только ffmpeg и ffprobe, плоско в каталог.
     Pick,
     /// Весь архив с сохранением поддерева: onnxruntime, чтобы `onnxruntime-*/lib/…` лёг ровно там, где его
-    /// ищет dub-asr::ensure_ort_dylib.
+    /// ищет dub_core::runtime::ensure_ort_dylib.
     Tree,
     /// Только динамические библиотеки платформы (*.dll / *.so*), плоско в каталог: CUDA runtime, cuDNN, cuFFT.
     Libs,
@@ -163,8 +163,8 @@ pub struct Parts {
     pub markers: &'static [Marker],
 }
 
-// Сборка llama.cpp одна на обе платформы (билд b11900).
-pub(crate) const GH_LLAMA_BUILD: &str = "b11900";
+// Сборка llama.cpp одна на обе платформы (билд b12248).
+pub(crate) const GH_LLAMA_BUILD: &str = "b12248";
 
 /// The llama.cpp build of this computer's card, as YuE2 picks it: CUDA 13, CUDA 12, Vulkan on another card, the
 /// processor without one (the build «auto» of the engines, `acpp::build`).
@@ -178,7 +178,7 @@ pub fn llama_parts(build: acpp_server::asset::Build) -> &'static Parts {
     }
 }
 
-/// The oldest glibc the upstream llama.cpp CUDA builds for Linux start on (b11900 needs GLIBC_2.38 and GLIBCXX_3.4.32).
+/// The oldest glibc the upstream llama.cpp CUDA builds for Linux start on (b12248 needs GLIBC_2.38 and GLIBCXX_3.4.32).
 const LLAMA_CUDA_GLIBC: (u32, u32) = (2, 38);
 
 /// The llama.cpp build the assistant runs on: the card's build, except a CUDA one on a Linux whose glibc is older than
@@ -252,19 +252,19 @@ const fn tcpp_file(build: dub_asr::tcpp::Build, dest_rel: &'static str) -> FileS
 mod platform {
     use super::{Extract, FileSpec, Marker, Parts};
 
-    // GitHub: llama.cpp win-cuda-13.4 (ggml-org/llama.cpp, билд b11900).
+    // GitHub: llama.cpp win-cuda-13.5 (ggml-org/llama.cpp, билд b12248).
     // ggml-cuda.dll импортирует cublas64_13.dll (ставит cuda-runtime), cudart слинкован статически.
     const GH_LLAMA: &str =
-        "https://github.com/ggml-org/llama.cpp/releases/download/b11900/llama-b11900-bin-win-cuda-13.4-x64.zip";
-    // GitHub: onnxruntime 1.28.2 win-x64 (microsoft/onnxruntime) — строго 1.28.x (ort rc.13 api-28; иначе дедлок).
+        "https://github.com/ggml-org/llama.cpp/releases/download/b12248/llama-b12248-bin-win-cuda-13.5-x64.zip";
+    // GitHub: onnxruntime 1.31.1 win-x64 (microsoft/onnxruntime) — строго 1.31.x (ort rc.15 api-31; иначе дедлок).
     const GH_ORT: &str =
-        "https://github.com/microsoft/onnxruntime/releases/download/v1.28.2/onnxruntime-win-x64-1.28.2.zip";
-    // GitHub: onnxruntime 1.28.2 GPU-сборка под CUDA 13 (gpu_cuda13) — CUDA-EP для Parakeet/Sortformer на
+        "https://github.com/microsoft/onnxruntime/releases/download/v1.31.1/onnxruntime-win-x64-1.31.1.zip";
+    // GitHub: onnxruntime 1.31.1 GPU-сборка под CUDA 13 (gpu_cuda13) — CUDA-EP для Parakeet/Sortformer на
     // GPU. onnxruntime_providers_cuda.dll грузит cudart64_13/cublas64_13/cublasLt64_13 (cuda-runtime),
     // cudnn64_9 (WHEEL_CUDNN) и cufft64_12 (REDIST_CUFFT).
     // Содержит onnxruntime.dll(GPU) + onnxruntime_providers_cuda.dll + onnxruntime_providers_shared.dll.
     const GH_ORT_GPU: &str =
-        "https://github.com/microsoft/onnxruntime/releases/download/v1.28.2/onnxruntime-win-x64-gpu_cuda13-1.28.2.zip";
+        "https://github.com/microsoft/onnxruntime/releases/download/v1.31.1/onnxruntime-win-x64-gpu_cuda13-1.31.1.zip";
     // GitHub: ffmpeg static win64 GPL (BtbN/FFmpeg-Builds), master-сборка последнего дня месяца: дневные
     // autobuild BtbN удаляет через пару недель, а сборки последнего дня месяца хранит, поэтому закреплена такая.
     const GH_FFMPEG: &str =
@@ -425,44 +425,44 @@ mod platform {
     };
 
     pub const LLAMA: Parts = Parts {
-        size: 164_721_212,
+        size: 170_994_198,
         files: &[
-            FileSpec { url: GH_LLAMA, dest_rel: "tools/llama/_llama.zip", size: 164_721_212, sha256: "0d75ad36367da00622c146a97e82fac3dcfcbe960afc2f0234eef026886b16f6", extract: Extract::Flat },
+            FileSpec { url: GH_LLAMA, dest_rel: "tools/llama/_llama.zip", size: 170_994_198, sha256: "ae0a1e064a94db82f3352c843ffa96eb190254fefafc29ce0213798c549a2799", extract: Extract::Flat },
         ],
         markers: &[Marker { rel: "tools/llama/llama-server.exe", expect: 0 }],
     };
     // the same release's other builds: CUDA 12.4 (cudart and cuBLAS 12 from cuda12-runtime), Vulkan and the processor
     pub const LLAMA_CUDA12: Parts = Parts {
-        size: 279_417_051,
-        files: &[FileSpec { url: "https://github.com/ggml-org/llama.cpp/releases/download/b11900/llama-b11900-bin-win-cuda-12.4-x64.zip", dest_rel: "tools/llama-cuda12/_llama.zip", size: 279_417_051, sha256: "387ad76c926cdb301971851a11df018165a7b4df4b1b7c64cf4b09a367ec82bc", extract: Extract::Flat }],
+        size: 288_964_573,
+        files: &[FileSpec { url: "https://github.com/ggml-org/llama.cpp/releases/download/b12248/llama-b12248-bin-win-cuda-12.4-x64.zip", dest_rel: "tools/llama-cuda12/_llama.zip", size: 288_964_573, sha256: "3f8a8f15b50f2f1e34ad2975d8679a009ec83a83e6f440322cb22f28d8068d60", extract: Extract::Flat }],
         markers: &[Marker { rel: "tools/llama-cuda12/llama-server.exe", expect: 0 }],
     };
     pub const LLAMA_VULKAN: Parts = Parts {
-        size: 37_051_563,
-        files: &[FileSpec { url: "https://github.com/ggml-org/llama.cpp/releases/download/b11900/llama-b11900-bin-win-vulkan-x64.zip", dest_rel: "tools/llama-vulkan/_llama.zip", size: 37_051_563, sha256: "baf0183b1906d7cc0cfe9a0bd3fae34ceb4048acecc371ff3b7a91456783d051", extract: Extract::Flat }],
+        size: 37_891_595,
+        files: &[FileSpec { url: "https://github.com/ggml-org/llama.cpp/releases/download/b12248/llama-b12248-bin-win-vulkan-x64.zip", dest_rel: "tools/llama-vulkan/_llama.zip", size: 37_891_595, sha256: "3745e446c88e18cf20fd52f9df62867beb60d12fd0208c130fb4663117425826", extract: Extract::Flat }],
         markers: &[Marker { rel: "tools/llama-vulkan/llama-server.exe", expect: 0 }],
     };
     pub const LLAMA_CPU: Parts = Parts {
-        size: 24_228_419,
-        files: &[FileSpec { url: "https://github.com/ggml-org/llama.cpp/releases/download/b11900/llama-b11900-bin-win-cpu-x64.zip", dest_rel: "tools/llama-cpu/_llama.zip", size: 24_228_419, sha256: "d3bbbbb7d1b4979b72052fd73cdeeb5a4d5a4e6a3f52aeb40abd6f116558e323", extract: Extract::Flat }],
+        size: 24_930_550,
+        files: &[FileSpec { url: "https://github.com/ggml-org/llama.cpp/releases/download/b12248/llama-b12248-bin-win-cpu-x64.zip", dest_rel: "tools/llama-cpu/_llama.zip", size: 24_930_550, sha256: "bb306bfd390f8782c0acaba490505d12f07392791b48f1dd039387a5bacf1181", extract: Extract::Flat }],
         markers: &[Marker { rel: "tools/llama-cpu/llama-server.exe", expect: 0 }],
     };
 
     pub const ORT: Parts = Parts {
-        size: 78_620_837,
+        size: 82_929_944,
         files: &[
-            FileSpec { url: GH_ORT, dest_rel: "models/runtime/_ort.zip", size: 78_620_837, sha256: "c4eedd29489d5feca21866d054638416f3655bf6b18851b3b6b85c8313e95c35", extract: Extract::Tree },
+            FileSpec { url: GH_ORT, dest_rel: "models/runtime/_ort.zip", size: 82_929_944, sha256: "5869e26bb25314375f2d5ef1877e3ea06b1543d6c710e6e4a1ec2f7177ab4b2c", extract: Extract::Tree },
         ],
-        // dub-asr::ensure_ort_dylib ищет ровно этот путь под models/runtime.
-        markers: &[Marker { rel: "models/runtime/onnxruntime-win-x64-1.28.2/lib/onnxruntime.dll", expect: 0 }],
+        // dub_core::runtime::ensure_ort_dylib ищет ровно этот путь под models/runtime.
+        markers: &[Marker { rel: "models/runtime/onnxruntime-win-x64-1.31.1/lib/onnxruntime.dll", expect: 0 }],
     };
 
     pub const ORT_GPU: Parts = Parts {
-        size: 365_562_963,
+        size: 309_101_542,
         files: &[
-            FileSpec { url: GH_ORT_GPU, dest_rel: "models/runtime/_ort_gpu.zip", size: 365_562_963, sha256: "4b7a2d01a3cc96b12d06c8266af2c8f42c96365c4a0100d45fd874c71b4a2e19", extract: Extract::Tree },
+            FileSpec { url: GH_ORT_GPU, dest_rel: "models/runtime/_ort_gpu.zip", size: 309_101_542, sha256: "6c64508de9c04f9d938297287e9d81fa47a2fbbb30cc04e6fac0db88f6cb68c1", extract: Extract::Tree },
         ],
-        markers: &[Marker { rel: "models/runtime/onnxruntime-win-x64-gpu_cuda13-1.28.2/lib/onnxruntime.dll", expect: 0 }],
+        markers: &[Marker { rel: "models/runtime/onnxruntime-win-x64-gpu_cuda13-1.31.1/lib/onnxruntime.dll", expect: 0 }],
     };
 
     pub const FFMPEG: Parts = Parts {
@@ -653,48 +653,48 @@ mod platform {
         markers: &[Marker { rel: "tools/bsroformer-cpu/bs_roformer-cli", expect: 0 }],
     };
 
-    // llama.cpp b11900 ubuntu-cuda-13.4: RUNPATH $ORIGIN для своих библиотек, cudart/cuBLAS 13 — из cuda-runtime,
+    // llama.cpp b12248 ubuntu-cuda-13.5: RUNPATH $ORIGIN для своих библиотек, cudart/cuBLAS 13 — из cuda-runtime,
     // libssl.so.3 — системная.
     pub const LLAMA: Parts = Parts {
-        size: 163_678_003,
+        size: 169_885_605,
         files: &[
-            FileSpec { url: "https://github.com/ggml-org/llama.cpp/releases/download/b11900/llama-b11900-bin-ubuntu-cuda-13.4-x64.tar.gz", dest_rel: "tools/llama/_llama.tar.gz", size: 163_678_003, sha256: "925078bca4277d495e7fc07cfd20aa1a9ed57640b218bce3ad49de9bcc1c5799", extract: Extract::Flat },
+            FileSpec { url: "https://github.com/ggml-org/llama.cpp/releases/download/b12248/llama-b12248-bin-ubuntu-cuda-13.5-x64.tar.gz", dest_rel: "tools/llama/_llama.tar.gz", size: 169_885_605, sha256: "ac18e01410e0114e1d5f2f0f3bdcd9a98d83000b5179f543342c8c51c33143b7", extract: Extract::Flat },
         ],
         markers: &[Marker { rel: "tools/llama/llama-server", expect: 0 }],
     };
     // the same release's other builds: CUDA 12.8 (cudart and cuBLAS 12 from cuda12-runtime), Vulkan and the processor
     pub const LLAMA_CUDA12: Parts = Parts {
-        size: 182_211_176,
-        files: &[FileSpec { url: "https://github.com/ggml-org/llama.cpp/releases/download/b11900/llama-b11900-bin-ubuntu-cuda-12.8-x64.tar.gz", dest_rel: "tools/llama-cuda12/_llama.tar.gz", size: 182_211_176, sha256: "618c17e4e4ccc11953f21452ca34e4786a1554dc405e98a2c4d53d7c2ed5b415", extract: Extract::Flat }],
+        size: 188_303_941,
+        files: &[FileSpec { url: "https://github.com/ggml-org/llama.cpp/releases/download/b12248/llama-b12248-bin-ubuntu-cuda-12.8-x64.tar.gz", dest_rel: "tools/llama-cuda12/_llama.tar.gz", size: 188_303_941, sha256: "508214544c8e36c2a2a614254231524a10a0857a8a025f7e4be1f437defae0ef", extract: Extract::Flat }],
         markers: &[Marker { rel: "tools/llama-cuda12/llama-server", expect: 0 }],
     };
     pub const LLAMA_VULKAN: Parts = Parts {
-        size: 35_162_561,
-        files: &[FileSpec { url: "https://github.com/ggml-org/llama.cpp/releases/download/b11900/llama-b11900-bin-ubuntu-vulkan-x64.tar.gz", dest_rel: "tools/llama-vulkan/_llama.tar.gz", size: 35_162_561, sha256: "111ee8d3f61723859e57195bb9ba21241eb598163621840aaf3b5c066950c092", extract: Extract::Flat }],
+        size: 35_975_646,
+        files: &[FileSpec { url: "https://github.com/ggml-org/llama.cpp/releases/download/b12248/llama-b12248-bin-ubuntu-vulkan-x64.tar.gz", dest_rel: "tools/llama-vulkan/_llama.tar.gz", size: 35_975_646, sha256: "092d7097cf90c1d1a22d0bba5147500f2420bdb9630db8734230f35bcb664bed", extract: Extract::Flat }],
         markers: &[Marker { rel: "tools/llama-vulkan/llama-server", expect: 0 }],
     };
     pub const LLAMA_CPU: Parts = Parts {
-        size: 22_497_562,
-        files: &[FileSpec { url: "https://github.com/ggml-org/llama.cpp/releases/download/b11900/llama-b11900-bin-ubuntu-x64.tar.gz", dest_rel: "tools/llama-cpu/_llama.tar.gz", size: 22_497_562, sha256: "3effcc3009af64d6f30c217827d7982b3934577d282feb243b11fb6789ed124e", extract: Extract::Flat }],
+        size: 23_157_778,
+        files: &[FileSpec { url: "https://github.com/ggml-org/llama.cpp/releases/download/b12248/llama-b12248-bin-ubuntu-x64.tar.gz", dest_rel: "tools/llama-cpu/_llama.tar.gz", size: 23_157_778, sha256: "6b3a530b44f6b0a4ae4872d3b3c8d1edc2ac6bba7d8bd211329a4ba644c0dc65", extract: Extract::Flat }],
         markers: &[Marker { rel: "tools/llama-cpu/llama-server", expect: 0 }],
     };
 
     pub const ORT: Parts = Parts {
-        size: 9_128_991,
+        size: 11_413_655,
         files: &[
-            FileSpec { url: "https://github.com/microsoft/onnxruntime/releases/download/v1.28.2/onnxruntime-linux-x64-1.28.2.tgz", dest_rel: "models/runtime/_ort.tgz", size: 9_128_991, sha256: "d7209b8751b27b862b0c76332c2e20e203396edb5dab700ecf4bb485cf147415", extract: Extract::Tree },
+            FileSpec { url: "https://github.com/microsoft/onnxruntime/releases/download/v1.31.1/onnxruntime-linux-x64-1.31.1.tgz", dest_rel: "models/runtime/_ort.tgz", size: 11_413_655, sha256: "c849e36a1ef3e22d4ff217b9d1ce4a3cf5b9467b975610913ae959ad5b16bdc9", extract: Extract::Tree },
         ],
-        markers: &[Marker { rel: "models/runtime/onnxruntime-linux-x64-1.28.2/lib/libonnxruntime.so.1.28.2", expect: 0 }],
+        markers: &[Marker { rel: "models/runtime/onnxruntime-linux-x64-1.31.1/lib/libonnxruntime.so.1.31.1", expect: 0 }],
     };
 
     // CUDA-провайдер на Linux связан с cuBLAS/cuBLASLt/cuRAND/cudart 13 (cuda-runtime) и без RUNPATH, cuDNN и
     // cuFFT грузит сам во время работы.
     pub const ORT_GPU: Parts = Parts {
-        size: 240_868_705,
+        size: 244_573_709,
         files: &[
-            FileSpec { url: "https://github.com/microsoft/onnxruntime/releases/download/v1.28.2/onnxruntime-linux-x64-gpu_cuda13-1.28.2.tgz", dest_rel: "models/runtime/_ort_gpu.tgz", size: 240_868_705, sha256: "118ca8dbc4e4bb9b3b7fea137d796a89d957c9aa70e1dc3a5199a302cdd5bb32", extract: Extract::Tree },
+            FileSpec { url: "https://github.com/microsoft/onnxruntime/releases/download/v1.31.1/onnxruntime-linux-x64-gpu_cuda13-1.31.1.tgz", dest_rel: "models/runtime/_ort_gpu.tgz", size: 244_573_709, sha256: "b2146862e691f7e338f5aff9c7a9a5567c2ca57cf01442a1adb3a13bf62d9095", extract: Extract::Tree },
         ],
-        markers: &[Marker { rel: "models/runtime/onnxruntime-linux-x64-gpu_cuda13-1.28.2/lib/libonnxruntime.so.1.28.2", expect: 0 }],
+        markers: &[Marker { rel: "models/runtime/onnxruntime-linux-x64-gpu_cuda13-1.31.1/lib/libonnxruntime.so.1.31.1", expect: 0 }],
     };
 
     // ffmpeg static linux64 GPL (BtbN), та же сборка последнего дня месяца, что на Windows.
@@ -747,7 +747,7 @@ mod platform {
 }
 
 #[cfg(all(target_os = "macos", not(target_arch = "aarch64")))]
-compile_error!("Speech Studio for macOS is built for Apple silicon only: ONNX Runtime 1.28.2 has no Intel build");
+compile_error!("Speech Studio for macOS is built for Apple silicon only: ONNX Runtime 1.31.1 has no Intel build");
 
 /// macOS on Apple silicon: one build of each engine, Metal and the processor in it (a stage set to the processor or to
 /// «auto» runs it); no CUDA, no Vulkan. Tar and zip archives of GitHub, ffmpeg of ffmpeg.martin-riedl.de. A sidecar whose
@@ -821,22 +821,22 @@ mod platform {
         markers: &[Marker { rel: "tools/bsroformer-cpu/bs_roformer-cli", expect: 0 }],
     };
 
-    // llama.cpp b11900 macos-arm64: Metal and the processor, rpath @loader_path.
+    // llama.cpp b12248 macos-arm64: Metal and the processor, rpath @loader_path.
     pub const LLAMA: Parts = NONE;
     pub const LLAMA_CUDA12: Parts = NONE;
     pub const LLAMA_VULKAN: Parts = NONE;
     pub const LLAMA_CPU: Parts = Parts {
-        size: 16_295_973,
-        files: &[FileSpec { url: "https://github.com/ggml-org/llama.cpp/releases/download/b11900/llama-b11900-bin-macos-arm64.tar.gz", dest_rel: "tools/llama-cpu/_llama.tar.gz", size: 16_295_973, sha256: "6d3af8649e687b288395ee79f4423a21376892edb94520fa6320bfd3eb81700b", extract: Extract::Flat }],
+        size: 16_742_946,
+        files: &[FileSpec { url: "https://github.com/ggml-org/llama.cpp/releases/download/b12248/llama-b12248-bin-macos-arm64.tar.gz", dest_rel: "tools/llama-cpu/_llama.tar.gz", size: 16_742_946, sha256: "7f643b4d35803ccc69270302f3368d9e8a40f56f74ef5a266e6f686d9dc7d3c6", extract: Extract::Flat }],
         markers: &[Marker { rel: "tools/llama-cpu/llama-server", expect: 0 }],
     };
 
     pub const ORT: Parts = Parts {
-        size: 32_093_967,
+        size: 36_936_435,
         files: &[
-            FileSpec { url: "https://github.com/microsoft/onnxruntime/releases/download/v1.28.2/onnxruntime-osx-arm64-1.28.2.tgz", dest_rel: "models/runtime/_ort.tgz", size: 32_093_967, sha256: "c4fceacfc53765d0869dc9180c31ec91054d149017a99d1e80ffe28dc79596de", extract: Extract::Tree },
+            FileSpec { url: "https://github.com/microsoft/onnxruntime/releases/download/v1.31.1/onnxruntime-osx-arm64-1.31.1.tgz", dest_rel: "models/runtime/_ort.tgz", size: 36_936_435, sha256: "2e1344a1926ee50eb25b38153cb6992c3567515aef0e677a1a520a1798896d6f", extract: Extract::Tree },
         ],
-        markers: &[Marker { rel: "models/runtime/onnxruntime-osx-arm64-1.28.2/lib/libonnxruntime.1.28.2.dylib", expect: 0 }],
+        markers: &[Marker { rel: "models/runtime/onnxruntime-osx-arm64-1.31.1/lib/libonnxruntime.1.31.1.dylib", expect: 0 }],
     };
 
     // ffmpeg 9.0.2 of ffmpeg.martin-riedl.de (static, signed): ffmpeg and ffprobe, a zip each. Not mirrored: a GPL
@@ -1547,7 +1547,7 @@ pub fn manifest() -> Vec<Component> {
         },
         Component {
             id: "onnxruntime",
-            name: "ONNX Runtime 1.28.2".into(),
+            name: "ONNX Runtime 1.31.1".into(),
             purpose: t!("setup-comp-onnxruntime-purpose"),
             requirement: Requirement::Required,
             delivery: Delivery::Download,
@@ -1558,7 +1558,7 @@ pub fn manifest() -> Vec<Component> {
         },
         Component {
             id: "onnxruntime-gpu",
-            name: "ONNX Runtime 1.28.2 GPU (CUDA)".into(),
+            name: "ONNX Runtime 1.31.1 GPU (CUDA)".into(),
             purpose: t!("setup-comp-onnxruntime-gpu-purpose"),
             requirement: Requirement::Recommended,
             delivery: Delivery::Download,
@@ -1620,7 +1620,7 @@ pub fn manifest() -> Vec<Component> {
             delivery: Delivery::Bundled,
             size: 1_120_664,
             files: &[],
-            // MSVCP140_1.dll импортирует onnxruntime 1.28 (ASR/диаризация/OCR на CPU) — без него на машине без
+            // MSVCP140_1.dll импортирует onnxruntime 1.31 (ASR/диаризация/OCR на CPU) — без него на машине без
             // VC++ Redistributable рантайм не грузится (scripts/check-dll-imports.ps1).
             markers: &[
                 Marker { rel: "models/higgs-engine/MSVCP140.dll", expect: 0 },
@@ -3616,11 +3616,27 @@ const RETIRED: &[&str] = &[
     "higgs-engine/libaudiocpp_engine.so.json",
 ];
 
-/// Removes the retired models, so they do not keep gigabytes that no row of the setup screen shows. A link (another
-/// program's folder linked in) loses only the link; a hard-linked file stays with the program that shares it.
-pub fn remove_retired(models_root: &Path) {
-    for rel in RETIRED {
-        let path = models_root.join(rel);
+/// Programs of a former version that nothing runs any more, under the program folder: ONNX Runtime 1.28.2 (before
+/// 1.31.1).
+const RETIRED_TOOLS: &[&str] = &[
+    "models/runtime/onnxruntime-win-x64-1.28.2",
+    "models/runtime/onnxruntime-win-x64-gpu_cuda13-1.28.2",
+    "models/runtime/onnxruntime-linux-x64-1.28.2",
+    "models/runtime/onnxruntime-linux-x64-gpu_cuda13-1.28.2",
+    "models/runtime/onnxruntime-osx-arm64-1.28.2",
+];
+
+/// Removes the retired models and programs (RETIRED under the models folder, RETIRED_TOOLS under the program folder),
+/// so they do not keep gigabytes that no row of the setup screen shows. A link (another program's folder linked in)
+/// loses only the link; a hard-linked file stays with the program that shares it.
+pub fn remove_retired(repo_root: &Path, models_root: &Path) {
+    retire(models_root, RETIRED);
+    retire(repo_root, RETIRED_TOOLS);
+}
+
+fn retire(root: &Path, retired: &[&str]) {
+    for rel in retired {
+        let path = root.join(rel);
         let Ok(meta) = std::fs::symlink_metadata(&path) else { continue };
         let removed = if meta.file_type().is_symlink() {
             std::fs::remove_dir(&path).or_else(|_| std::fs::remove_file(&path))
@@ -3630,8 +3646,8 @@ pub fn remove_retired(models_root: &Path) {
             std::fs::remove_file(&path)
         };
         match removed {
-            Ok(()) => tracing::info!("removed the retired models {}", path.display()),
-            Err(e) => tracing::error!("[ERROR] could not remove the retired models {}: {e}", path.display()),
+            Ok(()) => tracing::info!("removed the retired {}", path.display()),
+            Err(e) => tracing::error!("[ERROR] could not remove the retired {}: {e}", path.display()),
         }
     }
 }
@@ -3727,8 +3743,9 @@ mod tests {
     #[test]
     fn retired_models_go_and_current_ones_stay() {
         let root = tempfile::tempdir().unwrap();
+        let models = root.path().join("models");
         for rel in RETIRED {
-            let path = root.path().join(rel);
+            let path = models.join(rel);
             std::fs::create_dir_all(path.parent().unwrap()).unwrap();
             if rel.ends_with(".onnx") {
                 std::fs::write(&path, b"x").unwrap();
@@ -3737,13 +3754,24 @@ mod tests {
                 std::fs::write(path.join("encoder-model.int8.onnx"), b"x").unwrap();
             }
         }
-        let kept = root.path().join("asr-gguf-parakeet-v3").join("parakeet-tdt-0.6b-v3-Q8_0.gguf");
+        for rel in RETIRED_TOOLS {
+            std::fs::create_dir_all(root.path().join(rel).join("lib")).unwrap();
+            std::fs::write(root.path().join(rel).join("lib").join("x.dll"), b"x").unwrap();
+        }
+        let kept = models.join("asr-gguf-parakeet-v3").join("parakeet-tdt-0.6b-v3-Q8_0.gguf");
         std::fs::create_dir_all(kept.parent().unwrap()).unwrap();
         std::fs::write(&kept, b"x").unwrap();
-        remove_retired(root.path());
-        assert!(RETIRED.iter().all(|rel| !root.path().join(rel).exists()));
+        let current: Vec<_> = dub_core::runtime::ort_candidates(&models);
+        for c in &current {
+            std::fs::create_dir_all(c.parent().unwrap()).unwrap();
+            std::fs::write(c, b"x").unwrap();
+        }
+        remove_retired(root.path(), &models);
+        assert!(RETIRED.iter().all(|rel| !models.join(rel).exists()));
+        assert!(RETIRED_TOOLS.iter().all(|rel| !root.path().join(rel).exists()));
         assert!(kept.is_file());
-        remove_retired(root.path());
+        assert!(current.iter().all(|c| c.is_file()), "ONNX Runtime 1.31.1 stays");
+        remove_retired(root.path(), &models);
     }
     use super::*;
     use super::installed::status_with_system_dir;

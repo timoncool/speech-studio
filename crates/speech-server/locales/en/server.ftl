@@ -804,6 +804,7 @@ llm-not-ready = llama-server did not come up in { $secs } s (port { $port }); st
 llm-no-gpu-device = the local Gemma needs a graphics card, and the llama.cpp build sees none ({ $detail }). Choose a local server, OpenRouter or the agent for the script assistant in Settings → Models, or check the graphics driver.
 llm-http = the request to the model failed: { $error }
 llm-api = the model API: { $error }
+llm-unreachable = no connection to { $host }: check the internet connection, or set a proxy in Settings → Network ({ $error })
 llm-rejected = the model API refused the request ({ $status }): { $body }
 llm-empty-answer = the model { $model } returned an empty answer (no reason given)
 llm-empty-answer-reason = the model { $model } returned an empty answer (finish_reason={ $reason })

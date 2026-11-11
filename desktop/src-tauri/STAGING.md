@@ -60,7 +60,7 @@ scripts\build-release.ps1 -ReleaseNotes "..." -ModelsSource "F:\AI\Speech Studio
 
 Все пять DLL VC++ runtime (`MSVCP140.dll`, `MSVCP140_1.dll`, `VCOMP140.DLL`, `VCRUNTIME140.dll`,
 `VCRUNTIME140_1.dll`) — из одного VC++ Redistributable (например, `VC/Redist/MSVC/<версия>/x64/Microsoft.VC145.CRT`
-и `.OpenMP` из Build Tools); `MSVCP140_1.dll` нужен onnxruntime 1.28. Без него релиз запирает на «Первом запуске»
+и `.OpenMP` из Build Tools); `MSVCP140_1.dll` нужен onnxruntime 1.31. Без него релиз запирает на «Первом запуске»
 всех, у кого VC++ Redistributable нет в системе: докачать Bundled-компонент нельзя. Комплект staging (и
 распакованного портатива) проверяется по манифесту:
 

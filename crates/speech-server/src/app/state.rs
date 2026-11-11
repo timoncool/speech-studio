@@ -59,7 +59,7 @@ impl AppState {
         }
         let web_root = spa::find_web_root(&repo_root);
         let mroot = models_root(&repo_root);
-        setup::remove_retired(&mroot);
+        setup::remove_retired(&repo_root, &mroot);
         setup::remove_retired_whisper(&repo_root);
         match app::credential_migration::migrate_legacy_selection(&mroot) {
             Ok(moved) if moved.openrouter_key || moved.proxy_password => {

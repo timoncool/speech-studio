@@ -261,7 +261,7 @@ mod tests {
         let _servers = StopServers;
         let root = PathBuf::from(std::env::var("SPEECH_STUDIO_ROOT").expect("SPEECH_STUDIO_ROOT"));
         let models = root.join("models");
-        crate::set_ort_dylib_env(&root, &root).unwrap();
+        crate::set_ort_dylib_env(&root);
         std::env::set_var("DUB_ASR_BACKEND", crate::engines::models::stage_backend(&models, "asr_backend"));
         let choice = crate::app::recognition::choice(&root, &models, "auto", "test").unwrap();
         let mut asr = build_engine(&choice, None).unwrap();

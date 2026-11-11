@@ -1,4 +1,4 @@
-pub(crate) mod normalize_ru;
+pub(crate) use dub_core::normalize_ru;
 pub(crate) mod stress;
 pub(crate) mod pron_dict;
 pub(crate) mod prep;

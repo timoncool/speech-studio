@@ -72,9 +72,6 @@ pub fn augment_path_for_tools(repo_root: &Path) {
     }
 }
 
-/// Прописать ORT_DYLIB_PATH (onnxruntime 1.28) в окружение процесса до старта сервера: ort грузит dylib лениво,
-/// а по голому имени Windows нашла бы раньше PATH onnxruntime.dll другой версии из System32 (Windows AI).
-/// GPU-сборка (cuda13) — где CUDA работает, иначе процессорная (`pick_ort`); `beside_exe` — копия рядом с exe (портатив).
 /// The graphics card chosen in the settings goes into the process environment before anything starts CUDA: the studio's
 /// engines and every engine process it starts see that card alone, counted in PCI bus order as NVML and nvidia-smi
 /// count. Applies from the next start.
@@ -87,32 +84,36 @@ pub fn apply_gpu_choice(repo_root: &Path) {
     }
 }
 
-pub fn set_ort_dylib_env(repo_root: &Path, beside_exe: &Path) -> Result<(), String> {
-    ort_telemetry_off()?;
+/// Прописать ORT_DYLIB_PATH (onnxruntime 1.31.1) в окружение процесса до старта сервера: ort грузит dylib лениво,
+/// а по голому имени Windows нашла бы раньше PATH onnxruntime.dll другой версии из System32 (Windows AI).
+/// GPU-сборка (cuda13) — где CUDA работает, иначе процессорная (`pick_ort`); иначе — поиск
+/// `dub_core::runtime::ensure_ort_dylib` (копия рядом с exe в портативе и др.).
+pub fn set_ort_dylib_env(repo_root: &Path) {
     if std::env::var_os("ORT_DYLIB_PATH").is_some() {
-        return Ok(());
+        return;
     }
     ORT_PATH_OURS.store(true, std::sync::atomic::Ordering::Relaxed);
-    let rt = repo_root.join("models").join("runtime");
     let candidates = dub_core::runtime::ort_candidates(&repo_root.join("models"));
     let cuda = hw::gpu_report().cuda13_ok;
-    let found = pick_ort(&candidates, cuda).or_else(|| {
-        [beside_exe.join(dub_core::runtime::ORT_LIBRARY), rt.join("onnxruntime-1.28.dll"), rt.join("onnxruntime.dll")].into_iter().find(|cand| cand.is_file())
-    });
-    match found {
-        Some(cand) => std::env::set_var("ORT_DYLIB_PATH", cand),
-        None => {
-            // Nothing downloaded yet: point at the build we will fetch (GPU first on CUDA) so ort
-            // finds it once the ONNX Runtime component lands. macOS ships a single Apple-silicon
-            // build, so there can be only one candidate -- never assume a GPU+CPU pair here.
-            let pick = if cuda { candidates.first() } else { candidates.last() };
-            if let Some(pick) = pick {
-                std::env::set_var("ORT_DYLIB_PATH", pick);
-            }
-            eprintln!("[ERROR] onnxruntime 1.28 not found in {}: recognition and diarization will not start until the ONNX Runtime component is downloaded", rt.display());
-        }
+    if let Some(build) = pick_ort(&candidates, cuda) {
+        std::env::set_var("ORT_DYLIB_PATH", build);
+        return;
     }
-    Ok(())
+    dub_core::runtime::ensure_ort_dylib();
+    if std::env::var_os("ORT_DYLIB_PATH").is_some() {
+        return;
+    }
+    // Nothing downloaded yet: point at the build we will fetch (GPU first on CUDA) so ort finds it once the ONNX
+    // Runtime component lands. macOS ships a single Apple-silicon build, so there can be only one candidate.
+    let pick = if cuda { candidates.first() } else { candidates.last() };
+    if let Some(pick) = pick {
+        std::env::set_var("ORT_DYLIB_PATH", pick);
+    }
+    eprintln!(
+        "[ERROR] ONNX Runtime ({}) not found in {}: recognition and diarization will not start until the ONNX Runtime component is downloaded",
+        dub_core::runtime::ORT_LIBRARY,
+        repo_root.join("models").join("runtime").display()
+    );
 }
 
 /// The ONNX Runtime build the process loads from `candidates` (the GPU build first, as `ort_candidates` gives them)
@@ -125,39 +126,23 @@ fn pick_ort(candidates: &[std::path::PathBuf], cuda: bool) -> Option<std::path::
     preferred.map(|c| (*c).clone())
 }
 
-/// A session builder on the process's ONNX Runtime; a runtime that cannot be loaded is told with its file and what to do.
+/// A session builder in the process's one ONNX Runtime environment (`dub_core::runtime::ort_env`, telemetry off); a
+/// runtime that is not downloaded or cannot be loaded is told with its file and what to do.
 pub(crate) fn ort_session() -> Result<ort::session::builder::SessionBuilder, String> {
-    ort::session::Session::builder().map_err(|e| ort_failure(&e.to_string()))
+    let env = dub_core::runtime::ort_env().map_err(|e| ort_failure(&e))?;
+    ort::session::Session::builder(&env).map_err(|e| ort_failure(&e.to_string()))
 }
 
 fn ort_failure(error: &str) -> String {
-    if !error.contains("Failed to load ONNX Runtime") {
+    if !error.contains("failed to load from") {
         return t!("onnx-runtime", error = error.to_string());
     }
     let file = std::env::var("ORT_DYLIB_PATH").unwrap_or_default();
     t!("onnx-runtime-load", file = file, error = error.to_string())
 }
 
-/// Microsoft's ONNX Runtime builds send usage telemetry unless the environment turns it off. The options of the one
-/// environment of the process are set before any session makes it; an environment set up earlier is an error.
-fn ort_telemetry_off() -> Result<(), String> {
-    static OFF: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    if *OFF.get_or_init(|| ort::init().with_telemetry(false).commit()) {
-        Ok(())
-    } else {
-        Err("ONNX Runtime was set up before its telemetry could be turned off".to_string())
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn the_environment_turns_telemetry_off_once_and_keeps_it() {
-        assert_eq!(super::ort_telemetry_off(), Ok(()));
-        assert_eq!(super::ort_telemetry_off(), Ok(()), "a second start of the setup keeps the options it set");
-        assert!(!ort::init().with_telemetry(true).commit(), "options set later do not replace telemetry off");
-    }
-
     /// Without working CUDA the processor build of ONNX Runtime is loaded, with it the GPU build as before; one build
     /// on disk is loaded whatever it is, none is none.
     #[test]
@@ -180,7 +165,7 @@ mod tests {
     /// A runtime that does not load is named by its file with what to do; another error of it is told as it is.
     #[test]
     fn a_runtime_that_does_not_load_is_named_with_what_to_do() {
-        let told = super::ort_failure("Failed to load ONNX Runtime dylib onnxruntime.dll: LoadLibraryExW failed (source 1114)");
+        let told = super::ort_failure("ONNX Runtime: failed to load from `onnxruntime.dll`: LoadLibraryExW failed (source 1114)");
         assert!(told.contains("Visual C++") && told.contains("1114"), "{told}");
         assert!(!super::ort_failure("model is broken").contains("Visual C++"));
     }

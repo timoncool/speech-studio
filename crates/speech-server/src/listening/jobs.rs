@@ -281,7 +281,7 @@ fn recognise_by_pauses(p: &ListenPaths, choice: &crate::engines::models::AsrChoi
     }
     let probs = crate::engines::vad::probabilities(&p.models_root, &samples)?;
     let spans = crate::engines::vad::speech(&probs, samples.len(), vad);
-    let windows = crate::engines::vad::windows(&spans, &probs, crate::engines::vad::MAX_WINDOW_SECS);
+    let windows = crate::engines::vad::windows(&spans, &probs, &[], crate::engines::vad::MAX_WINDOW_SECS);
     if windows.is_empty() {
         return Err(t!("listen-no-speech", threshold = format!("{:.2}", vad.threshold)));
     }

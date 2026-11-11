@@ -639,6 +639,7 @@ llm-not-ready = llama-server 在 { $secs } 秒内未启动（端口 { $port }）
 llm-no-gpu-device = 本地 Gemma 需要显卡，但 llama.cpp 版本看不到任何显卡（{ $detail }）。请在“设置 → 模型”中为脚本助手选择本地服务器、OpenRouter 或代理，或检查显卡驱动。
 llm-http = 向模型发送请求失败：{ $error }
 llm-api = 模型 API：{ $error }
+llm-unreachable = 无法连接 { $host }：请检查网络连接，或在“设置 → 网络”中设置代理（{ $error }）
 llm-rejected = 模型 API 拒绝了请求（{ $status }）：{ $body }
 llm-empty-answer = 模型 { $model } 返回了空回答（未说明原因）
 llm-empty-answer-reason = 模型 { $model } 返回了空回答（finish_reason={ $reason }）

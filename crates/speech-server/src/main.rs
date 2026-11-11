@@ -3,7 +3,7 @@
 
 use speech_server::service::{self, Claim};
 use speech_server::{augment_path_for_tools, init_proxy_route, serve, AppState};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::Duration;
 
 #[tokio::main]
@@ -39,8 +39,7 @@ async fn main() -> anyhow::Result<()> {
     speech_server::apply_gpu_choice(&repo_root);
     augment_path_for_tools(&repo_root);
     init_proxy_route(&repo_root);
-    let exe_dir = std::env::current_exe().ok().and_then(|p| p.parent().map(Path::to_path_buf)).unwrap_or_default();
-    speech_server::set_ort_dylib_env(&repo_root, &exe_dir).map_err(anyhow::Error::msg)?;
+    speech_server::set_ort_dylib_env(&repo_root);
 
     let state = AppState::new(&repo_root);
     tracing::info!(

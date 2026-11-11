@@ -655,7 +655,7 @@ mod tests {
             }
         }
         let _servers = StopServers;
-        crate::set_ort_dylib_env(&root, &root).unwrap();
+        crate::set_ort_dylib_env(&root);
         let (x, sr) = crate::audio::wavio::read_mono_f32(Path::new(&std::env::var("LIVE_WAV").expect("LIVE_WAV"))).unwrap();
         let lang = std::env::var("LIVE_LANG").unwrap_or_else(|_| "ru".into());
         let choice = crate::app::recognition::choice(&root, &models, &lang, "test").unwrap();

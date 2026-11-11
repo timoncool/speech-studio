@@ -468,7 +468,7 @@ mod tests {
     }
 
     /// Runs the real model on this machine: set the model path and the onnxruntime dylib, e.g.
-    /// SPEECH_VOICE_GATE_MODEL=D:\...\redimnet2_b3_lm.onnx ORT_DYLIB_PATH=...\onnxruntime-1.28.dll
+    /// SPEECH_VOICE_GATE_MODEL=D:\...\redimnet2_b3_lm.onnx ORT_DYLIB_PATH=...\onnxruntime-win-x64-1.31.1\lib\onnxruntime.dll
     #[test]
     #[ignore = "needs the ONNX model and onnxruntime dylib via env"]
     fn the_embedder_runs_on_ort_and_a_signal_matches_itself() {
@@ -492,7 +492,7 @@ mod tests {
         let root = PathBuf::from(std::env::var("GATE_ROOT").expect("GATE_ROOT"));
         let models = root.join("models");
         let workspace = root.join("workspace");
-        crate::set_ort_dylib_env(&root, &root).unwrap();
+        crate::set_ort_dylib_env(&root);
         // the speech of a sound: its 30 ms frames no quieter than a twentieth of its loudest
         let speech_of = |x: &[f32]| -> Vec<f32> {
             let loudest = x.chunks(480).map(crate::speech::rms).fold(0.0f32, f32::max);

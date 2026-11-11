@@ -811,6 +811,7 @@ llm-not-ready = llama-server не поднялся за { $secs } с (порт {
 llm-no-gpu-device = локальной Gemma нужна видеокарта, а сборка llama.cpp не видит ни одной ({ $detail }). Выберите для помощника по сценарию локальный сервер, OpenRouter или агента в «Настройки → Модели» либо проверьте драйвер видеокарты.
 llm-http = запрос к модели не прошёл: { $error }
 llm-api = API модели: { $error }
+llm-unreachable = нет связи с { $host }: проверьте интернет или укажите прокси в Настройки → Сеть ({ $error })
 llm-rejected = API модели отверг запрос ({ $status }): { $body }
 llm-empty-answer = модель { $model } вернула пустой ответ (без причины)
 llm-empty-answer-reason = модель { $model } вернула пустой ответ (finish_reason={ $reason })

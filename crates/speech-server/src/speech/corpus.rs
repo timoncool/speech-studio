@@ -71,7 +71,7 @@ mod tests {
     #[ignore]
     fn the_hard_phrases_read_as_pinned() {
         let root = PathBuf::from(std::env::var("SPEECH_STUDIO_ROOT").expect("SPEECH_STUDIO_ROOT"));
-        crate::set_ort_dylib_env(&root, &root).unwrap();
+        crate::set_ort_dylib_env(&root);
         let s = crate::engines::stress::Stresser::load(&crate::engines::stress::dir(Path::new(&root.join("models")))).expect("RUAccent");
         let mut wrong = Vec::new();
         for p in phrases() {

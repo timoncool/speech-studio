@@ -141,13 +141,11 @@ fn start_or_reuse_service(repo_root: &std::path::Path) -> Result<u16, String> {
     Ok(port)
 }
 
-/// Окружение сервера до старта: путь к onnxruntime 1.28 (PATH под движок/инструменты добавит
+/// Окружение сервера до старта: путь к onnxruntime 1.31.1 (PATH под движок/инструменты добавит
 /// augment_path_for_tools внутри serve_blocking).
 fn setup_server_env(repo_root: &PathBuf) {
     speech_server::apply_gpu_choice(repo_root);
-    if let Err(e) = speech_server::set_ort_dylib_env(repo_root, &layout::executable_directory()) {
-        layout::fatal(&e);
-    }
+    speech_server::set_ort_dylib_env(repo_root);
 }
 
 /// Проверка обновления на GitHub-релизе и (по согласию юзера) установка. Драйвится из Rust: фронт
