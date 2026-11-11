@@ -5,6 +5,7 @@ import { FLAT_MIX, MIX_GAIN_DB, speechApi, type Mix, type TimelineBlock, type Tr
 import { errorText } from "../../lib/voices";
 import { named } from "../../lib/a11y";
 import { Tip } from "../Hint";
+import { pageZoom } from "../../lib/uiScale";
 
 export type OverlapChoice = "cut" | "join" | "keep";
 /** What the track editor changed on a clip: the part of the take kept, its gain and fades, or where it sounds — the
@@ -189,8 +190,8 @@ export default function ProjectTimeline({ pid, speakers, tintOf, textOf, refresh
   };
   const move = (e: React.PointerEvent, r: Row) => {
     if (!drag || drag.block !== r.block) return;
-    const dx = e.clientX - drag.x0;
-    const dy = e.clientY - drag.y0;
+    const dx = (e.clientX - drag.x0) / pageZoom();
+    const dy = (e.clientY - drag.y0) / pageZoom();
     if (!drag.moved && Math.abs(dx) < 3 && Math.abs(dy) < 3) return;
     if (!drag.moved) setDrag({ ...drag, moved: true });
     setLive({ block: r.block, value: change(r, drag.kind, dx, dy, drag.from) });
