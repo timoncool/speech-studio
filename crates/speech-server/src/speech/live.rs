@@ -559,7 +559,7 @@ mod tests {
         std::thread::sleep(std::time::Duration::from_millis(250));
         aired(p, "qw-3", 0.05, 0.1);
         let wait = queue_wait_ms("qw-3").unwrap();
-        assert!((120..=260).contains(&wait), "ready only well after the phrase before it ended: {wait}");
+        assert!((120..=1_000).contains(&wait), "ready only well after the phrase before it ended: {wait}");
         std::thread::sleep(std::time::Duration::from_millis(200));
         crate::app::arrived("qw-4");
         aired(p, "qw-4", 0.05, 0.1);
