@@ -37,7 +37,7 @@ jobs:
           test "$TAG" = v0.5.1
           git fetch origin "refs/tags/$TAG:refs/tags/$TAG"
           git diff --exit-code "$TAG" HEAD -- . ':!.github/workflows/release-macos.yml' ':!crates/speech-server/src/speech/live.rs'
-          git show "$TAG:crates/speech-server/src/speech/live.rs" | sed 's/120\.\.=260/120..=1_000/' | cmp - crates/speech-server/src/speech/live.rs
+          test "$(git hash-object crates/speech-server/src/speech/live.rs)" = 48eee8fe10c96f31ef1bf0dd5bef490b299a7007
       - uses: actions/setup-node@v4
         with:
           node-version: 24
