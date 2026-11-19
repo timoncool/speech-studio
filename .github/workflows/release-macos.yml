@@ -29,7 +29,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag }}
+          ref: ${{ github.sha }}
+      - name: Check the release source
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          test "$TAG" = v0.5.1
+          git fetch origin "refs/tags/$TAG:refs/tags/$TAG"
+          git diff --exit-code "$TAG" HEAD -- . ':!.github/workflows/release-macos.yml' ':!crates/speech-server/src/speech/live.rs'
+          git show "$TAG:crates/speech-server/src/speech/live.rs" | sed 's/120\.\.=260/120..=1_000/' | cmp - crates/speech-server/src/speech/live.rs
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -53,7 +61,42 @@ jobs:
           version="$(node -p "require('./desktop/src-tauri/tauri.conf.json').version")"
           cp "$dmg" "out/Speech-Studio-${version}-macos-arm64.dmg"
           (cd out && shasum -a 256 *.dmg)
+      - name: Check the window in the packaged app
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          hdiutil attach -readonly -nobrowse -mountpoint /Volumes/speech-check out/*.dmg
+          cp -R '/Volumes/speech-check/Speech Studio.app' "$RUNNER_TEMP/"
+          hdiutil detach /Volumes/speech-check
+          bundle="$RUNNER_TEMP/Speech Studio.app"
+          binary=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$bundle/Contents/Info.plist")
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$bundle/Contents/Info.plist")" = "${TAG#v}"
+          SPEECH_STUDIO_PORT=8797 "$bundle/Contents/MacOS/$binary" >"$RUNNER_TEMP/speech.log" 2>&1 &
+          pid=$!
+          trap 'kill "$pid" || true' EXIT
+          for i in $(seq 1 120); do
+            curl -fsS http://127.0.0.1:8797/mcp/status 2>/dev/null | grep -q '"window_open":true' && break
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:8797/mcp/status | grep -q '"window_open":true'
+          call() {
+            curl -fsS -m 45 -H 'Content-Type: application/json' -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"$1\",\"arguments\":$2}}" http://127.0.0.1:8797/mcp |
+              node -e 'let s="";process.stdin.on("data",x=>s+=x).on("end",()=>{const r=JSON.parse(s);if(!r.result||r.result.isError)process.exit(1);console.log(r.result.content[0].text)})'
+          }
+          for page in home models quality cloud network interface agent about; do
+            if [ "$page" = home ]; then call ui_navigate '{"view":"home"}'; else call ui_open_settings "{\"section\":\"$page\"}"; fi
+            sleep 2
+            call ui_read_page '{}' > "$RUNNER_TEMP/$page.txt"
+            test "$(wc -l < "$RUNNER_TEMP/$page.txt")" -gt 5
+          done
+          screencapture -x "$RUNNER_TEMP/speech-window.png"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: speech-macos-window
+          path: ${{ runner.temp }}/speech-window.png
+          if-no-files-found: error
       - name: Attach to the release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ inputs.tag }}" out/*.dmg --clobber
+        run: gh release upload "${{ inputs.tag }}" out/*.dmg
