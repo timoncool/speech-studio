@@ -258,13 +258,13 @@ mod platform {
         "https://github.com/ggml-org/llama.cpp/releases/download/b11900/llama-b11900-bin-win-cuda-13.4-x64.zip";
     // GitHub: onnxruntime 1.28.2 win-x64 (microsoft/onnxruntime) — строго 1.28.x (ort rc.13 api-28; иначе дедлок).
     const GH_ORT: &str =
-        "https://github.com/microsoft/onnxruntime/releases/download/v1.28.2/onnxruntime-win-x64-1.28.2.zip";
+        "https://github.com/timoncool/speech-studio/releases/download/onnxruntime-mirror/onnxruntime-win-x64-1.28.2.zip";
     // GitHub: onnxruntime 1.28.2 GPU-сборка под CUDA 13 (gpu_cuda13) — CUDA-EP для Parakeet/Sortformer на
     // GPU. onnxruntime_providers_cuda.dll грузит cudart64_13/cublas64_13/cublasLt64_13 (cuda-runtime),
     // cudnn64_9 (WHEEL_CUDNN) и cufft64_12 (REDIST_CUFFT).
     // Содержит onnxruntime.dll(GPU) + onnxruntime_providers_cuda.dll + onnxruntime_providers_shared.dll.
     const GH_ORT_GPU: &str =
-        "https://github.com/microsoft/onnxruntime/releases/download/v1.28.2/onnxruntime-win-x64-gpu_cuda13-1.28.2.zip";
+        "https://github.com/timoncool/speech-studio/releases/download/onnxruntime-mirror/onnxruntime-win-x64-gpu_cuda13-1.28.2.zip";
     // GitHub: ffmpeg static win64 GPL (BtbN/FFmpeg-Builds), master-сборка последнего дня месяца: дневные
     // autobuild BtbN удаляет через пару недель, а сборки последнего дня месяца хранит, поэтому закреплена такая.
     const GH_FFMPEG: &str =
@@ -458,9 +458,9 @@ mod platform {
     };
 
     pub const ORT_GPU: Parts = Parts {
-        size: 365_562_963,
+        size: 367_051_666,
         files: &[
-            FileSpec { url: GH_ORT_GPU, dest_rel: "models/runtime/_ort_gpu.zip", size: 365_562_963, sha256: "4b7a2d01a3cc96b12d06c8266af2c8f42c96365c4a0100d45fd874c71b4a2e19", extract: Extract::Tree },
+            FileSpec { url: GH_ORT_GPU, dest_rel: "models/runtime/_ort_gpu.zip", size: 367_051_666, sha256: "4c033a5088254f167e49c4f2eb90e2d0d77667b2b9400e3607e8e15a5c9fa970", extract: Extract::Tree },
         ],
         markers: &[Marker { rel: "models/runtime/onnxruntime-win-x64-gpu_cuda13-1.28.2/lib/onnxruntime.dll", expect: 0 }],
     };
@@ -682,7 +682,7 @@ mod platform {
     pub const ORT: Parts = Parts {
         size: 9_128_991,
         files: &[
-            FileSpec { url: "https://github.com/microsoft/onnxruntime/releases/download/v1.28.2/onnxruntime-linux-x64-1.28.2.tgz", dest_rel: "models/runtime/_ort.tgz", size: 9_128_991, sha256: "d7209b8751b27b862b0c76332c2e20e203396edb5dab700ecf4bb485cf147415", extract: Extract::Tree },
+            FileSpec { url: "https://github.com/timoncool/speech-studio/releases/download/onnxruntime-mirror/onnxruntime-linux-x64-1.28.2.tgz", dest_rel: "models/runtime/_ort.tgz", size: 9_128_991, sha256: "d7209b8751b27b862b0c76332c2e20e203396edb5dab700ecf4bb485cf147415", extract: Extract::Tree },
         ],
         markers: &[Marker { rel: "models/runtime/onnxruntime-linux-x64-1.28.2/lib/libonnxruntime.so.1.28.2", expect: 0 }],
     };
@@ -692,7 +692,7 @@ mod platform {
     pub const ORT_GPU: Parts = Parts {
         size: 240_868_705,
         files: &[
-            FileSpec { url: "https://github.com/microsoft/onnxruntime/releases/download/v1.28.2/onnxruntime-linux-x64-gpu_cuda13-1.28.2.tgz", dest_rel: "models/runtime/_ort_gpu.tgz", size: 240_868_705, sha256: "118ca8dbc4e4bb9b3b7fea137d796a89d957c9aa70e1dc3a5199a302cdd5bb32", extract: Extract::Tree },
+            FileSpec { url: "https://github.com/timoncool/speech-studio/releases/download/onnxruntime-mirror/onnxruntime-linux-x64-gpu_cuda13-1.28.2.tgz", dest_rel: "models/runtime/_ort_gpu.tgz", size: 240_868_705, sha256: "118ca8dbc4e4bb9b3b7fea137d796a89d957c9aa70e1dc3a5199a302cdd5bb32", extract: Extract::Tree },
         ],
         markers: &[Marker { rel: "models/runtime/onnxruntime-linux-x64-gpu_cuda13-1.28.2/lib/libonnxruntime.so.1.28.2", expect: 0 }],
     };
@@ -834,7 +834,7 @@ mod platform {
     pub const ORT: Parts = Parts {
         size: 32_093_967,
         files: &[
-            FileSpec { url: "https://github.com/microsoft/onnxruntime/releases/download/v1.28.2/onnxruntime-osx-arm64-1.28.2.tgz", dest_rel: "models/runtime/_ort.tgz", size: 32_093_967, sha256: "c4fceacfc53765d0869dc9180c31ec91054d149017a99d1e80ffe28dc79596de", extract: Extract::Tree },
+            FileSpec { url: "https://github.com/timoncool/speech-studio/releases/download/onnxruntime-mirror/onnxruntime-osx-arm64-1.28.2.tgz", dest_rel: "models/runtime/_ort.tgz", size: 32_093_967, sha256: "c4fceacfc53765d0869dc9180c31ec91054d149017a99d1e80ffe28dc79596de", extract: Extract::Tree },
         ],
         markers: &[Marker { rel: "models/runtime/onnxruntime-osx-arm64-1.28.2/lib/libonnxruntime.1.28.2.dylib", expect: 0 }],
     };
@@ -4218,6 +4218,40 @@ mod tests {
         sized(&dll, 1);
         assert!(!archive_installed(&root, wheel), "файл из записи изменился");
         std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn legacy_ort_cuda_record_requires_original_pin_url_and_files() {
+        let root = temp_root("legacy-ort-cuda");
+        let cuda = comp("onnxruntime-gpu");
+        let current = &cuda.files[0];
+        let mut legacy = current.clone();
+        legacy.url = "https://github.com/microsoft/onnxruntime/releases/download/v1.28.2/onnxruntime-win-x64-gpu_cuda13-1.28.2.zip";
+        legacy.sha256 = "4b7a2d01a3cc96b12d06c8266af2c8f42c96365c4a0100d45fd874c71b4a2e19";
+        let dll = root.join("models/runtime/onnxruntime.dll");
+        sized(&dll, 8);
+        let files = std::slice::from_ref(&dll);
+        write_record(&root, &legacy, files).unwrap();
+        assert!(archive_installed(&root, current));
+
+        let wrong_pin = "0000000000000000000000000000000000000000000000000000000000000000";
+        let mut future = current.clone();
+        future.sha256 = wrong_pin;
+        assert!(!archive_installed(&root, &future));
+        write_record_of(&root, &legacy, wrong_pin, files).unwrap();
+        assert!(!archive_installed(&root, current));
+        write_record_of(&root, current, legacy.sha256, files).unwrap();
+        assert!(!archive_installed(&root, current));
+
+        write_record(&root, &legacy, &[]).unwrap();
+        assert!(!archive_installed(&root, current));
+        write_record(&root, &legacy, files).unwrap();
+        sized(&dll, 1);
+        assert!(!archive_installed(&root, current));
+        std::fs::remove_file(&dll).unwrap();
+        assert!(!archive_installed(&root, current));
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     /// Движок одним файлом засчитывается по sha256, а не по размеру: прошлая сборка того же размера (transcribe.cpp

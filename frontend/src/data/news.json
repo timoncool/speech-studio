@@ -1,5 +1,26 @@
 [
   {
+    "id": "speech-studio-0-5-1",
+    "date": "2026-11-19",
+    "release": "https://github.com/timoncool/speech-studio/releases/tag/v0.5.1",
+    "title": {
+      "en": "Speech Studio 0.5.1",
+      "ru": "Speech Studio 0.5.1",
+      "zh": "Speech Studio 0.5.1",
+      "es": "Speech Studio 0.5.1",
+      "fr": "Speech Studio 0.5.1",
+      "pt": "Speech Studio 0.5.1"
+    },
+    "body": {
+      "en": "Setup now downloads ONNX Runtime 1.28.2 from the Speech Studio mirror. The original links returned 404; no manual download is needed. If you already installed the Windows CUDA runtime, you do not need to download it again.",
+      "ru": "Установщик теперь скачивает ONNX Runtime 1.28.2 с зеркала Speech Studio. Исходные ссылки возвращали ошибку 404; скачивать архив вручную больше не нужно. Если версия для Windows с CUDA уже установлена, скачивать её заново не придётся.",
+      "zh": "安装程序现从 Speech Studio 镜像下载 ONNX Runtime 1.28.2。原下载链接返回 404 错误，现在无需手动下载。如果已安装 Windows CUDA 版，也无需重新下载。",
+      "es": "El instalador ahora descarga ONNX Runtime 1.28.2 desde el servidor espejo de Speech Studio. Los enlaces originales devolvían un error 404; ya no hace falta descargar el archivo a mano. Si ya instalaste la versión para Windows con CUDA, no necesitas volver a descargarla.",
+      "fr": "Le programme d’installation télécharge désormais ONNX Runtime 1.28.2 depuis le miroir de Speech Studio. Les liens d’origine renvoyaient une erreur 404 ; le téléchargement manuel n’est plus nécessaire. Si la version Windows avec CUDA est déjà installée, inutile de la télécharger à nouveau.",
+      "pt": "O instalador agora baixa o ONNX Runtime 1.28.2 do espelho do Speech Studio. Os links originais retornavam o erro 404; não é mais necessário baixar o arquivo manualmente. Se você já instalou a versão para Windows com CUDA, não precisa baixá-la de novo."
+    }
+  },
+  {
     "id": "speech-studio-0-5-0",
     "date": "2026-11-10",
     "release": "https://github.com/timoncool/speech-studio/releases/tag/v0.5.0",

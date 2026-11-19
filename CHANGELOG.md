@@ -6,6 +6,12 @@ release notes on GitHub are taken from the release's section.
 
 ## Unreleased
 
+## 0.5.1 — 2026-11-19
+
+### Fixed
+
+- **ONNX Runtime downloads** now use the Speech Studio mirror because the upstream 1.28.2 URLs returned 404. Setup downloads the runtime automatically; no manual download is needed. The Windows CUDA archive was repacked from a verified installation and contains the same DLLs. Existing installations with the original archive or the official workaround do not need to download it again.
+
 ## 0.5.0 — 2026-11-10
 
 ### Added

@@ -2,10 +2,16 @@
 
 use super::*;
 
-/// Archive records must name the pinned hash and contain files of the recorded sizes.
 pub(super) fn archive_installed(repo_root: &Path, f: &FileSpec) -> bool {
-    read_record(repo_root, f)
-        .is_some_and(|r| r.sha256 == f.sha256 && !r.files.is_empty() && r.files.iter().all(|x| file_ok(&repo_root.join(&x.path), x.size)))
+    read_record(repo_root, f).is_some_and(|r| {
+        // Both the original Windows CUDA archive and the official workaround recorded the original hash.
+        (r.sha256 == f.sha256
+            || (f.sha256 == "4c033a5088254f167e49c4f2eb90e2d0d77667b2b9400e3607e8e15a5c9fa970"
+                && r.sha256 == "4b7a2d01a3cc96b12d06c8266af2c8f42c96365c4a0100d45fd874c71b4a2e19"
+                && r.url == "https://github.com/microsoft/onnxruntime/releases/download/v1.28.2/onnxruntime-win-x64-gpu_cuda13-1.28.2.zip"))
+            && !r.files.is_empty()
+            && r.files.iter().all(|x| file_ok(&repo_root.join(&x.path), x.size))
+    })
 }
 
 /// A program in one file (engine, CLI): builds with other flags can match in size, only sha256 tells them apart.

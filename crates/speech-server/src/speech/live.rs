@@ -583,18 +583,27 @@ mod tests {
     #[tokio::test]
     async fn a_listener_gets_the_pieces_in_order_and_the_first_sound() {
         let mut rx = channel().subscribe();
-        let phrase = Phrase::begin("p1", "b1");
+        const PROJECT: &str = "listener-order-test";
+        const BLOCK: &str = "listener-order-block";
+        let next = |rx: &mut broadcast::Receiver<Value>| loop {
+            let ev = rx.try_recv().expect("expected a queued live event");
+            if ev["project"].as_str() == Some(PROJECT) && ev["block"].as_str() == Some(BLOCK) {
+                break ev;
+            }
+        };
+        let phrase = Phrase::begin(PROJECT, BLOCK);
         phrase.pause(10, 24_000);
         assert_eq!(phrase.first_ms(), None, "a pause is no first sound");
         phrase.chunk(&[0.5, -0.5], 24_000);
         phrase.restart();
         phrase.end(true);
-        let kinds: Vec<String> = (0..5).map(|_| rx.try_recv().unwrap()["kind"].as_str().unwrap().to_string()).collect();
+        let kinds: Vec<String> = (0..5).map(|_| next(&mut rx)["kind"].as_str().unwrap().to_string()).collect();
         assert_eq!(kinds, ["start", "chunk", "chunk", "restart", "end"]);
         assert!(phrase.first_ms().is_some());
         let mut again = channel().subscribe();
+        let _foreign = Phrase::begin("listener-order-other", BLOCK);
         phrase.chunk(&[0.25], 24_000);
-        let ev = again.try_recv().unwrap();
+        let ev = next(&mut again);
         let bytes = base64::engine::general_purpose::STANDARD.decode(ev["data"].as_str().unwrap()).unwrap();
         assert_eq!(f32::from_le_bytes(bytes[..4].try_into().unwrap()), 0.25);
         assert_eq!(ev["sr"], 24_000);
