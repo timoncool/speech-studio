@@ -82,10 +82,11 @@ jobs:
           curl -fsS http://127.0.0.1:8797/mcp/status | grep -q '"window_open":true'
           call() {
             curl -fsS -m 45 -H 'Content-Type: application/json' -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"$1\",\"arguments\":$2}}" http://127.0.0.1:8797/mcp |
-              node -e 'let s="";process.stdin.on("data",x=>s+=x).on("end",()=>{const r=JSON.parse(s);if(!r.result||r.result.isError)process.exit(1);console.log(r.result.content[0].text)})'
+              node -e 'let s="";process.stdin.on("data",x=>s+=x).on("end",()=>{const r=JSON.parse(s);if(!r.result||r.result.isError){console.error(s);process.exit(1)}console.log(r.result.content[0].text)})'
           }
           for page in home models quality cloud network interface agent about; do
-            if [ "$page" = home ]; then call ui_navigate '{"view":"home"}'; else call ui_open_settings "{\"section\":\"$page\"}"; fi
+            echo "Checking $page"
+            if [ "$page" != home ]; then call ui_open_settings "{\"section\":\"$page\"}"; fi
             sleep 2
             call ui_read_page '{}' > "$RUNNER_TEMP/$page.txt"
             test "$(wc -l < "$RUNNER_TEMP/$page.txt")" -gt 5
