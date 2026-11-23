@@ -6,6 +6,11 @@ release notes on GitHub are taken from the release's section.
 
 ## Unreleased
 
+### Changed
+
+- **«Listen while voicing» is off by default** (Settings → Language & sounds): voicing no longer plays sound by itself, a page reload included. Whoever turned it on keeps it on.
+- **A block's play button goes on to the next blocks**: when the block ends, the next voiced blocks play one after another, each loaded while the one before it plays so no pause falls between them; playback stops at the first block without a take and does not start voicing it.
+
 ## 0.5.0 — 2026-11-10
 
 ### Added

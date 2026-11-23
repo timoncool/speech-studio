@@ -104,11 +104,12 @@ describe("live playback", () => {
     expect(out[1] / out[0]).toBeCloseTo(-0.5, 5);
   });
 
-  it("remembers the setting, on by default", () => {
+  it("remembers the setting, off by default", () => {
     localStorage.removeItem("speech-live-playback");
+    expect(livePlaybackEnabled()).toBe(false);
+    setLivePlaybackEnabled(true);
     expect(livePlaybackEnabled()).toBe(true);
     setLivePlaybackEnabled(false);
     expect(livePlaybackEnabled()).toBe(false);
-    setLivePlaybackEnabled(true);
   });
 });
