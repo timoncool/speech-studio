@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { ArrowLeft, BookOpen, BookUp, ChartGantt, Download, Drama, History, ListOrdered, Loader2, MessagesSquare, PenLine, Redo2, Search, Settings2, Sparkles, SpellCheck, Square, Undo2, Users, Wand2, X, ListChecks } from "lucide-react";
 import { api, ApiError } from "../../lib/api";
 import type { VoiceAge, VoiceGender } from "../../lib/api";
-import { activeTake, engineOf, fxOf, newId, VOICE_FX, spliceChars, SPEAKER_TINTS, speechApi, stressDoubts, voiceOf, type Block, type BlockState, type SpeechProject, type QueuedSynth, type StressWord, type BookPreview } from "../../lib/speech";
+import { activeTake, engineOf, fxOf, newId, VOICE_FX, spliceChars, SPEAKER_TINTS, speechApi, stressDoubts, voiceOf, type Block, type BlockState, type Take, type SpeechProject, type QueuedSynth, type StressWord, type BookPreview } from "../../lib/speech";
 import { openSettings } from "../../lib/settingsNav";
 import { useSpeechProject } from "../../lib/useSpeechProject";
 import BookImport from "./BookImport";
@@ -340,18 +340,27 @@ export default function ProjectEditor({ pid, onBack }: { pid: string; onBack: ()
     if (word) field.setSelectionRange(...sentenceAt(b.text, word[0]));
   };
   const changeRate = (r: number) => { rate.current = r; setSpeed(r); if (audio.current) audio.current.playbackRate = r; };
+  const takeSrc = useCallback((b: Block, take: Take) => {
+    const fx = latestProject.current ? fxOf(latestProject.current, b) : null;
+    const url = speechApi.takeUrl(pid, take.file, fx, b.mix, take.cut, latestProject.current?.settings.loudness);
+    return `${url}${url.includes("?") ? "&" : "?"}n=${take.n}`;
+  }, [pid]);
+  /** The next queued take, loading while the current one plays: the server renders a take's first play before it sends it. */
+  const preloaded = useRef<{ src: string; el: HTMLAudioElement } | null>(null);
   const playBlock = useCallback((b: Block, rest: string[], n?: number, at = 0) => {
     const take = (n == null ? null : b.takes.find((tk) => tk.n === n)) ?? activeTake(b);
     if (!take) return;
     audio.current?.pause();
-    const fx = latestProject.current ? fxOf(latestProject.current, b) : null;
-    const url = speechApi.takeUrl(pid, take.file, fx, b.mix, take.cut, latestProject.current?.settings.loudness);
-    const a = new Audio(`${url}${url.includes("?") ? "&" : "?"}n=${take.n}`);
+    const src = takeSrc(b, take);
+    const a = preloaded.current?.src === src ? preloaded.current.el : new Audio(src);
+    preloaded.current = null;
     a.volume = volume.current;
     a.playbackRate = rate.current;
     const [from, to] = take.cut ?? [0, Infinity];
     const startAt = Math.max(at, from);
-    if (startAt > 0) a.addEventListener("loadedmetadata", () => { a.currentTime = Math.min(startAt, Math.max(0, a.duration - 0.05)); }, { once: true });
+    const seekStart = () => { a.currentTime = Math.min(startAt, Math.max(0, a.duration - 0.05)); };
+    if (startAt > 0 && a.readyState >= HTMLMediaElement.HAVE_METADATA) seekStart();
+    else if (startAt > 0) a.addEventListener("loadedmetadata", seekStart, { once: true });
     if (to < Infinity) a.addEventListener("timeupdate", () => { if (a.currentTime >= to && !a.paused) { a.pause(); if (audio.current === a) setPlaying(null); } });
     audio.current = a;
     setPlaying(b.id);
@@ -360,7 +369,7 @@ export default function ProjectEditor({ pid, onBack }: { pid: string; onBack: ()
     setQueue(rest);
     a.onended = () => setPlaying(null);
     a.play().catch((e: unknown) => { if (pausedBeforeStart(e)) return; setPlaying(null); setJobError(errorText(e)); });
-  }, [pid]);
+  }, [takeSrc]);
 
   useEffect(() => {
     if (!job) return;
@@ -380,9 +389,21 @@ export default function ProjectEditor({ pid, onBack }: { pid: string; onBack: ()
       else if (!b || state === "skipped") setQueue(rest);
       else if (!latestJob.current) setQueue([]);
     };
+    advance();
     const timer = window.setInterval(advance, 300);
     return () => window.clearInterval(timer);
   }, [playing, queue, playBlock]);
+  useEffect(() => {
+    const p = latestProject.current;
+    const b = playing && queue.length && p ? blockList(p).find((x) => x.id === queue[0]) : undefined;
+    const take = b && p?.status?.[b.id]?.state === "ready" ? activeTake(b) : undefined;
+    if (!b || !take) return;
+    const src = takeSrc(b, take);
+    if (preloaded.current?.src === src) return;
+    const el = new Audio(src);
+    el.preload = "auto";
+    preloaded.current = { src, el };
+  }, [playing, queue, project, takeSrc]);
 
   const runSynth = async (scope: { ids?: string[]; from?: string; force?: boolean; seed?: number }) => {
     setJobError(null);
@@ -664,7 +685,11 @@ export default function ProjectEditor({ pid, onBack }: { pid: string; onBack: ()
     }),
     remove: () => edit((p) => { const at = locate(p, b.id); if (at && blockList(p).length > 1) p.chapters[at[0]].blocks.splice(at[1], 1); return p; }),
     synth: (force) => void runSynth({ ids: [b.id], force }),
-    play: () => (playing === b.id ? stopAudio() : playBlock(b, [])),
+    play: () => {
+      if (playing === b.id) { stopAudio(); return; }
+      const order = blocks.map((x) => x.id);
+      playBlock(b, order.slice(order.indexOf(b.id) + 1));
+    },
     ab: (n) => {
       if (playing !== b.id) { playBlock(b, [], n); return; }
       playBlock(b, [], playingTake === n ? activeTake(b)?.n : n, audio.current?.currentTime ?? 0);

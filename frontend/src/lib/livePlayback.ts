@@ -5,7 +5,7 @@ import { BASE } from "./api";
 const KEY = "speech-live-playback";
 
 export function livePlaybackEnabled(): boolean {
-  return localStorage.getItem(KEY) !== "0";
+  return localStorage.getItem(KEY) === "1";
 }
 export function setLivePlaybackEnabled(on: boolean): void {
   localStorage.setItem(KEY, on ? "1" : "0");
